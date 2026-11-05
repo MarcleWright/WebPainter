@@ -1,6 +1,6 @@
 # ADR-0002: 浮动选区状态与稳定资源的 WebGPU 预览
 
-Status: Accepted for prototype design, 2026-11-05。用户已确定主线并要求创建验证任务; 实现执行尚未授权。
+Status: Accepted for prototype design, 2026-11-05。用户已确定主线并授权任务 02; 实验原型与有限验证结果见任务记录。
 
 ## Context
 

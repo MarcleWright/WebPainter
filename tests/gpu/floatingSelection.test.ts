@@ -39,6 +39,7 @@ it('composes float on GPU before layer effects and preserves formal pixels durin
     expect(gpu.stats.gpuPreviews).toBeGreaterThan(before); expect(v).not.toBeNull(); expect(v!.every(Number.isFinite)).toBe(true); previews.push(v!);
   }
   t.up(h);
+  expect(gpu.floatingAtlasResidentTiles).toBe(0);
   for(let level=0;level<=2;level++) {
     const r={x:0,y:0,w:64>>level,h:48>>level};
     expect(maxDiff(previews[level],compositeRegion(doc,r,{level})).max).toBeLessThan(2/255);
@@ -53,7 +54,13 @@ it('composes float on GPU before layer effects and preserves formal pixels durin
   expect(layer.raster.readPixels(rect)).toEqual(b); expect(doc.selection.mask.readPixels(rect)).toEqual(bsel);
   expect(session.history.undo()).toBe(true); expect(layer.raster.readPixels(rect)).toEqual(data);
   expect(session.history.redo()).toBe(true); expect(session.history.redo()).toBe(true); expect(layer.raster.readPixels(rect)).toEqual(c);
-  t.down(h, pt(20,15)); t.move(h, pt(23,18)); t.cancel(h); expect(layer.raster.readPixels(rect)).toEqual(c);
+  for (let i=0;i<2;i++) {
+    t.down(h, pt(20,15)); t.move(h, pt(23,18));
+    const current=session.engine.getOverride(layer.id)!;
+    await gpu.compositeRead(doc,{x:0,y:0,w:32,h:24},{level:0,overrides:new Map([[layer.id,current]])});
+    expect(gpu.floatingAtlasResidentTiles).toBeGreaterThan(0);
+    t.cancel(h); expect(gpu.floatingAtlasResidentTiles).toBe(0); expect(layer.raster.readPixels(rect)).toEqual(c);
+  }
   // Alt copies, Shift constrains the move, and a boundary crossing remains undoable.
   const bounds = doc.selection.bounds(doc.bounds)!;
   t.down(h, {...pt(20,15), alt:true}); t.move(h, {...pt(28,18), shift:true}); t.up(h);
@@ -103,6 +110,7 @@ it('C1 GPU preview retains mask, multiply, opacity, and curves at 25 percent', a
   const l=createPixelLayer('photo',8,TiledRaster.fromPixels(128,96,4,8,rgba));l.opacity=.65;l.blendMode='multiply';l.mask=createMask(true);
   l.mask.raster.writeFloat({x:0,y:0,w:128,h:96},Float32Array.from({length:128*96},(_,i)=>[0,.5,1][Math.floor((i%128)/32)%3]));add(doc,l);
   const curves=defaultAdjustment('curves') as Extract<Adjustment, {type:'curves'}>;curves.rgb=[{x:0,y:0},{x:128,y:160},{x:255,y:255}];add(doc,createAdjustmentLayer(curves,'curves'));
+  const maskBefore=l.mask!.raster.readPixels({x:0,y:0,w:128,h:96}).slice();
   const session=editor.addDocument(doc);session.setActive(l.id);session.view.zoom=.25;
   doc.selection.combine({x:8,y:8,w:64,h:48},new Float32Array(64*48).fill(1),'replace');
   const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
@@ -111,9 +119,9 @@ it('C1 GPU preview retains mask, multiply, opacity, and curves at 25 percent', a
   const rect={x:0,y:0,w:32,h:24}, before=gpu.stats.gpuPreviews;
   const preview=await gpu.compositeRead(doc,rect,{level:2,overrides:new Map([[l.id,ov!]])});
   expect(gpu.stats.gpuPreviews).toBeGreaterThan(before); expect(preview).not.toBeNull(); expect(preview!.every(Number.isFinite)).toBe(true);
-  t.up(host);const exact=compositeRegion(doc,rect,{level:2});
+  t.up(host);expect(gpu.floatingAtlasResidentTiles).toBe(0);const exact=compositeRegion(doc,rect,{level:2});
   expect(maxDiff(preview!,exact).max).toBeLessThan(2/255);
-  expect(l.opacity).toBe(.65);expect(l.blendMode).toBe('multiply');expect(l.mask?.enabled).toBe(true);
+  expect(l.opacity).toBe(.65);expect(l.blendMode).toBe('multiply');expect(l.mask?.enabled).toBe(true);expect(l.mask!.raster.readPixels({x:0,y:0,w:128,h:96})).toEqual(maskBefore);
   editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
 });
 
@@ -133,5 +141,38 @@ it('commit failure rolls back pixels, selection and history', () => {
   t.up(host);l.raster.restore=restore;
   expect(l.raster.readPixels(region)).toEqual(original);expect(doc.selection.mask.readPixels(region)).toEqual(mask);
   expect(session.history.current.id).toBe(id);expect(session.engine.getOverride(l.id)).toBeUndefined();
+  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+});
+
+it('switching documents cancels the active preview and releases its tiles', async () => {
+  if (!gpu) throw new Error('GPU unavailable');setGpuCompositor(gpu);
+  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
+  const doc=newDoc(32,24), data=new Uint8ClampedArray(32*24*4).fill(127);
+  const l=createPixelLayer('switch',8,TiledRaster.fromPixels(32,24,4,8,data));add(doc,l);
+  const first=editor.addDocument(doc);first.setActive(l.id);doc.selection.combine({x:4,y:4,w:8,h:8},new Float32Array(64).fill(1),'replace');
+  const oldFactory=editor.hostFactory;
+  editor.hostFactory=()=>({editor,session:editor.active!,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})});
+  editor.registerTool('move', () => new MoveTool()); editor.setTool('move');const tool=editor.tool('move')!, host=editor.hostFactory()!;
+  const original=l.raster.readPixels({x:0,y:0,w:32,h:24}).slice(),id=first.history.current.id;
+  tool.down!(host,pt(6,6));tool.move!(host,pt(12,10));
+  const ov=first.engine.getOverride(l.id)!;expect(ov?.gpu?.floating).toBeTruthy();
+  await gpu.compositeRead(doc,{x:0,y:0,w:32,h:24},{level:0,overrides:new Map([[l.id,ov]])});
+  expect(gpu.floatingAtlasResidentTiles).toBeGreaterThan(0);
+  const second=editor.addDocument(newDoc(8,8));
+  expect(first.engine.getOverride(l.id)).toBeUndefined();expect(gpu.floatingAtlasResidentTiles).toBe(0);
+  expect(l.raster.readPixels({x:0,y:0,w:32,h:24})).toEqual(original);expect(first.history.current.id).toBe(id);
+  editor.removeSession(second.id);editor.removeSession(first.id);editor.hostFactory=oldFactory;
+  delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+});
+
+it('unsupported 16-bit documents use the existing path', () => {
+  if (!gpu) throw new Error('GPU unavailable');setGpuCompositor(gpu);
+  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
+  const doc=newDoc(32,24,16), data=new Uint16Array(32*24*4).fill(32768);
+  const l=createPixelLayer('16-bit',16,TiledRaster.fromPixels(32,24,4,16,data));add(doc,l);
+  const session=editor.addDocument(doc);session.setActive(l.id);doc.selection.combine({x:4,y:4,w:8,h:8},new Float32Array(64).fill(1),'replace');
+  const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+  const t=new MoveTool(),version=l.raster.version;t.down(host,pt(6,6));t.move(host,pt(12,10));
+  expect(session.engine.getOverride(l.id)).toBeUndefined();expect(l.raster.version).toBeGreaterThan(version);t.cancel(host);
   editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
 });

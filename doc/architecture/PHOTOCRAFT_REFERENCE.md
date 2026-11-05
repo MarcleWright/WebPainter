@@ -76,4 +76,4 @@ PhotoCraft 值得借鉴, 尤其是暂态编辑与正式文档分工、图块级�
 
 ## 仍待确认
 
-未执行 PhotoCraft native/Web 同条件基准; 未验收其复杂预览正确性; 未证明所有热点已覆盖; 尚无 WebPainter 优化后结果。产品收益和建议顺序见 [性能方向](../product/PERFORMANCE_DIRECTION.md), 基线与成本见 [评估](../engineering/4K_SELECTION_ASSESSMENT.md)。
+未执行 PhotoCraft native/Web 同条件基准; 未验收其复杂预览正确性; 未证明所有热点已覆盖; WebPainter 的有限脚本前后结果见任务 02, 不等于 PhotoCraft 同条件比较。产品收益和建议顺序见 [性能方向](../product/PERFORMANCE_DIRECTION.md), 基线与成本见 [评估](../engineering/4K_SELECTION_ASSESSMENT.md)。

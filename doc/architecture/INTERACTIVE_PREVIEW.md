@@ -1,8 +1,8 @@
 # 选区移动的交互预览主线
 
-状态: 2026-11-05 已确定原型验证主线, 未实施、未验收。采用 PhotoCraft 的浮动选区状态思路, 在本项目扩展稳定资源的 WebGPU 图层内实时合成; 松手写回并保留一次拖动一次撤销。决策见 [ADR-0002](../ai/decisions/ADR-0002_floating-selection-webgpu-prototype.md)。
+状态: 2026-11-05 受限实验原型已实施, 人工窗口验收缺失, 尚未通过 gate。采用 PhotoCraft 的浮动选区状态思路, 在本项目扩展稳定资源的 WebGPU 图层内实时合成; 松手写回并保留一次拖动一次撤销。决策见 [ADR-0002](../ai/decisions/ADR-0002_floating-selection-webgpu-prototype.md)。
 
-[原型验证任务](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md) 定义范围和验收。当前只授权调整文档和创建任务, 尚未授权执行原型。用户交互由 [INTERACTION_RULES](../design/INTERACTION_RULES.md) 维护。
+[原型验证任务](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md) 定义范围和验收。执行与证据边界以任务记录为准; 默认用户工作流未启用实验入口。用户交互由 [INTERACTION_RULES](../design/INTERACTION_RULES.md) 维护。
 
 ## 区分显示与正式数据
 

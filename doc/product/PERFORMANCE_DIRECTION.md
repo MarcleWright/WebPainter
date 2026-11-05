@@ -1,6 +1,6 @@
 # 4K 性能优化的产品方向
 
-状态: 产品目标待验证, 原型主线已确定, 未实施、未承诺性能收益。技术证据与工期估算归 [4K 评估](../engineering/4K_SELECTION_ASSESSMENT.md)。
+状态: 受限原型已实现并取得脚本对照, 产品体验尚待人工验证, 未承诺正式性能收益。技术证据与工期估算归 [4K 评估](../engineering/4K_SELECTION_ASSESSMENT.md)。
 
 ## 设计师实际遇到的问题
 

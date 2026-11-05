@@ -279,7 +279,18 @@ export class MoveTool implements Tool {
     const initialBounds = sel.bounds(s.doc.bounds);
     if (!initialBounds) return;
     const enabled = import.meta.env.DEV && (globalThis as unknown as { __webPainterTask02?: boolean }).__webPainterTask02 === true;
-    const supported = enabled && !!gpu && !gpu.disposed && !gpu.viewSupported(s.doc, s.engine.view) && !s.engine.hasOverrides() && s.doc.canvas.colorMode === 'rgb' && s.doc.canvas.bitDepth === 8 && s.view.level(s.engine.maxLevel()) <= 2 && Math.ceil(initialBounds.w / TILE_SIZE) * Math.ceil(initialBounds.h / TILE_SIZE) <= gpu.reserveFloatingAtlas() && s.doc.root.children.every(l => !l.clipping && !hasEnabledEffect(l.effects) && !l.vectorMask && l.advanced.knockout === 'none' && (l.kind === 'pixel' || (l.kind === 'adjustment' && l.adjustment.type === 'curves')));
+    let fallback: string | null = null;
+    if (enabled) {
+      if (!gpu || gpu.disposed) fallback = 'WebGPU compositor unavailable';
+      else if (gpu.viewSupported(s.doc, s.engine.view)) fallback = `unsupported view: ${gpu.viewSupported(s.doc, s.engine.view)}`;
+      else if (s.engine.hasOverrides()) fallback = 'another preview is active';
+      else if (s.doc.canvas.colorMode !== 'rgb' || s.doc.canvas.bitDepth !== 8) fallback = 'only RGB 8-bit documents are supported';
+      else if (s.view.level(s.engine.maxLevel()) > 2) fallback = 'zoom level below 25%';
+      else if (Math.ceil(initialBounds.w / TILE_SIZE) * Math.ceil(initialBounds.h / TILE_SIZE) > gpu.reserveFloatingAtlas()) fallback = 'floating atlas capacity';
+      else if (!s.doc.root.children.every(l => !l.clipping && !hasEnabledEffect(l.effects) && !l.vectorMask && l.advanced.knockout === 'none' && (l.kind === 'pixel' || (l.kind === 'adjustment' && l.adjustment.type === 'curves')))) fallback = 'unsupported layer composition';
+      if (fallback) console.info(`[Task 02] Using the existing Move path: ${fallback}`);
+    }
+    const supported = enabled && !fallback;
     const before = layer.raster.snapshot();
     const selBefore = sel.snapshot();
     // Still floating from the last drag: move the same pixels again (Alt-drag stamps a copy instead).

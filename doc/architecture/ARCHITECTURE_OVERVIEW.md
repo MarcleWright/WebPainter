@@ -34,6 +34,6 @@ flowchart LR
 ## 后续改造边界
 
 - 保留文档、分块存储、历史和 PSD 管线。原型主线已确定为浮动选区状态与稳定资源的 WebGPU 图层内实时合成。
-- 接口方向与正确性约束归 [INTERACTIVE_PREVIEW](INTERACTIVE_PREVIEW.md), 实施边界和 gate 归 [任务 02](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md); 尚未实施。
+- 接口方向与正确性约束归 [INTERACTIVE_PREVIEW](INTERACTIVE_PREVIEW.md), 实施边界和 gate 归 [任务 02](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md); 实验原型已实现, 尚未通过完整 gate。
 - PhotoCraft 作为固定版本源码参考, 不自动引入 Rust、WASM、新状态管理或全新渲染框架。见 [对照](PHOTOCRAFT_REFERENCE.md)。
 - 本项目仍是独立 fork。ADA 业务状态、Canvas 节点、Artifact 和 Provider 的 owner 不能因编辑器采用而被复制进来; 集成契约另行设计。

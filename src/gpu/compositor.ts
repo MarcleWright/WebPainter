@@ -56,6 +56,7 @@ class Atlas {
   private used: number[];
   private index = new Map<object | string, number>();
   uploads = 0;
+  get resident(): number { return this.index.size; }
   constructor(private device: GPUDevice, readonly format: GPUTextureFormat, readonly ids: number[], private bytesPerPixel: number, private placeholder: GPUTextureView, private onPage: () => void, pageBytes = PAGE_BYTES) {
     this.layers = Math.max(8, Math.min(device.limits.maxTextureArrayLayers, Math.floor(pageBytes / (TS * TS * bytesPerPixel))));
     this.pages = ids.map(() => null);
@@ -123,6 +124,11 @@ class Atlas {
     const n = layers * this.ids.length;
     this.owners = new Array(n).fill(null); this.revs = new Array(n).fill(-1); this.used = new Array(n).fill(-1);
     this.onPage();
+  }
+
+  trimIfEmpty(): void {
+    if (this.index.size || !this.pages.some(Boolean)) return;
+    this.destroy(); this.pages.fill(null); this.views.fill(this.placeholder); this.onPage();
   }
 
   forget(keys: Iterable<object>): void {
@@ -212,6 +218,7 @@ export class GpuCompositor {
   private dummyLut: GPUTextureView;
   private tileTextures = new Set<GPUTexture>();
   get floatingAtlasUploads(): number { return this.atlases[2].uploads; }
+  get floatingAtlasResidentTiles(): number { return this.atlases[2].resident; }
   reserveFloatingAtlas(): number { this.atlases[2].reserveEmpty(128 << 20); return this.atlases[2].layers; }
   readonly stats: GpuCompositorStats = { gpuTiles: 0, cpuTiles: 0, gpuPreviews: 0, lastFallback: null };
   disposed = false;
@@ -374,6 +381,8 @@ export class GpuCompositor {
   releaseFloating(cut: TiledRaster, pixels: TiledRaster): void {
     this.atlases[0].forget(cut.tiles.values());
     this.atlases[2].forget(pixels.tiles.values());
+    // Work already submitted may still sample the atlas; reclaim its empty page only afterward.
+    void this.device.queue.onSubmittedWorkDone().then(() => { if (!this.disposed) this.atlases[2].trimIfEmpty(); }).catch(() => { /* device lost */ });
   }
 
   releaseTile(tile: DisplayTile): void {

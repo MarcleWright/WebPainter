@@ -39,4 +39,4 @@
 - 导出/重开和目标 Photoshop 文件检查与性能验收分别记录。
 - 完全断网运行的绘画、打开、保存、重开、PSD 导出需单独人工验证。
 
-本轮仅执行 P-DOC 与源码研究。先前 setup 的 P-BUILD/P-SMOKE 已通过, 但本轮未重跑; P-FULL、PhotoCraft Rust 基准及上述人工矩阵未执行。未来验收由用户与实施任务明确的验证者共同记录。
+Task 02 的 P-MOVE、GPU 定向检查、P-BUILD 和有限脚本对照见 [任务记录](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md)。P-FULL、PhotoCraft Rust 基准、人工窗口矩阵和用户试用未执行。
