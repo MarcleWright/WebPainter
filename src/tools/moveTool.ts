@@ -17,6 +17,11 @@ import { cloneLayer } from '../document/clone';
 import { beginTransform } from './transformTool';
 import { ui } from '../app/store';
 import { editor } from '../app/editor';
+import { gpuCompositor } from '../rendering/renderEngine';
+import { hasEnabledEffect } from '../effects/types';
+import type { DocumentSession } from '../app/session';
+import { onGpuLost } from '../gpu/device';
+import type { LayerOverride } from '../rendering/compositor';
 
 interface LayerDrag {
   kind: 'layers';
@@ -50,6 +55,7 @@ interface FloatDrag {
   dx: number;
   dy: number;
   lastDirty: Rect;
+  preview?: { session: DocumentSession; docRev: number; raster: TiledRaster; rasterVersion: number; mask: TiledRaster; maskVersion: number; gpu: NonNullable<ReturnType<typeof gpuCompositor>>; cut: TiledRaster; pixels: TiledRaster; selectionVersion: number; moved: DocumentSession['doc']['selection']['moved']; stop: () => void; override: LayerOverride | null };
 }
 
 /**
@@ -269,6 +275,11 @@ export class MoveTool implements Tool {
       return;
     }
     const sel = s.doc.selection;
+    const gpu = gpuCompositor();
+    const initialBounds = sel.bounds(s.doc.bounds);
+    if (!initialBounds) return;
+    const enabled = import.meta.env.DEV && (globalThis as unknown as { __webPainterTask02?: boolean }).__webPainterTask02 === true;
+    const supported = enabled && !!gpu && !gpu.disposed && !gpu.viewSupported(s.doc, s.engine.view) && !s.engine.hasOverrides() && s.doc.canvas.colorMode === 'rgb' && s.doc.canvas.bitDepth === 8 && s.view.level(s.engine.maxLevel()) <= 2 && Math.ceil(initialBounds.w / TILE_SIZE) * Math.ceil(initialBounds.h / TILE_SIZE) <= gpu.reserveFloatingAtlas() && s.doc.root.children.every(l => !l.clipping && !hasEnabledEffect(l.effects) && !l.vectorMask && l.advanced.knockout === 'none' && (l.kind === 'pixel' || (l.kind === 'adjustment' && l.adjustment.type === 'curves')));
     const before = layer.raster.snapshot();
     const selBefore = sel.snapshot();
     // Still floating from the last drag: move the same pixels again (Alt-drag stamps a copy instead).
@@ -276,11 +287,11 @@ export class MoveTool implements Tool {
     if (f && !p.alt && f.layerId === layer.id && f.raster === layer.raster && f.rasterVersion === layer.raster.version && f.selVersion === sel.version) {
       const at = { x: f.rect.x + f.ox, y: f.rect.y + f.oy, w: f.rect.w, h: f.rect.h };
       this.drag = { kind: 'float', layerId: layer.id, start: { x: p.x, y: p.y }, before, selBefore, float: f.float, floatCov: f.floatCov, cutState: f.cutState, rect: f.rect, ox: f.ox, oy: f.oy, baseSelVersion: f.baseSelVersion, dx: 0, dy: 0, lastDirty: at };
+      if (supported) try { this.prepareFloatPreview(h, this.drag as FloatDrag, layer.raster, gpu!); } catch (error) { this.drag = null; toast(`Move preview failed: ${String(error)}`); }
       return;
     }
     this.floating = null;
-    const rect = sel.bounds(s.doc.bounds);
-    if (!rect) return;
+    const rect = initialBounds;
     const lr = { x: rect.x - layer.x, y: rect.y - layer.y, w: rect.w, h: rect.h };
     const px = layer.raster.readFloat(lr);
     const cov = sel.read(rect);
@@ -289,14 +300,50 @@ export class MoveTool implements Tool {
     const alpha = new Float32Array(rect.w * rect.h);
     for (let i = 0; i < alpha.length; i++) alpha[i] = (native[i * 4 + 3] / max) * cov[i];
     const float: FloatPixels = { px: native, alpha, w: rect.w, h: rect.h };
+    const cut = supported ? layer.raster.clone() : layer.raster;
     if (!p.alt) {
       for (let i = 0; i < rect.w * rect.h; i++) px[i * 4 + 3] *= 1 - cov[i];
-      layer.raster.writeFloat(lr, px);
+      cut.writeFloat(lr, px);
     }
-    const cutState = layer.raster.snapshot();
-    // (Put back at once: the hole appears with the first movement.)
-    layer.raster.restore(before);
+    const cutState = cut.snapshot();
+    // The legacy path temporarily cuts the formal raster; the experiment uses a private clone.
+    if (!supported) layer.raster.restore(before);
     this.drag = { kind: 'float', layerId: layer.id, start: { x: p.x, y: p.y }, before, selBefore, float, floatCov: cov, cutState, rect, ox: 0, oy: 0, baseSelVersion: sel.version, dx: 0, dy: 0, lastDirty: rect };
+    if (supported) try { this.prepareFloatPreview(h, this.drag, layer.raster, gpu!); } catch (error) { this.drag = null; toast(`Move preview failed: ${String(error)}`); }
+  }
+
+  private prepareFloatPreview(h: ToolHost, d: FloatDrag, raster: TiledRaster, gpu: NonNullable<ReturnType<typeof gpuCompositor>>) {
+    const s = h.session;
+    const cut = new TiledRaster(4, 8); cut.restore(d.cutState);
+    const data = new Float32Array(d.float.w * d.float.h * 4);
+    for (let i = 0; i < d.float.alpha.length; i++) {
+      data[i * 4] = d.float.px[i * 4] / 255; data[i * 4 + 1] = d.float.px[i * 4 + 1] / 255;
+      data[i * 4 + 2] = d.float.px[i * 4 + 2] / 255; data[i * 4 + 3] = d.float.alpha[i];
+    }
+    const pixels = TiledRaster.fromPixels(d.float.w, d.float.h, 4, 32, data);
+    const invalidate = () => {
+      if (this.drag !== d || this.validPreview(h, d)) return;
+      this.clearFloatPreview(d); this.drag = null; h.redraw();
+    };
+    const stopDoc = s.doc.on(invalidate), stopGpu = onGpuLost(invalidate);
+    d.preview = { session: s, docRev: s.doc.rev, raster, rasterVersion: raster.version, mask: s.doc.selection.mask, maskVersion: s.doc.selection.mask.version, selectionVersion: s.doc.selection.version, moved: s.doc.selection.moved, gpu, cut, pixels, stop: () => { stopDoc(); stopGpu(); }, override: null };
+    editor.beginInteraction();
+  }
+
+  private validPreview(h: ToolHost, d: FloatDrag): boolean {
+    const p = d.preview, s = h.session, l = s.doc.getLayer(d.layerId);
+    return !!p && p.session === s && editor.active === s && s.doc.rev === p.docRev && !!l && hasRaster(l) && l.raster === p.raster && l.raster.version === p.rasterVersion && !l.locks.pixels && !l.locks.position && !l.locks.all && s.doc.selection.mask === p.mask && p.mask.version === p.maskVersion && s.doc.selection.version === p.selectionVersion && s.view.level(s.engine.maxLevel()) <= 2 && gpuCompositor() === p.gpu && !p.gpu.disposed;
+  }
+
+  private clearFloatPreview(d: FloatDrag) {
+    const p = d.preview;
+    if (!p) return;
+    p.stop();
+    if (p.override && p.session.engine.getOverride(d.layerId) === p.override) p.session.engine.setOverride(d.layerId, null);
+    if (p.session.doc.selection.mask === p.mask && p.mask.version === p.maskVersion && p.session.doc.selection.version === p.selectionVersion) p.session.doc.selection.moved = p.moved;
+    p.gpu.releaseFloating(p.cut, p.pixels);
+    editor.endInteraction();
+    d.preview = undefined;
   }
 
   /** The float's selection outline at offset (dx, dy) from where it was lifted. */
@@ -343,16 +390,17 @@ export class MoveTool implements Tool {
     }
     // Floating pixels (offset from where they were lifted).
     const layer = s.doc.getLayer(d.layerId);
-    if (!layer || !hasRaster(layer)) return;
+    if (!layer || !hasRaster(layer)) { if (d.preview) { this.clearFloatPreview(d); this.drag = null; h.redraw(); } return; }
     if (dx === d.dx && dy === d.dy) return;
     const moved0 = !d.dx && !d.dy;
     d.dx = dx;
     d.dy = dy;
     dx += d.ox;
     dy += d.oy;
-    layer.raster.restore(d.cutState);
+    if (d.preview && !this.validPreview(h, d)) { this.clearFloatPreview(d); this.drag = null; h.redraw(); return; }
+    if (!d.preview) layer.raster.restore(d.cutState);
     const dest = { x: d.rect.x + dx, y: d.rect.y + dy, w: d.rect.w, h: d.rect.h };
-    stampFloat(layer.raster, dest.x - layer.x, dest.y - layer.y, d.float);
+    if (!d.preview) stampFloat(layer.raster, dest.x - layer.x, dest.y - layer.y, d.float);
     // Redraw only where the float was and where it is (and, the first time, the hole it leaves),
     // not the box spanning them, which grows with the distance dragged.
     const rects = [d.lastDirty, dest];
@@ -361,7 +409,25 @@ export class MoveTool implements Tool {
     // The outline follows as an offset; the selection mask itself is written when the drag ends.
     const sel = s.doc.selection;
     sel.moved = { version: sel.version, baseVersion: d.baseSelVersion, dx, dy, mdx: d.ox, mdy: d.oy };
-    s.doc.emit(...rects.map((rect) => ({ type: 'pixels' as const, layerId: layer.id, rect })));
+    if (d.preview) {
+      const preview = d.preview;
+      if (!d.dx && !d.dy) {
+        if (preview.override && s.engine.getOverride(layer.id) === preview.override) s.engine.setOverride(layer.id, null);
+        preview.override = null; sel.moved = preview.moved; h.redraw(); return;
+      }
+      let cpu: TiledRaster | null = null;
+      const override: LayerOverride = {
+        interaction: { valid: () => this.drag === d && this.validPreview(h, d), abort: () => { if (this.drag === d) { this.clearFloatPreview(d); this.drag = null; h.redraw(); } } },
+        read: (r, level) => {
+          if (!cpu) { cpu = new TiledRaster(4, 8); cpu.restore(d.cutState); stampFloat(cpu, dest.x - layer.x, dest.y - layer.y, d.float); }
+          const scale = 1 << level;
+          return cpu.readFloat({ x: r.x - Math.round(layer.x / scale), y: r.y - Math.round(layer.y / scale), w: r.w, h: r.h }, level);
+        },
+        gpu: { floating: { cut: preview.cut, pixels: preview.pixels, x: dest.x - layer.x, y: dest.y - layer.y } },
+      };
+      preview.override = override;
+      s.engine.setOverride(layer.id, override, union(union(rects[0], rects[1])!, d.rect));
+    } else s.doc.emit(...rects.map((rect) => ({ type: 'pixels' as const, layerId: layer.id, rect })));
     h.redraw();
   }
 
@@ -384,14 +450,45 @@ export class MoveTool implements Tool {
       return;
     }
     const layer = s.doc.getLayer(d.layerId);
-    if (!layer || !hasRaster(layer)) return;
+    if (!layer || !hasRaster(layer)) { if (d.preview) this.clearFloatPreview(d); return; }
     const sel = s.doc.selection;
+    if (d.preview && !this.validPreview(h, d)) { this.clearFloatPreview(d); h.redraw(); return; }
     if (!d.dx && !d.dy) {
       // No movement: nothing changed (a float stays floating).
+      if (d.preview) this.clearFloatPreview(d);
       if (this.floating) { this.floating.rasterVersion = layer.raster.version; this.floating.selVersion = sel.version; }
       return;
     }
     const ox = d.ox + d.dx, oy = d.oy + d.dy;
+    if (d.preview) {
+      // Prepare both results privately before touching the session's authoritative state.
+      try {
+        const next = new TiledRaster(4, 8); next.restore(d.cutState);
+        stampFloat(next, d.rect.x + ox - layer.x, d.rect.y + oy - layer.y, d.float);
+        const after = next.snapshot(), selAfter = this.floatSelection(d, ox, oy);
+        const from = { ...d.rect, x: d.rect.x + d.ox, y: d.rect.y + d.oy }, to = { ...d.rect, x: d.rect.x + ox, y: d.rect.y + oy };
+        const dirty = expand(union(union(from, to)!, d.rect)!, 1);
+        const historyId = s.history.current.id;
+        this.clearFloatPreview(d);
+        try {
+          layer.raster.restore(after); sel.restore(selAfter);
+          sel.moved = { version: sel.version, baseVersion: d.baseSelVersion, dx: ox, dy: oy, mdx: ox, mdy: oy };
+          s.push(new CompositeCommand('Move', [new RasterEditCommand('Move', { kind: 'layer', layerId: layer.id }, d.before, after, dirty), new RasterEditCommand('Move', { kind: 'selection' }, d.selBefore, selAfter, dirty)]), true);
+        } catch (error) {
+          try { if (s.history.current.id !== historyId) s.history.rejectLast(); }
+          finally { layer.raster.restore(d.before); sel.restore(d.selBefore); }
+          throw error;
+        }
+        this.floating = { layerId: layer.id, raster: layer.raster, rasterVersion: layer.raster.version, selVersion: sel.version, float: d.float, floatCov: d.floatCov, cutState: d.cutState, rect: d.rect, ox, oy, baseSelVersion: d.baseSelVersion };
+        try { s.doc.emit({ type: 'pixels', layerId: layer.id, rect: dirty }, { type: 'selection' }); }
+        catch (error) { console.warn('Move committed, but a document listener failed:', error); }
+      } catch (error) {
+        if (d.preview) this.clearFloatPreview(d);
+        toast(`Move failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      h.redraw();
+      return;
+    }
     sel.restore(this.floatSelection(d, ox, oy));
     sel.moved = { version: sel.version, baseVersion: d.baseSelVersion, dx: ox, dy: oy, mdx: ox, mdy: oy };
     s.doc.emit({ type: 'selection' });
@@ -417,6 +514,7 @@ export class MoveTool implements Tool {
       // A structural change also discards any lift and re-renders exactly.
       s.doc.emit({ type: 'structure' });
     } else {
+      if (d.preview) { this.clearFloatPreview(d); h.redraw(); return; }
       const layer = s.doc.getLayer(d.layerId);
       if (layer && hasRaster(layer)) layer.raster.restore(d.before);
       s.doc.selection.restore(d.selBefore);

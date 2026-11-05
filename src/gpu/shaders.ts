@@ -532,12 +532,11 @@ fn coverage(x: u32, y: u32) -> f32 {
   if ((p.cov >> 24u) == 0u) { return textureLoad(atlasCovA, vec2u(x, y), layer, 0).r; }
   return textureLoad(atlasCovB, vec2u(x, y), layer, 0).r;
 }
-fn atlasSample(x: u32, y: u32) -> vec4f {
-  let sx = p.rx0 + i32(x); let sy = p.ry0 + i32(y);
+fn atlasAt(sx: i32, sy: i32, gx0: i32, gy0: i32, gw: u32, gh: u32, grid: u32) -> vec4f {
   let tx = i32(floor(f32(sx) / 256.0)); let ty = i32(floor(f32(sy) / 256.0));
-  let gx = tx - p.gx0; let gy = ty - p.gy0;
-  if (gx < 0 || gy < 0 || gx >= i32(p.gw) || gy >= i32(p.gh)) { return vec4f(0.0); }
-  let slot = data[p.grid + u32(gy) * p.gw + u32(gx)];
+  let gx = tx - gx0; let gy = ty - gy0;
+  if (gx < 0 || gy < 0 || gx >= i32(gw) || gy >= i32(gh)) { return vec4f(0.0); }
+  let slot = data[grid + u32(gy) * gw + u32(gx)];
   if (slot == 0xFFFFFFFFu) { return vec4f(0.0); }
   let lx = u32(sx - tx * 256); let ly = u32(sy - ty * 256);
   let atlas = slot >> 24u; let layer = slot & 0xFFFFFFu;
@@ -551,6 +550,7 @@ fn atlasSample(x: u32, y: u32) -> vec4f {
     default: { return textureLoad(atlas32, q, layer, 0); }
   }
 }
+fn atlasSample(x: u32, y: u32) -> vec4f { return atlasAt(p.rx0 + i32(x), p.ry0 + i32(y), p.gx0, p.gy0, p.gw, p.gh, p.grid); }
 /** The (straight, masked) source pixel. */
 fn source(x: u32, y: u32, i: u32) -> vec4f {
   var s: vec4f;
@@ -704,6 +704,37 @@ fn gather(@builtin(global_invocation_id) id: vec3u) {
   var s = atlasSample(id.x, id.y);
   if ((p.flags & 16u) != 0u) { s = vec4f(s.rgb * s.a, s.a); }
   dst[id.y * p.w + id.x] = s;
+}
+// Compose at native resolution before the same 2x2 reductions as the RGBA8 pyramid.
+fn floatPixel(x: i32, y: i32) -> vec4f {
+  let b = atlasAt(x, y, p.gx0, p.gy0, p.gw, p.gh, p.grid);
+  let q = p.srcOff;
+  let f = atlasAt(x-bitcast<i32>(data[q]), y-bitcast<i32>(data[q+1u]), bitcast<i32>(data[q+2u]), bitcast<i32>(data[q+3u]), data[q+4u], data[q+5u], data[q+6u]);
+  if (f.a <= 0.0) { return b; }
+  if (f.a >= 1.0) { return vec4f(f.rgb, 1.0); }
+  let a = f.a + b.a * (1.0 - f.a);
+  let c = (f.rgb * f.a + b.rgb * b.a * (1.0 - f.a)) / a;
+  return round(clamp(vec4f(c, a), vec4f(0.0), vec4f(1.0)) * 255.0) / 255.0;
+}
+fn reduce4(a: vec4f, b: vec4f, c: vec4f, d: vec4f) -> vec4f {
+  let alpha = a.a + b.a + c.a + d.a;
+  if (alpha <= 0.0) { return vec4f(0.0); }
+  let rgb = (a.rgb*a.a + b.rgb*b.a + c.rgb*c.a + d.rgb*d.a) / alpha;
+  return round(clamp(vec4f(rgb, alpha * 0.25), vec4f(0.0), vec4f(1.0)) * 255.0) / 255.0;
+}
+fn block2(x: i32, y: i32) -> vec4f {
+  return reduce4(floatPixel(x,y),floatPixel(x+1,y),floatPixel(x,y+1),floatPixel(x+1,y+1));
+}
+@compute @workgroup_size(16, 16)
+fn floating(@builtin(global_invocation_id) id: vec3u) {
+  if (id.x >= p.w || id.y >= p.h) { return; }
+  let scale = i32(1u << p.mode);
+  let x = p.rx0 + i32(id.x)*scale; let y = p.ry0 + i32(id.y)*scale;
+  var c: vec4f;
+  if (p.mode == 0u) { c = floatPixel(x,y); }
+  else if (p.mode == 1u) { c = block2(x,y); }
+  else { c = reduce4(block2(x,y),block2(x+2,y),block2(x,y+2),block2(x+2,y+2)); }
+  dst[id.y*p.w+id.x] = c;
 }
 fn tap(i: i32) -> f32 { return df(p.adjBase + u32(i)); }
 @compute @workgroup_size(16, 16)

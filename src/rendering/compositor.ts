@@ -40,6 +40,8 @@ import type { BlendMode } from '../image-engine/blend';
 
 export interface LayerOverride {
   hidden?: boolean;
+  /** Experimental interaction validity check; invalid previews are discarded before display. */
+  interaction?: { valid: () => boolean; abort: () => void };
   /** Replaces content sampling (live transform / filter preview). Straight RGBA for rect at level (and CMYK plate). */
   read?: (r: Rect, level: number, plate?: number) => Float32Array;
   adjustment?: Adjustment;
@@ -52,7 +54,7 @@ export interface LayerOverride {
    * stays the CPU path): a destructive adjustment or a filter on the layer's pixels, blended by
    * the selection.
    */
-  gpu?: { adjustment?: Adjustment; filter?: { id: string; params: Record<string, unknown> } };
+  gpu?: { adjustment?: Adjustment; filter?: { id: string; params: Record<string, unknown> }; floating?: { cut: import('../image-engine/tiledRaster').TiledRaster; pixels: import('../image-engine/tiledRaster').TiledRaster; x: number; y: number } };
 }
 
 export interface CompositeOptions {

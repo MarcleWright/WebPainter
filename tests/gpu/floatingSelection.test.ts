@@ -1,0 +1,137 @@
+// @vitest-environment jsdom
+import { afterAll, beforeAll, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { testDevice, maxDiff } from '../helpers/gpu';
+import { GpuCompositor } from '../../src/gpu/compositor';
+import { setGpuCompositor } from '../../src/rendering/renderEngine';
+import { compositeRegion } from '../../src/rendering/compositor';
+import { editor } from '../../src/app/editor';
+import { MoveTool } from '../../src/tools/moveTool';
+import type { ToolHost, ToolPointer } from '../../src/tools/tool';
+import { add, newDoc } from '../helpers/build';
+import { createPixelLayer, createMask, createAdjustmentLayer } from '../../src/document/layerFactory';
+import { defaultAdjustment, type Adjustment } from '../../src/adjustments/types';
+import { TiledRaster } from '../../src/image-engine/tiledRaster';
+
+let gpu: GpuCompositor | null = null;
+beforeAll(async () => { const d = await testDevice(); if (d) gpu = new GpuCompositor(d); });
+afterAll(() => { setGpuCompositor(null); gpu?.dispose(); });
+const pt = (x: number, y: number): ToolPointer => ({ x, y, sx: x, sy: y, pressure: 1, tiltX: 0, tiltY: 0, twist: 0, button: 0, buttons: 1, shift: false, alt: false, mod: false, pointerType: 'mouse', time: 0, clickCount: 1 });
+it('composes float on GPU before layer effects and preserves formal pixels during movement', async () => {
+  if (!gpu) throw new Error('GPU unavailable: this test requires a real WebGPU adapter');
+  setGpuCompositor(gpu);
+  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
+  const doc = newDoc(64, 48); const data = new Uint8ClampedArray(64*48*4);
+  for(let i=0;i<64*48;i++) { data[i*4]=i%251; data[i*4+1]=(i*7)%256; data[i*4+2]=(i*11)%256; data[i*4+3]=[0,64,128,255][i%4]; }
+  const layer=createPixelLayer('test',8,TiledRaster.fromPixels(64,48,4,8,data)); add(doc,layer);
+  const session=editor.addDocument(doc); session.setActive(layer.id); session.view.zoom=.25;
+  doc.selection.combine({x:4,y:4,w:24,h:20}, Float32Array.from({length:480},(_,i)=>i%5===0?.5:1), 'replace');
+  const h: ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+  const t=new MoveTool(), rv=layer.raster.version, sv=doc.selection.mask.version;
+  t.down(h,pt(6,6)); t.move(h,pt(13,11));
+  expect(layer.raster.version).toBe(rv); expect(doc.selection.mask.version).toBe(sv);
+  const ov=session.engine.getOverride(layer.id); expect(ov?.gpu?.floating).toBeTruthy();
+  const previews: Float32Array[]=[];
+  for(let level=0;level<=2;level++) {
+    const r={x:0,y:0,w:64>>level,h:48>>level};
+    const before=gpu.stats.gpuPreviews;
+    const v=await gpu.compositeRead(doc,r,{level,overrides:new Map([[layer.id,ov!]])});
+    expect(gpu.stats.gpuPreviews).toBeGreaterThan(before); expect(v).not.toBeNull(); expect(v!.every(Number.isFinite)).toBe(true); previews.push(v!);
+  }
+  t.up(h);
+  for(let level=0;level<=2;level++) {
+    const r={x:0,y:0,w:64>>level,h:48>>level};
+    expect(maxDiff(previews[level],compositeRegion(doc,r,{level})).max).toBeLessThan(2/255);
+  }
+  const rect = { x: 0, y: 0, w: 64, h: 48 };
+  const b = layer.raster.readPixels(rect).slice();
+  const bsel = doc.selection.mask.readPixels(rect).slice();
+  t.down(h, pt(13,11)); t.move(h, pt(20,15)); t.up(h); t.up(h);
+  const c = layer.raster.readPixels(rect).slice();
+  expect(c).not.toEqual(b);
+  expect(session.history.undo()).toBe(true);
+  expect(layer.raster.readPixels(rect)).toEqual(b); expect(doc.selection.mask.readPixels(rect)).toEqual(bsel);
+  expect(session.history.undo()).toBe(true); expect(layer.raster.readPixels(rect)).toEqual(data);
+  expect(session.history.redo()).toBe(true); expect(session.history.redo()).toBe(true); expect(layer.raster.readPixels(rect)).toEqual(c);
+  t.down(h, pt(20,15)); t.move(h, pt(23,18)); t.cancel(h); expect(layer.raster.readPixels(rect)).toEqual(c);
+  // Alt copies, Shift constrains the move, and a boundary crossing remains undoable.
+  const bounds = doc.selection.bounds(doc.bounds)!;
+  t.down(h, {...pt(20,15), alt:true}); t.move(h, {...pt(28,18), shift:true}); t.up(h);
+  expect(doc.selection.bounds(doc.bounds)?.y).toBe(bounds.y);
+  expect(session.history.undo()).toBe(true); expect(layer.raster.readPixels(rect)).toEqual(c);
+  t.down(h, pt(20,15)); t.move(h, pt(-20,-15)); t.up(h);
+  expect(session.history.undo()).toBe(true); expect(layer.raster.readPixels(rect)).toEqual(c);
+  const historyId = session.history.current.id;
+  t.down(h, pt(20,15)); t.up(h); expect(session.history.current.id).toBe(historyId);
+  // An external write must invalidate the preview and survive its cancellation.
+  t.down(h, pt(20,15)); t.move(h, pt(24,18));
+  layer.raster.writeFloat({x:0,y:0,w:1,h:1}, new Float32Array([1,0,0,1]));
+  doc.emit({type:'pixels',layerId:layer.id,rect:{x:0,y:0,w:1,h:1}});
+  t.up(h); expect(layer.raster.readPixels({x:0,y:0,w:1,h:1})).toEqual(new Uint8ClampedArray([255,0,0,255]));
+  expect(session.engine.getOverride(layer.id)).toBeUndefined(); expect(session.history.current.id).toBe(historyId);
+  editor.removeSession(session.id); delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+});
+
+it('C2 experimental commit matches the pre-change raster and selection oracle', () => {
+  if (!gpu) throw new Error('GPU unavailable');
+  setGpuCompositor(gpu);
+  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
+  const w=24,h=16,doc=newDoc(w,h),pixels=new Uint8ClampedArray(w*h*4);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) { const i=(y*w+x)*4; pixels[i]=(x*37+y*11)%256; pixels[i+1]=(x*7+y*29)%256; pixels[i+2]=(x*13+y*19)%256; pixels[i+3]=[0,64,128,255][(x+y)%4]; }
+  const layer=createPixelLayer('C2',8,TiledRaster.fromPixels(w,h,4,8,pixels)); add(doc,layer);
+  const session=editor.addDocument(doc);session.setActive(layer.id);
+  const hst: ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+  const cov=new Float32Array(48); for(let y=0;y<6;y++)for(let x=0;x<8;x++)cov[y*8+x]=x===0||y===0||x===7||y===5?.5:1;
+  doc.selection.combine({x:2,y:2,w:8,h:6},cov,'replace');
+  const t=new MoveTool();t.down(hst,pt(4,4));t.move(hst,pt(10,7));
+  expect(session.engine.getOverride(layer.id)?.gpu?.floating).toBeTruthy(); t.up(hst);
+  const hash=(bytes: ArrayBufferView)=>createHash('sha256').update(new Uint8Array(bytes.buffer,bytes.byteOffset,bytes.byteLength)).digest('hex');
+  const r={x:0,y:0,w,h};
+  expect([hash(layer.raster.readPixels(r)),hash(doc.selection.mask.readPixels(r)),hash(compositeRegion(doc,r,{level:0}))]).toEqual([
+    '2b25e8a12a305e931b99d7b8cf73ff9cad4fea5570a3deb6562aa3f910256c85',
+    'bcb886f547c4855c500d0c01f1c94fcc58d361bd860fae4a091f116b3bdcd0da',
+    '55d7d6b246aa6247c6f83c61d7ac286871039063f72698c65ba1e10339ba559a']);
+  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+});
+
+it('C1 GPU preview retains mask, multiply, opacity, and curves at 25 percent', async () => {
+  if (!gpu) throw new Error('GPU unavailable'); setGpuCompositor(gpu);
+  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
+  const doc=newDoc(128,96);const rgba=new Uint8ClampedArray(128*96*4);
+  for(let i=0;i<128*96;i++){rgba[i*4]=i%251;rgba[i*4+1]=(i*7)%256;rgba[i*4+2]=(i*19)%256;rgba[i*4+3]=255;}
+  add(doc,createPixelLayer('background',8,TiledRaster.fromPixels(128,96,4,8,rgba)));
+  const l=createPixelLayer('photo',8,TiledRaster.fromPixels(128,96,4,8,rgba));l.opacity=.65;l.blendMode='multiply';l.mask=createMask(true);
+  l.mask.raster.writeFloat({x:0,y:0,w:128,h:96},Float32Array.from({length:128*96},(_,i)=>[0,.5,1][Math.floor((i%128)/32)%3]));add(doc,l);
+  const curves=defaultAdjustment('curves') as Extract<Adjustment, {type:'curves'}>;curves.rgb=[{x:0,y:0},{x:128,y:160},{x:255,y:255}];add(doc,createAdjustmentLayer(curves,'curves'));
+  const session=editor.addDocument(doc);session.setActive(l.id);session.view.zoom=.25;
+  doc.selection.combine({x:8,y:8,w:64,h:48},new Float32Array(64*48).fill(1),'replace');
+  const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+  const t=new MoveTool();t.down(host,pt(20,20));t.move(host,pt(35,27));
+  const ov=session.engine.getOverride(l.id);expect(ov?.gpu?.floating).toBeTruthy();
+  const rect={x:0,y:0,w:32,h:24}, before=gpu.stats.gpuPreviews;
+  const preview=await gpu.compositeRead(doc,rect,{level:2,overrides:new Map([[l.id,ov!]])});
+  expect(gpu.stats.gpuPreviews).toBeGreaterThan(before); expect(preview).not.toBeNull(); expect(preview!.every(Number.isFinite)).toBe(true);
+  t.up(host);const exact=compositeRegion(doc,rect,{level:2});
+  expect(maxDiff(preview!,exact).max).toBeLessThan(2/255);
+  expect(l.opacity).toBe(.65);expect(l.blendMode).toBe('multiply');expect(l.mask?.enabled).toBe(true);
+  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+});
+
+it('commit failure rolls back pixels, selection and history', () => {
+  if (!gpu) throw new Error('GPU unavailable');setGpuCompositor(gpu);
+  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
+  const doc=newDoc(32,24), data=new Uint8ClampedArray(32*24*4).fill(127);
+  const l=createPixelLayer('failure',8,TiledRaster.fromPixels(32,24,4,8,data));add(doc,l);
+  const session=editor.addDocument(doc);session.setActive(l.id);
+  doc.selection.combine({x:4,y:4,w:8,h:8},new Float32Array(64).fill(1),'replace');
+  const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+  const region={x:0,y:0,w:32,h:24},original=l.raster.readPixels(region).slice(),mask=doc.selection.mask.readPixels(region).slice(), id=session.history.current.id;
+  const t=new MoveTool();t.down(host,pt(6,6));t.move(host,pt(12,10));
+  expect(session.engine.getOverride(l.id)?.gpu?.floating).toBeTruthy();
+  const restore=l.raster.restore.bind(l.raster);let calls=0;
+  l.raster.restore=(snap)=>{if(calls++===0)throw new Error('injected commit failure');restore(snap);};
+  t.up(host);l.raster.restore=restore;
+  expect(l.raster.readPixels(region)).toEqual(original);expect(doc.selection.mask.readPixels(region)).toEqual(mask);
+  expect(session.history.current.id).toBe(id);expect(session.engine.getOverride(l.id)).toBeUndefined();
+  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+});

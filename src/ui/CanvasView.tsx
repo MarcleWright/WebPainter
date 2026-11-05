@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { editor } from '../app/editor';
 import { ui, useApp } from '../app/store';
 import { useSession } from './hooks';
-import { createViewportRendererAsync, RendererChoice, ViewportRenderer } from '../rendering/viewportRenderer';
+import { createViewportRendererAsync, planTiles, RendererChoice, ViewportRenderer } from '../rendering/viewportRenderer';
 import { setGpuCompositor } from '../rendering/renderEngine';
 import type { Tool, ToolHost, ToolPointer } from '../tools/tool';
 import { transformController, transformingSelection } from '../tools/transformTool';
@@ -311,10 +311,16 @@ export function CanvasView() {
       const r = rendererRef.current;
       if (!s || !r) return;
       const eng = s.engine;
+      eng.checkPreview();
       let complete = true;
       if (dirty.current || eng.hasPendingWork()) {
         // While painting, leave frame time to the brush; moving layers has no such competition.
-        eng.process(pointerDown.current && editor.currentToolId !== 'move' ? 6 : 12);
+        if (eng.atomicPreview) {
+          const { w, h } = sizeRef.current;
+          planTiles(eng, s.view, w, h);
+          eng.process(Infinity);
+          eng.atomicPreview = false;
+        } else eng.process(pointerDown.current && editor.currentToolId !== 'move' ? 6 : 12);
         complete = r.render(eng, s.view, { pasteboard: PASTEBOARD, checkerSize: editor.prefs.general.checkerSize, checkerLight: [1, 1, 1], checkerDark: [0.8, 0.8, 0.8], lut: lutFor() });
         dirty.current = !complete || eng.hasPendingWork();
         overlayDirty.current = true;

@@ -195,6 +195,8 @@ export class RenderEngine {
   private queue: { level: number; tx: number; ty: number; prio: number }[] = [];
   private queued = new Set<string>();
   private overrides = new Map<LayerId, LayerOverride>();
+  /** Keep a floating-preview generation together when rendering visible tiles. */
+  atomicPreview = false;
   lift: LiftState | null = null;
   private unsub: () => void;
   private clock = 0;
@@ -306,8 +308,13 @@ export class RenderEngine {
     this.invalidate(null);
   }
 
+  checkPreview(): void {
+    for (const ov of this.overrides.values()) if (ov.interaction && !ov.interaction.valid()) ov.interaction.abort();
+  }
+
   /** Live preview override for a layer (transform drag, filter preview...). */
   setOverride(id: LayerId, ov: LayerOverride | null, dirty: Rect | null = null): void {
+    if (ov?.gpu?.floating || this.overrides.get(id)?.gpu?.floating) this.atomicPreview = true;
     if (ov) this.overrides.set(id, ov);
     else this.overrides.delete(id);
     this.invalidate(dirty);

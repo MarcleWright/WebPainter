@@ -50,13 +50,14 @@ const PAGE_BYTES = 32 << 20;
 class Atlas {
   readonly pages: (GPUTexture | null)[];
   readonly views: GPUTextureView[];
-  readonly layers: number;
+  layers: number;
   private owners: (object | string | null)[];
   private revs: number[];
   private used: number[];
   private index = new Map<object | string, number>();
-  constructor(private device: GPUDevice, readonly format: GPUTextureFormat, readonly ids: number[], private bytesPerPixel: number, placeholder: GPUTextureView, private onPage: () => void) {
-    this.layers = Math.max(8, Math.min(device.limits.maxTextureArrayLayers, Math.floor(PAGE_BYTES / (TS * TS * bytesPerPixel))));
+  uploads = 0;
+  constructor(private device: GPUDevice, readonly format: GPUTextureFormat, readonly ids: number[], private bytesPerPixel: number, private placeholder: GPUTextureView, private onPage: () => void, pageBytes = PAGE_BYTES) {
+    this.layers = Math.max(8, Math.min(device.limits.maxTextureArrayLayers, Math.floor(pageBytes / (TS * TS * bytesPerPixel))));
     this.pages = ids.map(() => null);
     this.views = ids.map(() => placeholder);
     const n = this.layers * ids.length;
@@ -93,6 +94,7 @@ class Atlas {
       const p = Math.floor(s / this.layers);
       this.device.queue.writeTexture({ texture: this.page(p), origin: { x: 0, y: 0, z: s % this.layers } }, bytes, { bytesPerRow: u.w * this.bytesPerPixel, rowsPerImage: u.h }, { width: u.w, height: u.h, depthOrArrayLayers: 1 });
       this.revs[s] = rev;
+      this.uploads++;
     }
     this.used[s] = serial;
     return (this.ids[Math.floor(s / this.layers)] << 24) | (s % this.layers);
@@ -110,6 +112,25 @@ class Atlas {
     }
     if (best < 0) throw new Unsupported('GPU atlas is full for this tile');
     return best;
+  }
+
+  /** Expand only an empty atlas; experimental float previews can retain a full 4K fragment. */
+  reserveEmpty(pageBytes: number): void {
+    const layers = Math.max(8, Math.min(this.device.limits.maxTextureArrayLayers, Math.floor(pageBytes / (TS * TS * this.bytesPerPixel))));
+    if (layers <= this.layers || this.index.size) return;
+    this.destroy(); this.layers = layers;
+    this.pages.fill(null); this.views.fill(this.placeholder);
+    const n = layers * this.ids.length;
+    this.owners = new Array(n).fill(null); this.revs = new Array(n).fill(-1); this.used = new Array(n).fill(-1);
+    this.onPage();
+  }
+
+  forget(keys: Iterable<object>): void {
+    for (const key of keys) {
+      const slot = this.index.get(key);
+      if (slot === undefined) continue;
+      this.index.delete(key); this.owners[slot] = null; this.revs[slot] = -1; this.used[slot] = -1;
+    }
   }
 
   bytes(): number {
@@ -130,7 +151,7 @@ interface SrcDesc {
   groupUnpremul?: boolean;
 }
 
-type Pipe = keyof typeof WGSL_MODULES | `filter:${'gather' | 'blurH' | 'blurV' | 'straighten' | 'unsharp' | 'crop' | 'selmix'}`;
+type Pipe = keyof typeof WGSL_MODULES | `filter:${'gather' | 'blurH' | 'blurV' | 'straighten' | 'unsharp' | 'crop' | 'selmix' | 'floating'}`;
 
 interface Op {
   pipe: Pipe;
@@ -190,6 +211,8 @@ export class GpuCompositor {
   private lutCache = new WeakMap<object, { tex: GPUTexture; view: GPUTextureView; n: number }>();
   private dummyLut: GPUTextureView;
   private tileTextures = new Set<GPUTexture>();
+  get floatingAtlasUploads(): number { return this.atlases[2].uploads; }
+  reserveFloatingAtlas(): number { this.atlases[2].reserveEmpty(128 << 20); return this.atlases[2].layers; }
   readonly stats: GpuCompositorStats = { gpuTiles: 0, cpuTiles: 0, gpuPreviews: 0, lastFallback: null };
   disposed = false;
 
@@ -345,6 +368,12 @@ export class GpuCompositor {
     read.unmap();
     read.destroy();
     return out;
+  }
+
+  /** Forget interaction-owned tiles, allowing atlas slots and their keys to be reused. */
+  releaseFloating(cut: TiledRaster, pixels: TiledRaster): void {
+    this.atlases[0].forget(cut.tiles.values());
+    this.atlases[2].forget(pixels.tiles.values());
   }
 
   releaseTile(tile: DisplayTile): void {
@@ -580,6 +609,20 @@ export class GpuCompositor {
 
   private previewSource(enc: Encoding, ctx: Ctx, layer: Layer & { raster: TiledRaster; x: number; y: number }, r: Rect, g: NonNullable<LayerOverride['gpu']>): SrcDesc | null {
     if (isLabDoc(ctx.doc)) return null; // Lab previews run through the RGB view on the CPU
+    if (g.floating) {
+      if (ctx.level > 2 || ctx.plate || ctx.doc.canvas.colorMode !== 'rgb') return null;
+      const scale = 1 << ctx.level;
+      const x = (r.x - Math.round(layer.x / scale)) * scale;
+      const y = (r.y - Math.round(layer.y / scale)) * scale;
+      const region = { x, y, w: r.w * scale, h: r.h * scale };
+      const f = g.floating;
+      const base = this.atlasSource(enc, f.cut, { x: 0, y: 0 }, region, 0);
+      const frag = this.atlasSource(enc, f.pixels, { x: 0, y: 0 }, { ...region, x: x - f.x, y: y - f.y }, 0);
+      const meta = enc.pushU32([f.x, f.y, frag.gx0!, frag.gy0!, frag.gw!, frag.gh!, frag.grid!]);
+      const out = this.take(enc, r.w * r.h);
+      this.raw(enc, 'filter:floating', { w: r.w, h: r.h, mode: ctx.level, srcOff: meta, atlas: base }, out, null, null);
+      return { src: SRC.straight, buf: out, srcOff: 0 };
+    }
     if (g.adjustment) {
       const key = isCmykDoc(ctx.doc) ? (ctx.plate === 1 ? 'cmyk1' : 'cmyk0') : 'rgb';
       const e = encodeAdjustment(g.adjustment, key);
@@ -651,7 +694,7 @@ export class GpuCompositor {
     return { src: SRC.straight, srcOff: enc.pushUpload(content) };
   }
 
-  private atlasSource(enc: Encoding, raster: TiledRaster, layer: Layer & { x: number; y: number }, r: Rect, level: number): SrcDesc {
+  private atlasSource(enc: Encoding, raster: TiledRaster, layer: { x: number; y: number }, r: Rect, level: number): SrcDesc {
     const s = 1 << level;
     const rx0 = r.x - Math.round(layer.x / s), ry0 = r.y - Math.round(layer.y / s);
     const { tx0, ty0, tx1, ty1 } = tileRange({ x: rx0, y: ry0, w: r.w, h: r.h });
