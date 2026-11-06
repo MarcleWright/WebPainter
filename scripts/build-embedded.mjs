@@ -9,7 +9,7 @@ execFileSync(process.execPath, ['node_modules/vite/bin/vite.js','build','--confi
 // A self-contained ESM codec also loads inside the host's CommonJS Electron package.
 // It contains data/validation only, never an active editor, UI or desktop boot.
 await build({entryPoints:['src/document/native.ts'],outfile:'dist-embedded/native.mjs',bundle:true,format:'esm',platform:'neutral',target:'es2022',minify:true,sourcemap:false});
-const input = [...files('src'), 'vite.embedded.config.ts','scripts/build-embedded.mjs','package.json','package-lock.json'];
+const input = [...files('src'),...files('third_party/libraw'),'LICENSE','LICENSE-MIT','LICENSE-APACHE','scripts/raw/build-libraw.ps1','scripts/embedded-licenses.mjs', 'vite.embedded.config.ts','scripts/build-embedded.mjs','package.json','package-lock.json'];
 const sourceHash = hash(input.sort().map(p => `${p.replaceAll('\\','/')} ${hash(readFileSync(p))}\n`).join(''));
 const entries = files('dist-embedded').filter(p => !p.endsWith('manifest.json')).map(p => ({path:relative('dist-embedded',p).replaceAll('\\','/'), bytes:readFileSync(p).length, sha256:hash(readFileSync(p))}));
 // Report the actual build worktree. A later commit must never relabel an old bundle.

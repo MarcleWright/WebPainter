@@ -33,3 +33,9 @@ Planned / 待审查及实施授权。依赖 [03D](2026-11-06_03D_ada-document-wo
 ## Execution Report
 
 未执行。产品可用性、真实模型、Photoshop、离线和打包结论分别列出, 缺失项指定后续 owner。
+
+## Authorized Execution Progress
+
+Owner已授权03B→D→E→F连续实施。ADA03E阶段提交ae42e37f，实际正式Desktop+app协议+同iframe、受控HTTP Provider完整链路已执行，Provider次数1且S图像hash与实际multipart一致；不作真实/付费模型验收。03F开始补资源/独立入口与真正打包。
+
+embedded资源构建新增实际Rollup module归属清单与16份实际依赖许可证（含两版pako），WP原LICENSE/MIT/Apache，以及LibRaw0.22.2源码archive、桥接CPP、许可证/COPYRIGHT/README与构建脚本；包内worker与harfbuzz/lcms/libraw三个WASM保留，无新增字体分发或品牌替换。未直接修改固定vendor包。类型、包构建与端口native/RPC11/11通过后提交构建脚本，随后清洁重建替换ADA并重验；上述是资源清点和技术检查，不替代人工/法律发行验收。
