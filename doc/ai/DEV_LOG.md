@@ -1,5 +1,7 @@
 # 工作进展索引
 
+2026-11-06 — 03B main通用native v1：显式有界manifest/binary tile、稳定ID和支持数据恢复、继续编辑/撤销、非法输入拒绝；独立PSD管线保留。[格式与边界](../engineering/NATIVE_FORMAT.md)。通过阶段门槛后本地提交并由main单向合入embedded，不推送/发布。
+
 ## Recent
 
 ### 2026-11-06 保存与关闭可靠性实现
