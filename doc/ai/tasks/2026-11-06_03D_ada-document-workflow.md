@@ -60,3 +60,13 @@ Planner 已独立核对 ADA e9f45893 的 `ProfileRuntimeRoot.tsx`, `profile-conn
 ## Plan Review Follow-up
 
 2026-11-06 [独立评审 R1/P2](2026-11-06_03_ada-integration-architecture-review.md)由 planner 静态复核后采纳。已补续期/离开边界、长期会话与单次 transport 身份、owner 和定向验收; 待 reviewer 对修订文档复核。未修改 reviewer 原结论, 不将计划修订视为代码实现、测试通过或 R1 独立关闭。
+
+## Authorized Implementation Progress
+
+Owner 本轮已授权03B→D→E→F连续实施。03D ADA owner 已实现独立drawing创建/保存/CAS、准入状态/原操作查询、单个恢复sidecar、来源引用保护与准确预览；正式Canvas toolbar/节点编辑入口、同iframe薄面板、实际Desktop协议/CSP与应用退出关闭合同已接通。同实例续期沿长期会话+单次transport边界。ADA阶段任务记录详见指定仓库的 2026-11-06_03BDEF_webpainter-production-integration.md。
+
+已实际执行：真实Artifact/API定向组合33/33；新增真实Web adapter→HTTP→Artifact owner延迟回执/续期查询1/1；contracts3/3、Profile controller/workspace/scopedclient、03C两项P2回归29项及共享面板通过。Electron44.9.0实际app协议+生产Canvas入口在隔离Profile运行创建、原图加入、绘画、保存、退出Cancel/重开；同实例续期叠加已提交但暂扣回执、较新本地变更、原操作新transport查询、续期失败保留dirty；真正应用quit Cancel通过。无CSP响应替换、mock保存或真实Provider。
+
+升级演练：main 1b00ef79 的通用非法类型校验更新，单向merge 913fd9a5；清洁包fb1c151c…，原owner保存的nativeId/hash重开保持、继续编辑保存/节点重开通过。main新增6个非法输入先复现，24/24与独立完整build通过；embedded组合41/41。随后端口独立限制可选PNG32MiB，手动native保存不因超限失败，生成捕获仍拒绝；先复现1failed/8passed，修复18/18与类型通过，embedded3cab474e的清洁包cff1ce50…由ADA替换后重验，不能追认此前实窗为此新包。
+
+恢复候选重启实窗、正式packaged/offline、PSD/人工输入等仍归03F统一检查；此记录不是全部验收通过。
