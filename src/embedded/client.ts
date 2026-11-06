@@ -2,6 +2,10 @@
 export async function mountDirect(container: HTMLElement, host: HostPort): Promise<EmbeddedEditor> {
   return (await import('./mount')).mountDirect(container, host);
 }
+/** A composition page owns its document; the host may place its own UI beside WP. */
+export async function mountPage(container: HTMLElement, host: HostPort): Promise<EmbeddedEditor> {
+  return (await import('./mount')).mountFrame(container, host);
+}
 export type { EmbeddedEditor, HostPort, Output } from './contract';
 import type { EmbeddedEditor, HostPort, EditorState } from './contract';
 import { connectRpc } from './rpc';

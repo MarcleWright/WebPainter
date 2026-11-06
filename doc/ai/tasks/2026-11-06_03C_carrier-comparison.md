@@ -1,5 +1,15 @@
 # Task 03C: 独立全屏承载 A/B 有限对照与定案
 
+## Bottom Panel Bounded Prototype
+
+2026-11-06 新一轮授权：仅底部 ADA 悬浮面板与受控链路补验，允许在当前分支分阶段本地提交。此前两项 P2 独立复审 Approved，保留其回归。承载尚未确认，03B/D/E/F 未获实施授权。下方旧报告仍按原包/原阶段理解。
+
+开工核对：WP `integration/embedded` / `3a04360b6c74c0539d4e058b55fe54310cd4fe61`；ADA `codex/isolate-drawing-interface-20261104` / `feac5a452c39ae5c1dcccd10ddcffc5a8395b8e3`，两边干净，未用 `_New`。WP main 与 merge-base 均为 `ef3eea87beb00b2c79c6f1e4902e4a5739ef8557`。
+
+阶段 1（通用挂载）：WP client 只增加懒加载 `mountPage`，让 ADA 自有 iframe 页面可在同一 document 组合 WP 和 ADA 面板；原 mountDirect/mountIframe 与独立入口保留。没有 ADA 模型/Provider/Artifact 代码进入 WP，没有新增插件框架。构建 manifest 改为报告实际 dirty 和 main merge-base，避免把已提交源码或已移动 main 冒充旧包版本。
+
+阶段检查：WP typecheck、embeddedLifecycle/embeddedRpc **9/9** 通过。下一步先提交此通用入口，再从干净的确切 commit 重新构建固定包，ADA 校验并复制后验证两条路径。最终本轮证据、配套提交及未验收项在本节续记；阶段提交不是验收。
+
 ## Status
 
 Finite prototype complete / **Inconclusive**，2026-11-06。Owner 本轮授权仅 03A 与 03C 有限原型/测试。依赖 [03A](2026-11-06_03A_editor-boundary.md)，没有实施 03B、03D/03E/03F。等待独立 review、Owner 确认承载及后续授权。
