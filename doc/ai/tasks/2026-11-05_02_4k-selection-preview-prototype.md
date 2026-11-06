@@ -225,6 +225,12 @@ C0/C1 在一次固定最终位移各取原位置、新位置、边缘三处 32×
 
 验证: JS 语法检查通过; 已实际执行 bat 并得到启动诊断: enabled=true, renderer=webgpu (GPU compositing), gpu=true, autosaveMinutes=0, width=3840, height=2160, sessions=1。这仅证明入口与初始配置, 尚未人工验证 F6-F9、连续拖动、分块/交接或关闭后的服务退出, 不宣称用户体验/性能通过。本轮未重新测量性能, 未提交或推送。
 
+## Current Source Editor Entry - 2026-11-06
+
+用户另要求双击启动当前源码的完整工程, 而非固定合成样例或未开启实验开关的生产路径。已新增 Start-WebPainter.bat、scripts/start-current.mjs 与 current-source-host.cjs: 启动前构建当前 Electron main/preload, 使用本地 Vite 加载当前前端, wrapper 加载正常主进程并开启已有开发实验开关, 关闭独立 profile 的自动保存, 不创建任何测试图片。不修改优化算法、文件读写实现或生产默认开关, 未将新入口视为日常正式化验收。
+
+实际启动诊断: enabled=true、nativeBridge=true、autosaveMinutes=0、renderer=webgpu (GPU compositing)、sessions=0, JS 语法检查通过。正常桌面文件服务沿用原实现, 本轮未重新完成打开/保存/导出矩阵或实际拖动验证。操作说明见 [DEV_SETUP](../../engineering/DEV_SETUP.md#启动当前源码的完整工程)。本轮未提交/推送。
+
 ## User Feedback - 2026-11-06
 
 用户通过手测入口反馈: 性能确实优化, 达到可用水平。这是优化路径的实际用户体验确认, 取代“用户尚未试用”的当前状态; 未提供各 C0/C1 场景、100% 缩放、完整交接/效果矩阵的分别确认, 不据此补记未执行检查或量化 FPS, 不自动视为生产默认开启/发布验收。
@@ -240,3 +246,4 @@ C0/C1 在一次固定最终位移各取原位置、新位置、边缘三处 32×
 - Avoid: 不把 CPU 全量改写优化、顶部图片覆盖、稀释输入或忽略效果当作成功; 不把离屏数字当生产窗口 FPS。
 - Follow-up: 完整性能/精细 GPU 读回/故障注入/资源审计、16 位及复杂组合、正式基准维护、拖动与持久化读取一致性、ADA 接入和离线/PSD 验收后续定义。后续工作由 AI_CONTEXT 与产品方向索引, 不自动扩大范围。
 - Repair: R1、R2 已按 Repair Adjustment 局部修复并通过独立复审; 用户试用后受限原型 Go, 正式化与未覆盖项继续后续处理。
+- Next: 用户已确认去掉实验开关的接入方向, 详见 [2026-11-06 默认接入任务](2026-11-06_01_default-gpu-selection-move.md); 当前仅创建任务, 不将原型通过解释为正式默认能力已交付。
