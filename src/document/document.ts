@@ -40,7 +40,7 @@ export type DocumentChange =
 export type DocumentListener = (changes: DocumentChange[]) => void;
 
 export class CelenneDocument {
-  readonly id = newId('doc');
+  readonly id: string;
   name: string;
   filePath: string | null = null;
   /** Format the document was loaded from / last saved as ("psd", "png", ...). */
@@ -72,7 +72,8 @@ export class CelenneDocument {
   private pending: DocumentChange[] = [];
   private batchDepth = 0;
 
-  constructor(name: string, canvas: CanvasInfo) {
+  constructor(name: string, canvas: CanvasInfo, id = newId('doc')) {
+    this.id = id;
     this.name = name;
     this.canvas = { ...canvas };
     this.root = createGroupLayer('Root');

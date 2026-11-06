@@ -1,5 +1,7 @@
 # 工作进展索引
 
+2026-11-06 — 03B main通用native v1：显式有界manifest/binary tile、稳定ID和支持数据恢复、继续编辑/撤销、非法输入拒绝；独立PSD管线保留。[格式与边界](../engineering/NATIVE_FORMAT.md)。通过阶段门槛后本地提交并由main单向合入embedded，不推送/发布。
+
 2026-11-06 — Owner 确认 iframe；03C 有限面板 review Approved。更新 ADR/架构及后续 B→D→E→F 连续执行安排，保留人工/正式宿主/离线等未验收项。本次仅文档。[选型](tasks/2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision)。
 
 2026-11-06 — 03C 面板有限原型完成自查：WP c9acf84 通用 mountPage/干净固定包、ADA 共用面板/受控合同；双方类型/构建、WP9、面板与保留P2/实窗通过。人工IME/手绘板/正式宿主仍 Pending，工程暂推荐B但总体 Inconclusive，待统一独立review/Owner选择。分阶段本地提交、不推送，03B/D/E/F 未推进。[记录](tasks/2026-11-06_03C_carrier-comparison.md#bottom-panel-bounded-prototype)。

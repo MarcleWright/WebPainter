@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-06 03B：main独立worktree通用native v1已实施，待后续统一review。初始main ef3eea8；75项首次组合检查、追加后native18项/类型及构建通过，6层4K codec与tile往返有记录。格式/拒绝边界见 [native格式](../engineering/NATIVE_FORMAT.md)，[执行证据](tasks/2026-11-06_03B_native-codec.md)。只由main单向合入embedded供ADA固定包使用，不引入ADA/embedded依赖；未推送/发布，人工/Photoshop未验收。
+
 2026-11-06 当前决策：Owner 已确认 **本地 iframe**，03C 有限面板原型独立 review Approved；Direct 仅实验，承载不再待选。03B/D/E/F 尚未实施，可按后续 coder 一次性授权连续实施、分阶段提交、最终统一 review；前置正确性检查与人工/真实环境验收仍分开。见[父任务当前执行安排](tasks/2026-11-06_03_ada-integration-architecture.md#current-decision-and-remaining-execution)和[选型记录](tasks/2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision)。本次仅修改 WP 文档，未实施、提交或推送；下方为历史记录。
 
 2026-11-06 最新：03C 底部面板有限原型与统一自查完成，待一次独立 review/Owner 承载确认。WP 源 c9acf84 干净重建包 f6e695f…，ADA 实现 d8ea30df/最终验证构建61ac1657；175文件校验、双方类型/构建、WP9项、ADA面板/旧壳/P2 29项、A/B面板2场景及P2实窗6场景通过。ADA 业务仍为固定模型/受控资源，无 Provider/正式保存。工程暂推荐B，人工IME/手绘板/正式宿主仍 Pending，总体 Inconclusive。详见[本轮 03C](tasks/2026-11-06_03C_carrier-comparison.md#bottom-panel-bounded-prototype)。仅本地分阶段提交，未推送/发布，03B/D/E/F 未实施；发评审后暂停。下方为历史阶段记录。

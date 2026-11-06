@@ -91,7 +91,7 @@ function bumpRevs(g: GroupLayer) {
 
 /** Isolated output checkpoint, including document preservation data and COW raster state. */
 export function snapshotDocument(doc: CelenneDocument): CelenneDocument {
-  const out = new CelenneDocument(doc.name, structuredClone(doc.canvas));
+  const out = new CelenneDocument(doc.name, structuredClone(doc.canvas), doc.id);
   restoreState(out, captureState(doc));
   out.canvas = structuredClone(doc.canvas); out.profile = structuredClone(doc.profile);
   out.smartSources = new Map([...doc.smartSources].map(([id, source]) => {
