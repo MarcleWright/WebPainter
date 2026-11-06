@@ -2,7 +2,10 @@ import { editor } from '../app/editor';
 import { allActions, register, run } from '../app/actions';
 import { closeSession, prepareMoveOutput, save } from '../app/fileOps';
 import { installPlatform, type Platform } from '../app/platform/platform';
-import { snapshotDocument } from '../document/clone';
+import { snapshotDocument, cloneLayer } from '../document/clone';
+import { decodeNative, encodeNative, isNative } from '../document/native';
+import { CreateLayerCommand } from '../commands/layerCommands';
+import { adoptLayers, spaceOfDoc } from '../color/convertDocument';
 import { findImporter, exporters } from '../formats/registry';
 import { registerTools } from '../tools/registry';
 import { keymap } from '../app/shortcuts';
@@ -41,7 +44,16 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
       await host.save({ ...op, format: 'psd-test', bytes });
       if (!valid(op)) throw new Error('Stale output receipt');
     },
-    confirm: (...args) => host.confirm(args[0], args[1], args[2] ?? ['OK', 'Cancel']),
+    async confirm(message,detail,buttons=['OK','Cancel']) {
+      const answer=await host.confirm(message,detail,buttons);
+      // Keep the core's close gate/output reservation. Native Save happens here, then the
+      // core may finish closing only after a confirmed, still-current clean checkpoint.
+      if(host.nativeVersion===1 && buttons.length===3 && buttons[0]==='Save' && buttons[1]==='Don’t Save') {
+        if(answer===0){try{await nativeCheckpoint(true,true);return editor.active?.modified?2:1;}catch(e){host.error({generation,message:String(e)});return 2;}}
+        return answer===1?1:2;
+      }
+      return Number.isInteger(answer)&&answer>=0&&answer<buttons.length?answer:buttons.length-1;
+    },
     recovery: { list: async () => [], save: unsupported, load: unsupported, remove: async () => {} },
     scratch: { put: unsupported, get: unsupported, remove: async () => {}, clear: async () => {}, location: async () => 'Unavailable' },
     setTitle() {}, setEdited: notify, onCloseRequested() {}, confirmClose() {}, onOpenFile() {},
@@ -60,7 +72,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
     }
   }
   keymap.rebuild();
-  async function capture(): Promise<Output> {
+  async function capture(format:'png'|'psd'='png'): Promise<Output> {
     assertLive();
     const s = editor.active;
     if (opening || !s || s.outputPending || s.closePending || !prepareMoveOutput(s)) throw new Error('Editor busy or unavailable');
@@ -68,13 +80,28 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
     s.editProtected = true; s.notify();
     const pending = Promise.resolve().then(async () => {
       const checkpoint = snapshotDocument(s.doc);
-      const bytes = await exporters.find(x => x.id === 'png')!.export(checkpoint, {});
+      const bytes = await exporters.find(x => x.id === format)!.export(checkpoint, {});
       if (!valid(op) || editor.session(s.id) !== s) throw new Error('Stale capture');
-      return { ...op, format: 'png' as const, bytes };
+      return { ...op, format, bytes };
     });
     s.outputPending = pending.then(() => true, () => false);
     try { return await pending; }
     finally { s.outputPending = null; s.editProtected = false; s.notify(); }
+  }
+  async function nativeCheckpoint(publish:boolean, closing=false):Promise<Output> {
+    assertLive();const s=editor.active;
+    if(host.nativeVersion!==1 || opening || !s || s.outputPending || (s.closePending&&!closing) || !prepareMoveOutput(s))throw Error('Native editor busy or unavailable');
+    const op=operation(),entry=s.history.current.id,protectedBefore=s.editProtected;
+    s.editProtected=true;s.notify();
+    const pending=Promise.resolve().then(async()=>{
+      const checkpoint=snapshotDocument(s.doc),bytes=encodeNative(checkpoint),preview=await exporters.find(x=>x.id==='png')!.export(checkpoint,{});
+      const output:Output={...op,format:'wpnative',bytes,preview,checkpoint:entry};
+      if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry)throw Error('Stale native checkpoint');
+      if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry)throw Error('Stale native receipt');s.markSaved(entry);}
+      return output;
+    });
+    s.outputPending=pending.then(()=>true,()=>false);
+    try{return await pending;}finally{s.outputPending=null;s.editProtected=protectedBefore;s.notify();}
   }
   const api: EmbeddedEditor = {
     async open(nextBinding, token) {
@@ -86,18 +113,46 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
         const resource = await host.readResource(op, token);
         if (!valid(op)) throw new Error('Stale open');
         const importer = findImporter(resource.bytes, resource.name);
-        if (!importer?.available) throw new Error('Unsupported resource');
-        const result = await importer.import(resource.bytes, resource.name, {});
+        const native=isNative(resource.bytes);
+        if(native && host.nativeVersion!==1)throw Error('Native host capability required');
+        if(!native&&!importer?.available)throw Error('Unsupported resource');
+        const result=native?decodeNative(resource.bytes):await importer!.import(resource.bytes, resource.name, {});
         if (!valid(op)) throw new Error('Stale open');
         result.doc.filePath = null;
         const s = editor.addDocument(result.doc);
+        if(resource.recovered)s.markUnsaved();
         offSession = s.on(notify); notify();
       } catch (e) { if (valid(op)) host.error({ generation, message: String(e) }); throw e; }
       finally { opening = false; }
     },
-    async save() { assertLive(); if (opening) return false; const ok = await save(); notify(); return ok; },
+    async save() {
+      assertLive();if(opening)return false;
+      if(host.nativeVersion===1){try{await nativeCheckpoint(true);notify();return true;}catch(e){host.error({generation,message:String(e)});return false;}}
+      const ok=await save();notify();return ok;
+    },
     captureComposite: capture,
+    captureNative:()=>nativeCheckpoint(false),saveAndCapture:()=>nativeCheckpoint(true),
     async exportPng() { const output = await capture(); await host.export(output); if (!valid(output)) throw new Error('Stale export receipt'); },
+    async exportPsd() { const output=await capture('psd');await host.export(output);if(!valid(output))throw Error('Stale export receipt'); },
+    async addResource(token) {
+      assertLive();const s=editor.active;
+      if(opening||!s||s.outputPending||s.closePending||!s.canEdit())throw Error('Editor busy');
+      const op=operation();s.editProtected=true;s.notify();
+      const pending=(async()=>{
+        const resource=await host.readResource(op,token),importer=findImporter(resource.bytes,resource.name);
+        if(resource.source && (!resource.source.id || !/^[a-f0-9]{64}$/.test(resource.source.hash)))throw Error('Invalid immutable resource source');
+        if(!importer?.available||importer.id==='psd'||isNative(resource.bytes))throw Error('Only raster image resources can be added');
+        const result=await importer.import(resource.bytes,resource.name,{}),layers=result.doc.allLayers();
+        if(layers.length!==1||layers[0].kind!=='pixel'||result.doc.width*result.doc.height>8192*8192)throw Error('Unsupported image resource');
+        if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale resource');
+        const layer=cloneLayer(layers[0],true);adoptLayers(s.doc,spaceOfDoc(result.doc),[layer]);
+        if(resource.source)layer.metadata.custom={source:{...resource.source}};
+        // The owner-held reservation protects the async read; release only for this command.
+        s.editProtected=false;s.push(new CreateLayerCommand('Add image resource',layer,null,s.doc.root.children.length));s.editProtected=true;s.setActive(layer.id);
+      })();
+      s.outputPending=pending.then(()=>true,()=>false);
+      try{await pending;}finally{s.outputPending=null;s.editProtected=false;s.notify();}
+    },
     async command(command) {
       assertLive();
       const ids = { undo: 'edit.undo', redo: 'edit.redo', layerViaCopy: 'layer.viaCopy', transform: 'edit.freeTransform' };

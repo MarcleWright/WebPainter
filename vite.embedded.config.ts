@@ -6,6 +6,6 @@ export default defineConfig({
   plugins: [react()], base: './', define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   worker: { format: 'es' }, optimizeDeps: { exclude: ['lcms-wasm'] },
   build: { outDir: 'dist-embedded', target: 'es2022', sourcemap: true,
-    rollupOptions: { preserveEntrySignatures: 'strict', input: { client: resolve('src/embedded/client.ts'), frame: resolve('embedded.html'), standalone: resolve('standalone-probe.html') },
+    rollupOptions: { preserveEntrySignatures: 'strict', input: { client: resolve('src/embedded/client.ts'), native:resolve('src/document/native.ts'), frame: resolve('embedded.html'), standalone: resolve('standalone-probe.html') },
       output: { entryFileNames: '[name].js' } }, chunkSizeWarningLimit: 4000 },
 });

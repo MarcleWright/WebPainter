@@ -7,6 +7,7 @@ export async function mountPage(container: HTMLElement, host: HostPort): Promise
   return (await import('./mount')).mountFrame(container, host);
 }
 export type { EmbeddedEditor, HostPort, Output } from './contract';
+export { PORT_VERSION } from './contract';
 import type { EmbeddedEditor, HostPort, EditorState } from './contract';
 import { connectRpc } from './rpc';
 
@@ -26,8 +27,8 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('message', ready); };
     const timer = setTimeout(() => { cleanup(); rpc.dispose(); frame.remove(); reject(new Error('Iframe handshake timeout')); }, 15000);
     const ready = (e: MessageEvent) => {
-      if (e.source !== frame.contentWindow || e.origin !== url.origin || e.data?.type !== 'wp-ready' || e.data?.version !== 1 || e.data?.nonce !== nonce) return;
-      cleanup(); frame.contentWindow!.postMessage({ type: 'wp-connect', version: 1, nonce }, url.origin, [channel.port2]); resolve();
+      if (e.source !== frame.contentWindow || e.origin !== url.origin || e.data?.type !== 'wp-ready' || e.data?.version !== 2 || e.data?.nonce !== nonce) return;
+      cleanup(); frame.contentWindow!.postMessage({ type: 'wp-connect', version: 2, nonce, nativeVersion:host.nativeVersion }, url.origin, [channel.port2]); resolve();
     };
     window.addEventListener('message', ready); frame.src = url.href; container.append(frame);
   });
@@ -37,6 +38,7 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
   return {
     open: (binding, token) => rpc.call('open', binding, token), save: () => rpc.call('save'), captureComposite: () => rpc.call('capture'),
     exportPng: () => rpc.call('exportPng'), command: command => rpc.call('command', command), state: () => cached,
+    captureNative:()=>rpc.call('captureNative'),saveAndCapture:()=>rpc.call('saveAndCapture'),addResource:token=>rpc.call('addResource',token),exportPsd:()=>rpc.call('exportPsd'),
     requestClose: () => rpc.call('close'),
     async destroy() {
       if (destroyed || cached.open) throw new Error('Close before destroy');

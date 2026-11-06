@@ -1,13 +1,14 @@
 /** Small request/reply channel. Unknown DTOs never dispatch to arbitrary object properties. */
-export type RpcMethod = 'open' | 'save' | 'capture' | 'exportPng' | 'command' | 'state' | 'close' | 'destroy' | 'readResource' | 'hostSave' | 'hostExport' | 'confirm' | 'dirty' | 'error';
-const methods = new Set<RpcMethod>(['open','save','capture','exportPng','command','state','close','destroy','readResource','hostSave','hostExport','confirm','dirty','error']);
+export type RpcMethod = 'captureNative' | 'saveAndCapture' | 'addResource' | 'exportPsd' | 'open' | 'save' | 'capture' | 'exportPng' | 'command' | 'state' | 'close' | 'destroy' | 'readResource' | 'hostSave' | 'hostExport' | 'confirm' | 'dirty' | 'error';
+const methods = new Set<RpcMethod>(['captureNative','saveAndCapture','addResource','exportPsd','open','save','capture','exportPng','command','state','close','destroy','readResource','hostSave','hostExport','confirm','dirty','error']);
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
 const op = (v: unknown) => record(v) && Number.isInteger(v.generation) && typeof v.operationId === 'string' && typeof v.binding === 'string';
-const output = (v: unknown) => op(v) && record(v) && ['png','psd-test'].includes(String(v.format)) && v.bytes instanceof Uint8Array;
+const output = (v: unknown) => op(v) && record(v) && ['png','psd-test','wpnative','psd'].includes(String(v.format)) && v.bytes instanceof Uint8Array && v.bytes.length<=512*1024*1024 && (v.format!=='wpnative'||(typeof v.checkpoint==='string'&&v.preview instanceof Uint8Array));
 export function validArgs(method: RpcMethod, a: unknown): a is unknown[] {
   if (!Array.isArray(a)) return false;
   switch(method) {
     case 'open': return a.length === 2 && a.every(x => typeof x === 'string');
+    case 'addResource': return a.length===1&&typeof a[0]==='string';
     case 'command': return a.length === 1 && ['undo','redo','layerViaCopy','transform'].includes(a[0]);
     case 'readResource': return a.length === 2 && op(a[0]) && typeof a[1] === 'string';
     case 'hostSave': case 'hostExport': return a.length === 1 && output(a[0]);
@@ -20,10 +21,10 @@ export function validArgs(method: RpcMethod, a: unknown): a is unknown[] {
 export function connectRpc(port: MessagePort, nonce: string, handlers: Partial<Record<RpcMethod, (...args: any[]) => unknown>>) {
   let serial = 0, disposed = false;
   const pending = new Map<number, { resolve(value: any): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
-  const send = (message: object) => { if (!disposed) port.postMessage({ version: 1, nonce, ...message }); };
+  const send = (message: object) => { if (!disposed) port.postMessage({ version: 2, nonce, ...message }); };
   port.onmessage = async event => {
     const m = event.data;
-    if (!record(m) || m.version !== 1 || m.nonce !== nonce || !Number.isSafeInteger(m.id)) return;
+    if (!record(m) || m.version !== 2 || m.nonce !== nonce || !Number.isSafeInteger(m.id)) return;
     if (m.type === 'reply') {
       const p = pending.get(m.id as number); if (!p || typeof m.ok !== 'boolean') return;
       pending.delete(m.id as number); clearTimeout(p.timer);

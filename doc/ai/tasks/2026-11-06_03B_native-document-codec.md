@@ -2,6 +2,12 @@
 
 ## Status
 
+2026-11-06 当前实施：Owner 已授权 B→D→E→F 连续执行。通用codec已在main `6cf7d0738361b941c985d4fd0fcc9176ce500628` 实施并通过阶段检查，单向合入embedded `eb4e4a07efa2994ccbdf379d76e434031453054f`；main不依赖embedded/ADA。reviewer的iframe交接文档先原样提交 `168da86`，合入只解决context/log冲突并保留双方记录。详见[main执行证据](2026-11-06_03B_native-codec.md)及[精确格式/支持边界](../../engineering/NATIVE_FORMAT.md)。下方 Planned 为历史状态。
+
+embedded增加通用 nativeVersion=1 宿主能力、受保护 native+PNG 检查点、read-only恢复捕获、saveAndCapture、带通用来源id/hash的图片加层及PSD导出；核心closeSession保留关闭队列，通过宿主保存门接通native，不另建关闭队列。端口显式升级v2，拒绝旧协议包；实验host未声明native仍保留旧PSD-test路径。新增纯codec构建入口供宿主消费同一格式而非复制解析内核。
+
+本阶段实际 native/embedded/native生命周期/RPC **33/33** 与typecheck通过。main既有阶段75项组合及18项native、构建、6层4K的原范围保留。下一步提交此端口后从干净commit重建固定包，配套hash和ADA消费检查后续补记；阶段提交不等于正式产品/人工验收。
+
 Planned / 待审查及实施授权。依赖 [03A](2026-11-06_03A_editor-boundary.md) 首版数据合同, 与承载 A/B 无关。父任务 [03](2026-11-06_03_ada-integration-architecture.md)。
 
 ## Task Brief And Evidence

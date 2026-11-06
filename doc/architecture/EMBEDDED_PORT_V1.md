@@ -1,5 +1,11 @@
 # Embedded Port v1 — 03A 实施边界
 
+## Current Port v2 / Native v1
+
+2026-11-06 03B后端口升级为 **2**，nativeVersion=**1**，下方v1为历史合同。`nativeVersion:1`宿主以native为事实保存，open解析同一通用codec；`captureNative`只捕获native+PNG+history checkpoint、不标clean；`saveAndCapture`从同一受保护快照输出两份内容，经host.save确认后核对代次/会话/entry才markSaved。`save`和核心关闭Save门复用该路径；失败保留dirty、关闭Cancel不移除会话。Resource可带recovered标记（打开后dirty）和通用source id/hash（内嵌像素/来源，不解释平台身份）。`addResource`经原CreateLayerCommand加图层/撤销，`exportPsd`经既有exporter独立输出，不移动保存点。
+
+新`native.js`纯codec构建入口导出create/inspect/encode/decode，供宿主校验相同格式，无UI或业务依赖。格式及支持/拒绝范围见[Native v1](../engineering/NATIVE_FORMAT.md)。旧端口握手不能消费v2；新固定包须按manifest重验，不追认旧03C包。WP通用iframe和ADA自有组合页是独立传输适配，后者业务合同由ADA拥有，Direct仍仅实验。
+
 2026-11-06。实现位于 `integration/embedded`，待独立 review；不是正式 ADA 保存合同。承载结论见 [03C](../ai/tasks/2026-11-06_03C_carrier-comparison.md)。
 
 ## 入口和所有权
