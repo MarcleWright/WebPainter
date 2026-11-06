@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned / 待审查及实施授权。依赖 [03D](2026-11-06_03D_ada-document-workflow.md)。父任务 [03](2026-11-06_03_ada-integration-architecture.md), 规则归 [集成架构](../../architecture/ADA_INTEGRATION.md#6-编辑器内生成)。
+Implemented / 本轮已授权实施；有限检查通过，待统一独立 review 与 Owner 验收。依赖 [03D](2026-11-06_03D_ada-document-workflow.md)。父任务 [03](2026-11-06_03_ada-integration-architecture.md), 规则归 [集成架构](../../architecture/ADA_INTEGRATION.md#6-编辑器内生成)。
 
 ## Task Brief And Owners
 
@@ -37,4 +37,13 @@ Planned / 待审查及实施授权。依赖 [03D](2026-11-06_03D_ada-document-wo
 
 ## Execution Report
 
-未执行。报告 snapshot、执行和 Results 的真实身份、发布/交付边界, 区分受控 provider 与真实模型验收。
+本轮执行见下。03C 原型证据不追认为正式业务接线；真实/付费 Provider 未调用。
+
+
+## 2026-11-07 Implementation And Evidence
+
+ADA阶段 ae42e37f 接入原模型配置/GenerationRuntime/Artifact/Results；最终运行代码构建自干净 0b4e1db17ac392468c9a42b1bbd96801c3b2defb。共用同iframe薄面板，Direct仍为03C实验。准确保存回执D/r加PNG发布不可变S，system execution无Canvas目标；B发布事务保存原D/r/S/execution证明，原relation owner完成Results。关闭面板不取消已受理业务，交付失败只补原交付，显式加层可undo/redo且B仍在Results，不自动插层或创建Canvas节点。没有另建业务队列/Artifact库/插件框架。
+
+真实临时SQLite/Artifact/GenerationRuntime/HTTP受控Provider组合及旧生成回归通过，最终受影响API组合57/57；其中drawing owner+client+generation14/14。真正production ASAR/Electron44.9、正式app协议/CSP与Canvas页面跑通六层4096²非均匀RGBA+文字/蒙版/曲线、D/r→S→Provider实际multipart→B/Results→显式加层及退出重开。只读提取实际隔离库核对：D doc-fw7qc-1；S来自r2，图像SHA256 dd79f167db8a56be45ad09982c7cd222f580b98472ffe64102ac97c04f15d133，8,108,529字节，和实际image[]完全一致；Provider调用1。唯一execution为system/succeeded，canvas_id与target_projection_id均null，Canvas仅原drawing节点1个。
+
+S采用既有derived发布枚举描述技术派生，Gallery Input/Output分类、默认可见性与保留政策仍未决定，也未新增过滤/清理规则。真实模型效果/计费/限流及人工输入不是本次受控测试通过项。固定包/实际ADA构建/PSD与离线证据归[03F](2026-11-06_03F_offline-psd-acceptance.md)及ADA统一03BDEF任务。

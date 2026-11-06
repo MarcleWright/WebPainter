@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-07：Owner选定iframe后的03B→D→E→F代码与有限技术检查已实施，待统一review/Owner验收。main1b00ef79（通用native）；embedded包源efcfd66 clean、bundle1c75b3f…、port2/native1；ADA实际生产构建0b4e1db1/drawing-4cda1527。真实包六层4K/平台保存恢复/受控生成Results、实际PS27有限检查及两WP独立入口通过；人工IME/手绘板/真实Provider等Pending，不声称全面验收。[最终证据及复现](tasks/2026-11-06_03F_offline-psd-acceptance.md)。未推送/发布或反向合并。下方为先前阶段历史，旧包不追认。
+
 2026-11-06 03B：main独立worktree通用native v1已实施，待后续统一review。初始main ef3eea8；75项首次组合检查、追加后native18项/类型及构建通过，6层4K codec与tile往返有记录。格式/拒绝边界见 [native格式](../engineering/NATIVE_FORMAT.md)，[执行证据](tasks/2026-11-06_03B_native-codec.md)。只由main单向合入embedded供ADA固定包使用，不引入ADA/embedded依赖；未推送/发布，人工/Photoshop未验收。
 
 2026-11-06 当前决策：Owner 已确认 **本地 iframe**，03C 有限面板原型独立 review Approved；Direct 仅实验，承载不再待选。03B/D/E/F 尚未实施，可按后续 coder 一次性授权连续实施、分阶段提交、最终统一 review；前置正确性检查与人工/真实环境验收仍分开。见[父任务当前执行安排](tasks/2026-11-06_03_ada-integration-architecture.md#current-decision-and-remaining-execution)和[选型记录](tasks/2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision)。本次仅修改 WP 文档，未实施、提交或推送；下方为历史记录。

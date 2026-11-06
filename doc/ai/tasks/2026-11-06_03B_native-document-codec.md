@@ -41,3 +41,6 @@ Planned / 待审查及实施授权。依赖 [03A](2026-11-06_03A_editor-boundary
 未执行。输出精确受支持属性清单与包格式、已知损失及测量限制; 不将小图往返当 4K 验收。
 
 03D 端口补强：保存时同时核对 doc.rev 与历史检查点；迟到原生回执不能把未入历史的较新变更标 clean。先复现 1 failed/7 passed，修复后端口三文件17/17及类型通过。dirty 通知增加稳定 history checkpoint，用于宿主恢复候选去重，不逐像素上报。
+
+
+2026-11-07最终配套：main1b00ef79 native24/24；embedded70项组合与PSD24项、两独立入口实窗、固定资源/license和ADA包证据归[03F](2026-11-06_03F_offline-psd-acceptance.md)。源包efcfd66、port2/native1，不以随后文档HEAD重标包。之前18/33/75等阶段数字与旧包仍保持原范围。

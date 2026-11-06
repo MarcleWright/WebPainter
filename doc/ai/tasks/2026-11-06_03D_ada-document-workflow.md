@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned / 待审查及实施授权。依赖 [03B](2026-11-06_03B_native-document-codec.md) 和 [03C](2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision) 已确认的本地 iframe; 既有保存关闭修复需复审/必要人工收口。父任务 [03](2026-11-06_03_ada-integration-architecture.md)。
+Implemented / 已授权实施并完成有限验证；待统一 review 和 Owner 验收。依赖 [03B](2026-11-06_03B_native-document-codec.md) 和 [03C](2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision) 已确认的本地 iframe; 既有保存关闭修复需复审/必要人工收口。父任务 [03](2026-11-06_03_ada-integration-architecture.md)。
 
 ## Task Brief And Owners
 
@@ -70,3 +70,6 @@ Owner 本轮已授权03B→D→E→F连续实施。03D ADA owner 已实现独立
 升级演练：main 1b00ef79 的通用非法类型校验更新，单向merge 913fd9a5；清洁包fb1c151c…，原owner保存的nativeId/hash重开保持、继续编辑保存/节点重开通过。main新增6个非法输入先复现，24/24与独立完整build通过；embedded组合41/41。随后端口独立限制可选PNG32MiB，手动native保存不因超限失败，生成捕获仍拒绝；先复现1failed/8passed，修复18/18与类型通过，embedded3cab474e的清洁包cff1ce50…由ADA替换后重验，不能追认此前实窗为此新包。
 
 恢复候选重启实窗、正式packaged/offline、PSD/人工输入等仍归03F统一检查；此记录不是全部验收通过。
+
+
+2026-11-07补验：实际生产包的保存/恢复/生成闭环、跨会话候选清理与有限输出协调、固定配套版本见[03F最终报告](2026-11-06_03F_offline-psd-acceptance.md#final-pair-and-finite-acceptance-2026-11-07)。真实owner定向最终API组合57/57，原两项P2 29/29保留。PS/native备份是显式下载，不改Primary native保存边界。独立review和人工验收尚未完成。

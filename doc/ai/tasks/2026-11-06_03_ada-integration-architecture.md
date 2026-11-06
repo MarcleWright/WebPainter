@@ -1,5 +1,9 @@
 # Task 03: ADA 集成架构规划
 
+## 2026-11-07 Authorized Implementation State
+
+Owner已授权并连续实施03B→D→E→F，按阶段本地提交。通用native在main1b00ef79，只有main→embedded同步；ADA正式iframe/真实Artifact、GenerationRuntime与Results已接通，有限生产包/离线实窗/实际PS检查见[03F](2026-11-06_03F_offline-psd-acceptance.md)。Direct仍隔离，不是两套产品。当前是代码与有限技术验证完成、待统一独立review及Owner人工验收；没有推送/发布或ADA主线合并。历史03C Inconclusive只保留原证据范围，不能追认全部人工/GPU/手绘板验收。以下11-06文档交接与旧Status按历史时点保留。
+
 ## Current Decision And Remaining Execution
 
 2026-11-06：Owner 确认本地 iframe；03C 有限面板原型已独立 review Approved，原两项 P2 已关闭。详见 [03C 当前选型](2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision)。以下旧 Status/交接按历史时点保留；承载选择不再阻塞后续，设备/正式宿主等未验收项不升级为通过。03B/D/E/F 尚未实施，本次仅调整文档。

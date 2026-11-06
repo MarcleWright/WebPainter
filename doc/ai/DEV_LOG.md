@@ -1,5 +1,7 @@
 # 工作进展索引
 
+2026-11-07 — 03B→D→E→F授权实施与有限收口：main native、正式iframe真实owners、受控生成/Results、生产包离线/恢复与PS27有限核对、两独立入口回归。版本/实际通过/人工Pending见[03F](tasks/2026-11-06_03F_offline-psd-acceptance.md)，待统一独立review及Owner验收，不推送发布。
+
 2026-11-06 — 03B main通用native v1：显式有界manifest/binary tile、稳定ID和支持数据恢复、继续编辑/撤销、非法输入拒绝；独立PSD管线保留。[格式与边界](../engineering/NATIVE_FORMAT.md)。通过阶段门槛后本地提交并由main单向合入embedded，不推送/发布。
 
 2026-11-06 — Owner 确认 iframe；03C 有限面板 review Approved。更新 ADR/架构及后续 B→D→E→F 连续执行安排，保留人工/正式宿主/离线等未验收项。本次仅文档。[选型](tasks/2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision)。
