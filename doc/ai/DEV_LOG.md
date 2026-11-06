@@ -1,6 +1,42 @@
 # 工作进展索引
 
+2026-11-06 — 03C 两项 P2 已按本轮有限授权修复，待独立复审：Return 等待完整打开并合并关闭；非法确认值一律 Cancel。新增回归 29/29、原壳自测、ADA typecheck/build、WP lifecycle/RPC 9/9 与固定包 6/6 定向实窗通过；真实 dirty 场景保留修改。底部面板/其他补验及 03B/D/E/F 未实施；无新分支/提交/发布。详见 [03C 修复记录](tasks/2026-11-06_03C_carrier-comparison.md#p2-repair-only)，发 ADA集成-REV 复审后暂停。
+
 ## Recent
+
+### 2026-11-06 03A / 03C 有限实施与对照
+
+Status: 03A 实施待 review；03C 总体 Inconclusive，等待 Owner 承载确认，后续阶段暂停。
+
+- [03A](tasks/2026-11-06_03A_editor-boundary.md) / [03C](tasks/2026-11-06_03C_carrier-comparison.md)：同内核 4K 实窗、端口生命周期、36/36 定向检查、双方构建与 main smoke；暂推荐本地 iframe，不以单次性能数据定案。未提交、推送、发布；03B/D/E/F 未实施。
+
+### 2026-11-06 Task03 评审 R1 规划修订
+
+Status: Planner 已采纳 R1/P2 并修订计划, 待独立复核; 不视为代码验收。
+
+- 核对 ADA renew/quiescence/workspace transport, 区分自动续期与真正关闭作品, 补 03D 生命周期/操作身份和定向验收。
+- [父任务评审处理](tasks/2026-11-06_03_ada-integration-architecture.md#plan-review-result-and-revision)、[03D](tasks/2026-11-06_03D_ada-document-workflow.md#profile-renewal-contract)。未改 reviewer 原文/产品代码/相邻 ADA, 未执行测试或提交。
+
+### 2026-11-06 独立版、嵌入分支与 ADA 更新路线
+
+Status: Owner 已确认分支路线, 03A-03F 文档修订待整体审查; 无实现授权。
+
+- main 保留独立本地能力及通用功能/codec, embedded 持续合入 main 并提供通用入口, ADA 只持专用 adapter 和固定版本包; 上游 PR 按通用改动独立整理。
+- [父任务](tasks/2026-11-06_03_ada-integration-architecture.md#branch-and-repository-ownership)、[架构](../architecture/ADA_INTEGRATION.md#21-仓库分支和更新路线)、ADR 与全部子任务同步。最新静态基线 ef3eea8/e9f45893; 保存关闭仍待复审/人工。本轮无分支创建、代码改动、提交或相邻 ADA 写入。
+
+### 2026-11-06 ADA 共用任务与承载分叉规划
+
+Status: 03A-03F 已拆分, 待审查及实施授权。
+
+- Owner 确认全屏界面独立, 不等于必须 iframe; 修正架构/ADR, 保留 A/B 选择。
+- [父任务与六项子任务](tasks/2026-11-06_03_ada-integration-architecture.md#ordered-subtasks-and-dependencies)明确共用代码、依赖及有限验收。主要分叉在 03C, 不建设两套完整产品; 未改代码/相邻 ADA 或创建执行循环。
+
+### 2026-11-06 ADA 集成架构草案
+
+Status: 仅架构规划, 待 Owner 确认, 未实施或提交。
+
+- 以最新 WebPainter 和指定 ADA worktree 核对, 建议保留内核、有限开放首版, 明确嵌入/保存/生成/Three.js 边界。
+- [架构草案](../architecture/ADA_INTEGRATION.md)、[任务记录](tasks/2026-11-06_03_ada-integration-architecture.md)、[Proposed ADR](decisions/ADR-0003_ada-embedded-editor.md)。确认架构后再拆实施任务。
 
 ### 2026-11-06 保存与关闭可靠性实现
 

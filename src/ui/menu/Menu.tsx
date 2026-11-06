@@ -1,3 +1,4 @@
+import { portalTarget } from '../surface';
 /** Popup menus: application menu bar, context menus and submenus (keyboard navigable). */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -123,7 +124,7 @@ export function ContextMenuHost() {
     };
   }, []);
   if (!menu) return null;
-  return createPortal(<PopupMenu items={menu.items} x={menu.x} y={menu.y} onClose={() => setMenu(null)} />, document.body);
+  return createPortal(<PopupMenu items={menu.items} x={menu.x} y={menu.y} onClose={() => setMenu(null)} />, portalTarget());
 }
 
 export function MenuBar() {
@@ -171,7 +172,7 @@ export function MenuBar() {
       <div className="search" onMouseDown={(e) => { e.stopPropagation(); run('edit.commandPalette'); }} title="Search commands (Ctrl+F)">
         ⌕ Search commands
       </div>
-      {menu && open && createPortal(<PopupMenu key={menu.id} items={resolve(menu.items)} x={open.x} y={open.y} onClose={() => setOpen(null)} />, document.body)}
+      {menu && open && createPortal(<PopupMenu key={menu.id} items={resolve(menu.items)} x={open.x} y={open.y} onClose={() => setOpen(null)} />, portalTarget())}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { keyboardTarget } from './surface';
 /** Document tabs + interactive canvas viewport. */
 import { buildCmykGrid, evalCmykGrid } from '../color/cmykDisplayGrid';
 import { hasInkAppearance } from '../rendering/inkView';
@@ -717,12 +718,12 @@ export function CanvasView() {
       spaceHeld.current = false;
       if (viewRef.current) viewRef.current.style.cursor = '';
     };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
+    keyboardTarget().addEventListener('keydown', down as EventListener);
+    keyboardTarget().addEventListener('keyup', up as EventListener);
     window.addEventListener('blur', blur);
     return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
+      keyboardTarget().removeEventListener('keydown', down as EventListener);
+      keyboardTarget().removeEventListener('keyup', up as EventListener);
       window.removeEventListener('blur', blur);
     };
   }, []);
@@ -899,7 +900,7 @@ export function CanvasView() {
 }
 
 function isTyping(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement | null;
+  const t = (e.composedPath()[0] ?? e.target) as HTMLElement | null;
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
 }
 

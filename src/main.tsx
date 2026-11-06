@@ -2,6 +2,7 @@
 import { requestApplicationClose } from './app/closeApplication';
 import { createRoot } from 'react-dom/client';
 import './ui/styles.css';
+import 'flexlayout-react/style/dark.css';
 import './app/actions';
 import { App } from './ui/App';
 import { registerTools } from './tools/registry';

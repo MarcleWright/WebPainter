@@ -1,3 +1,4 @@
+import { portalTarget } from './surface';
 /** Left toolbar with flyout tool groups and color chips. */
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -103,7 +104,7 @@ export function Toolbar() {
               ))}
             </div>
           </>,
-          document.body,
+          portalTarget(),
         )}
     </div>
   );

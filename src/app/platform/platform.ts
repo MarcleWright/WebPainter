@@ -288,6 +288,12 @@ class BrowserPlatform implements Platform {
 }
 
 let instance: Platform | null = null;
+/** Optional, scoped host services. The standalone default remains lazy and unchanged. */
+export function installPlatform(value: Platform): () => void {
+  const previous = instance;
+  instance = value;
+  return () => { if (instance === value) instance = previous; };
+}
 export function platform(): Platform {
   if (!instance) instance = typeof window !== 'undefined' && window.celenne ? new ElectronPlatform(window.celenne) : new BrowserPlatform();
   return instance;

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-embedded/
 dist-electron/
 release/
 release-*/

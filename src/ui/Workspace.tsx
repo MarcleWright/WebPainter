@@ -1,7 +1,6 @@
 /** Dockable workspace: canvas area plus panel tabsets (flexlayout), persisted per user. */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { Actions, DockLocation, IJsonModel, Layout, Model, TabNode, TabSetNode } from 'flexlayout-react';
-import 'flexlayout-react/style/dark.css';
 import { CanvasView } from './CanvasView';
 import { PANELS } from './panels/registry';
 

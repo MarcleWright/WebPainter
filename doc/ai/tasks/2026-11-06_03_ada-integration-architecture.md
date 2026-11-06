@@ -1,0 +1,93 @@
+# Task 03: ADA 集成架构规划
+
+## Status
+
+本轮 Owner 仅授权 03A 与 03C 有限原型/测试及向 ADA集成-REV 发评审请求。03A 已实施待 review；03C 对照完成但总体 **Inconclusive**，承载未定案。已建 integration/embedded，未提交、推送、合并、发 PR 或发布；03B/D/E/F 未实施。
+
+2026-11-06 后续：03A/03C 独立实现 review 为 Changes Requested, 两项实验壳 P2 待修复, 见 [03C 补充范围](2026-11-06_03C_carrier-comparison.md#ui-clarification-and-bounded-follow-up)。Owner 新确认的 UI/入口要求已写入本组计划; 当前追加授权仅为调整任务文档, 不启动修复、面板实现或后续任务。
+
+## Task Brief
+
+明确有限首版和未来扩展的边界, 避免把完整 WebPainter 应用无差别搬入 ADA, 或只复制几个工具重新搭建编辑器。先形成可审查的嵌入、状态、保存、生成与三维扩展架构, 架构确认后再制定执行任务。
+
+## Evidence And Ownership
+
+- 初次核对为 WP 98c4c4f; 本次更新基线为 main/ef3eea8, ADA 指定 worktree 仍为 e9f45893。现有规划文档 dirty 与 ADA 原有文档均保留, 执行前需重核实际版本。
+- [保存与关闭可靠性任务](2026-11-06_02_save-close-reliability.md) 最新补修有 95 项定向自动证据与构建记录, 仍待独立复审/人工验收; 本轮未重跑或替代该验收。
+- 平台目标依据来自 ADA 原架构；规划阶段未修改其文档或代码，本轮有限实现范围见末尾交接。未调用真实库、Provider 或用户文档。
+
+## Proposed Scope
+
+以 [ADA_INTEGRATION](../../architecture/ADA_INTEGRATION.md) 为合同草案, [ADR-0003](../decisions/ADR-0003_ada-embedded-editor.md) 记录提案。保留内核与有限首版, 直接挂载/iframe 共用端口与业务, 经对照选择承载。原生保存与 PSD 分开; 首版工具细目仍需审查。
+
+Owner 已确认首版沿用 WP 上方面板/左工具栏/右图层/中间画板, 只增加底部 ADA 悬浮功能面板, 用于提示词、模型选择、生成及结果查看, 无 Agent 对话; 专用 UI 留待后续。WP main 保留完整独立能力, ADA 仅开放首版能力。03C 补同一薄面板的布局/输入/受控通信比较; 03D 负责 Canvas 工具栏新建作品、作品节点重开及保存退出; 03E 负责正式生成/Artifact/持久 Results/显式加层。正式入口不是现有实验按钮, 旧原型证据不覆盖新增面板。
+
+## Ordered Subtasks And Dependencies
+
+原子任务规划的后续授权由本轮 Status 覆盖；A/C 记录本次交付，其余仍 Planned。不是长任务执行循环，不委派 agent 或自动提交。未来代码跨两个仓库时, 应先取得相应实施授权并分别记录提交, 不将一个仓库的提交当作跨仓库原子提交。
+
+## Branch And Repository Ownership
+
+开发路线的稳定规则归 [架构 2.1](../../architecture/ADA_INTEGRATION.md#21-仓库分支和更新路线)。未来执行时按以下分配落代码, 不能将本表当成现在建分支/提交的授权:
+
+| 位置 | 允许内容 | 不应进入 |
+| --- | --- | --- |
+| WP main | 通用编辑功能/修复/codec, 独立本地入口 | 嵌入专用 boot、ADA 业务依赖 |
+| WP integration/embedded | 可选嵌入 boot、通用端口/lifecycle/承载构建入口 | ADA API/业务 owner、另一套画笔/历史 |
+| ADA 指定 worktree | 全屏壳、WP 固定包、业务 adapter、平台数据接线 | vendor 包内直接改 WP 内核 |
+
+03A 主要在 embedded; 必需的通用清理拆独立变更先入 main。03B 的通用 codec 在 main, 再合入 embedded, 只依赖 03A 的已确认数据合同而不导入 embedded 模块。03C 跨 embedded 与 ADA; 03D/03E 主要在 ADA, 通用 bug 回 main; 03F 核对三方配套版本及两种产品的必要回归。
+
+每个跨分支/仓库交付记录 main base、embedded commit、bundle hash、port/native 版本和 ADA commit。候选包先校验后替换, 验证失败保留旧配套包, 不盲目只换某一侧。升级/旧包回退需对旧文档可读性有证据, 不承诺把新版文档降级。上游 PR 不捆绑嵌入/ADA 变更, 是否提交 PR 另行授权。
+
+## Dependency Table
+
+| 子任务 | 依赖 | 交付 |
+| --- | --- | --- |
+| [03A 编辑边界与宿主端口](2026-11-06_03A_editor-boundary.md) | 重新核对最新 HEAD 与保存/关闭修复状态 | 可启动/销毁的编辑模块、共享 DTO/端口、首版能力合同 |
+| [03B 原生文档 codec](2026-11-06_03B_native-document-codec.md) | 03A 数据/能力合同 | 可重复恢复的首版 native 载荷, 不依赖宿主传输 |
+| [03C 全屏承载比较](2026-11-06_03C_carrier-comparison.md) | 03A | 两个薄入口实测后选一个, 有限三维输入探针 |
+| [03D ADA 作品闭环](2026-11-06_03D_ada-document-workflow.md) | 03B + 03C 定案, 保存/关闭修复收口 | 文档节点创建/编辑/保存重开/预览/恢复 |
+| [03E 生成与 Results](2026-11-06_03E_editor-generation.md) | 03D | D/r -> S -> B -> Results -> 显式加层 |
+| [03F 离线/PSD/产品验收](2026-11-06_03F_offline-psd-acceptance.md) | 03D, 最终集成验收需 03E | 固定构建包的完整首版闭环与未验收清单 |
+
+建议串行顺序 A -> C -> B -> D -> E -> F, 尽早识别承载问题。B 在 main 完成后再合入 embedded, 对更新后的包重验 C 的受影响路径, 不沿用旧 commit 的通过记录。B 与 C 在 A 后无代码依赖, 可先 B; 依赖的是数据合同, 不是让 main 合入 embedded。保存关闭未收口不妨碍规划/隔离验证, 但不能据此日常集成。
+
+关键门槛: A 确认首版能力和输出边界; C 承载定案; B 证明像素/结构可恢复; D 证明 A 图片到修改后的作品保存重开; E 证明实际 reference 与持久 Results; F 为实际离线和 Photoshop 证据。失败只修当前范围或记录阻塞, 不自动重选引擎/扩建平台。原型不依赖完整平台 API, 正式闭环不接受只接 mock。
+
+## Acceptance Of This Planning Work
+
+- 明确 Image/图层文档/Canvas 节点身份、命令历史、保存修订与预览的区别。
+- 说明现有实现与未实现接线, 尤其 React/boot 耦合、native codec 缺口与 Three.js 传递风险。
+- 保留 editor-origin 快照/Results/显式加层与离线/PSD 的既定语义。
+- 首版投入有边界, 扩展不要求重做平台或复制全部应用; 未授权实施项保持待定。
+
+## Validation
+
+P-DOC: 新增/修改文档 UTF-8 无 BOM、相对链接、diff 检查及上游文档未变。纯规划不重跑图像测试或 build, 不将源码核对写成运行验收。
+
+## Planning Execution Report (Before Implementation)
+
+- 完成两仓库静态核对, 与用户确认指定目标 worktree。
+- 后续按用户澄清将界面独立与运行环境隔离分开, 更新架构/ADR 并创建 03A-03F 草案。没有实现任一子任务。
+- 本次补入 Owner 确认的分支开发路线、通用端口与 ADA 身份隔离、配套版本/升级/上游 PR 边界。仍只存在 WP main, 没有创建嵌入分支或执行集成。
+- 新增架构草案、Proposed ADR 和本记录, 仅维护 WebPainter 入口/context/log。
+- 尚未执行嵌入原型、资源迁移、native codec、ADA schema/接口、生成、PSD 或离线验证。
+- 文档检查结果见本次交付; 未提交、推送、发布。
+
+## Context Delta
+
+- Keep: 受限 GPU 原型成果、ADA 统一文档/历史/合成目标、完全离线和 PSD 要求。
+- Changed: 通用更新先 main, 再合入 embedded 并构建固定包, 最后更新 ADA adapter; 明确 main 不依赖嵌入专用模块, WP 不拥有 ADA 业务身份。
+- Avoid: 不预设全量入口接入、不只复制几个工具、不把本地 iframe 当现成 SDK 或把三维纹理共享当已实现。
+- Follow-up: 审查 03A-03F 后再授权执行; 通过 03C 选择承载, 不预先冻结 iframe。3D 正式能力仍是后续范围。
+
+## Plan Review Result And Revision
+
+2026-11-06 独立[整体评审](2026-11-06_03_ada-integration-architecture-review.md)为 Changes Requested, 无 P1, 一项 R1/P2 归 03D。Planner 已在 ADA e9f45893 静态核对并采纳: 自动同实例续期保留作品, 生命周期身份与单次 transport epoch 分开, 真正离开才走关闭合同, 并补真实 owner 的续期/延迟保存定向验收。架构同步修订, reviewer 原文不改。
+
+当前状态为 R1 已作计划修订/待独立复核, 不是 Approved 或代码已修复; 不阻断 03A-03C 的隔离设计, 各项实际执行仍需授权。本轮只检查文档和源码, 未运行产品测试、创建分支或修改 ADA。
+
+## 03A / 03C Execution Handoff
+
+2026-11-06：仅执行本轮授权 A/C。实现/35 项定向检查见 [03A](2026-11-06_03A_editor-boundary.md#execution-report)，包版本、三入口实窗、维护成本、暂推荐方案与未验收项见 [03C](2026-11-06_03C_carrier-comparison.md#execution-report)。已有规划 dirty 保留。用户要求向 ADA集成-REV 发送独立评审请求，发送后本实施 session 停止；等待 review、承载确认与下一阶段授权，按 B→D→E→F 推进，不能自行进入下一项。

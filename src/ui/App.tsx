@@ -1,3 +1,4 @@
+import { keyboardTarget } from './surface';
 /** Application shell: menu bar, options bar, toolbar, dock workspace, status bar and hosts. */
 import { useEffect, useState } from 'react';
 import { MenuBar, ContextMenuHost } from './menu/Menu';
@@ -18,7 +19,7 @@ import { Icon } from './icons';
 const BRUSH_TOOLS = new Set<ToolId>(['brush', 'pencil', 'eraser', 'bgEraser', 'cloneStamp', 'patternStamp', 'healing', 'spotHealing', 'remove', 'colorReplace', 'blur', 'sharpen', 'smudge', 'dodge', 'burn', 'sponge', 'quickSelect']);
 
 function isTyping(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement | null;
+  const t = (e.composedPath()[0] ?? e.target) as HTMLElement | null;
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
 }
 
@@ -118,13 +119,15 @@ export function App() {
   const screenMode = useApp((s) => s.screenMode);
   const [panelsHidden, setPanelsHidden] = useState(false);
   useEffect(() => {
-    window.addEventListener('keydown', onGlobalKeyDown);
-    window.addEventListener('keyup', onGlobalKeyUp);
+    keyboardTarget().addEventListener('keydown', onGlobalKeyDown as EventListener);
+    keyboardTarget().addEventListener('keyup', onGlobalKeyUp as EventListener);
     const toggle = () => setPanelsHidden((v) => !v);
     window.addEventListener('celenne:togglePanels', toggle);
     return () => {
-      window.removeEventListener('keydown', onGlobalKeyDown);
-      window.removeEventListener('keyup', onGlobalKeyUp);
+      if (digitTimer) clearTimeout(digitTimer);
+      digitTimer = null; digitBuffer = '';
+      keyboardTarget().removeEventListener('keydown', onGlobalKeyDown as EventListener);
+      keyboardTarget().removeEventListener('keyup', onGlobalKeyUp as EventListener);
       window.removeEventListener('celenne:togglePanels', toggle);
     };
   }, []);

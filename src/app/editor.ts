@@ -4,6 +4,7 @@
  */
 import { configureScratch } from '../history/scratch';
 import { DocumentSession } from './session';
+import { platform } from './platform/platform';
 import { ui, useApp } from './store';
 import type { CelenneDocument } from '../document/document';
 import type { Tool, ToolHost } from '../tools/tool';
@@ -128,10 +129,8 @@ export class Editor {
   updateTitle(): void {
     const s = this.active;
     const title = s ? `${s.doc.name}${s.modified ? ' *' : ''} @ ${Math.round(s.view.zoom * 1000) / 10}% — Celenne Studio` : 'Celenne Studio';
-    import('./platform/platform').then(({ platform }) => {
-      platform().setTitle(title);
-      platform().setEdited(this.sessions.some((x) => x.modified));
-    });
+    platform().setTitle(title);
+    platform().setEdited(this.sessions.some((x) => x.modified));
   }
 
   /** Coalesces store notifications to one per animation frame. */
@@ -181,6 +180,13 @@ export class Editor {
   // -------------------------------------------------------------------------------------------
   registerTool(id: ToolId, f: ToolFactory): void {
     this.toolFactories.set(id, f);
+  }
+
+  /** Drop session-bearing tool caches when an embedding releases its last document. */
+  releaseToolInstances(): void {
+    if (this.sessions.length) throw new Error('Close documents before releasing tools');
+    this.toolInstances.clear();
+    this.springTool = null;
   }
 
   tool(id: ToolId): Tool | null {

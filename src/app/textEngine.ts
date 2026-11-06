@@ -56,12 +56,13 @@ function fontTypeOf(postScriptName: string): number | undefined {
   return f ? (f.trueType ? 1 : 0) : undefined;
 }
 
-export function installTextEngine(): void {
+export function installTextEngine(): () => void {
   // Saved PSDs name each font as Photoshop does (its PostScript name and outline type).
   setPostScriptNameResolver(postScriptNameOf);
   setFontTypeResolver(fontTypeOf);
   editor.documentAdded.add(preload);
-  onEngineFonts(() => { timer ??= setTimeout(refresh, 30); });
+  const off = onEngineFonts(() => { timer ??= setTimeout(refresh, 30); });
+  return () => { editor.documentAdded.delete(preload); off(); if (timer) clearTimeout(timer); timer = null; };
 }
 
 /** Inspection hook for smoke tests (no effect on the app). */
