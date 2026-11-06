@@ -6,11 +6,11 @@ Planned / 待审查及实施授权。依赖 [03D](2026-11-06_03D_ada-document-wo
 
 ## Task Brief And Owners
 
-在原 ADA GenerationRuntime/Artifact 发布和交付 owner 内新增 editor-origin, 从当前作品发起生成并把正式结果归入原作品 Results。A/B 只改变宿主端口传输方式, 不影响快照、执行或交付语义。
+在原 ADA GenerationRuntime/Artifact 发布和交付 owner 内新增 editor-origin, 从当前作品发起生成并把正式结果归入原作品 Results。正式 UI 使用已确认的 iframe 宿主通信, 快照、执行和交付语义不依赖 Direct 实验。
 
 ## Branch Scope
 
-本任务的底部悬浮 UI、快照 Artifact、Provider/Results/来源/重试均属于 ADA worktree, WP 只提供通用捕获和加层命令。首版复用 WP UI, ADA 面板位于同一全屏编辑页面底部; 若选 iframe, 面板与 WP 一起在 iframe 内运行, 经宿主 adapter 通信。不要求 WP main 或 embedded 导入 ADA 的生成合同, 不在 vendor 包中直接修改专用 UI。端口扩展在 embedded, 底层通用修复仍先 main。
+本任务的底部悬浮 UI、快照 Artifact、Provider/Results/来源/重试均属于 ADA worktree, WP 只提供通用捕获和加层命令。首版复用 WP UI, ADA 面板位于同一全屏编辑页面底部; 已选 iframe, 面板与 WP 一起在 iframe 内运行, 经宿主 adapter 通信。不要求 WP main 或 embedded 导入 ADA 的生成合同, 不在 vendor 包中直接修改专用 UI。端口扩展在 embedded, 底层通用修复仍先 main。
 
 ## Change Contract
 

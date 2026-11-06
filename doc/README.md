@@ -9,8 +9,8 @@
 | 项目面向谁、与 ADA 的关系 | [产品定位](product/PRODUCT_BRIEF.md) |
 | 嵌入端口、首版工具及 native 规格输入 | [Embedded Port v1](architecture/EMBEDDED_PORT_V1.md), 03A 已实施待 review，native 未实施 |
 | ADA 首版接什么、以后怎样扩展 | [集成架构](architecture/ADA_INTEGRATION.md)，03A/03C 有限原型，正式闭环未实施 |
-| ADA 共用工作与承载方案如何拆任务 | [父任务 03 与 03A-03F](ai/tasks/2026-11-06_03_ada-integration-architecture.md#ordered-subtasks-and-dependencies), 03A 已实施、03C 对照 Inconclusive，其余未实施 |
-| WP 独立版、嵌入分支与 ADA 如何更新 | [分支和更新路线](architecture/ADA_INTEGRATION.md#21-仓库分支和更新路线), 已建 integration/embedded，尚未提交或发布 |
+| ADA 共用工作与承载方案如何拆任务 | [父任务 03 与 03A-03F](ai/tasks/2026-11-06_03_ada-integration-architecture.md#ordered-subtasks-and-dependencies), 03C 有限原型 review Approved、Owner 已选 iframe，其余未实施 |
+| WP 独立版、嵌入分支与 ADA 如何更新 | [分支和更新路线](architecture/ADA_INTEGRATION.md#21-仓库分支和更新路线), 已建 integration/embedded 并有阶段提交，未发布 |
 | 为什么优化 4K、先做什么、怎样算有效 | [产品性能方向](product/PERFORMANCE_DIRECTION.md) |
 | 拖动时看什么、什么时候落定、怎样撤销 | [交互约定](design/INTERACTION_RULES.md) |
 | 原有结构与 fork 的边界 | [架构入口](architecture/ARCHITECTURE_OVERVIEW.md) |

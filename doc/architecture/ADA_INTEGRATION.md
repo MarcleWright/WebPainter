@@ -2,7 +2,7 @@
 
 ## Status And Authority
 
-- 2026-11-06：Owner 后续仅授权 03A 与 03C 有限原型/测试；03A 已实施待 review，03C **Inconclusive**，工程暂推荐本地 iframe，尚未定案。详见 [03C 证据与未验收项](../ai/tasks/2026-11-06_03C_carrier-comparison.md#execution-report) 及 [Port v1](EMBEDDED_PORT_V1.md)。03B/D/E/F 未实施，无提交/发布授权。
+- 2026-11-06 最新：Owner 已确认首版使用 **本地 iframe**，03C 有限面板原型独立 review Approved；Direct 仅保留为实验。详见 [选型与证据边界](../ai/tasks/2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision) 及 [Port v1](EMBEDDED_PORT_V1.md)。性能/设备及正式产品验收缺口不因选型关闭；03B/D/E/F 未实施，执行权限以后续 coder 指令为准。下列初始基线仅为历史时点，最新配套见 03C。
 - WebPainter 初次研究基线为 98c4c4f; 路线更新时已核对 `main/ef3eea87beb00b2c79c6f1e4902e4a5739ef8557`。规划期既有未提交文档全部保留；本轮源码与包的未提交状态见 03A/03C。保存/关闭最新修复仍待独立复审及人工验收。
 - 目标: `D:/00_Projects_WSY/AI/Codex_Projects/auto_design_Agent`, worktree 分支 `codex/isolate-drawing-interface-20261104`, HEAD `e9f458930f250191ef35d2efae3734cca4573351`。不以相邻 `_New` 目录替代。ADA 当前已有未提交文档, 既有内容保留；本轮仅新增实验壳/固定测试包和任务记录，不接业务存储。
 - 平台目标语义归 ADA 的 `doc/architecture/DRAWING_EDITOR_ARCHITECTURE.md` 和 ADR-0021。本文件只拥有 WebPainter 的接入建议, 不以本 fork 文档自行改变 ADA 的现行业务合同。
@@ -31,23 +31,25 @@
 
 不支持的工具不只隐藏按钮: 菜单、快捷键和宿主调用应遵守同一个简单能力清单。保留独立 WebPainter 的完整模式, 不为 ADA 模式删除现有功能或建立插件市场。对超出保存合同的文档应阻止编辑/保存或明确拒绝导入, 不能静默压平丢失内容。
 
-## 2. 部署边界: 独立全屏编辑空间, 承载方式待比较
+<a id="2-部署边界-独立全屏编辑空间-承载方式待比较"></a>
+
+## 2. 部署边界: 独立全屏编辑空间, 本地 iframe
 
 Owner 确认: 编辑时全屏遮住 Session/Canvas/Gallery, 退出回原工作上下文。界面独立不等于运行页面必须独立。无论采用何种承载, 程序资源随 ADA 本地部署, 不访问远程站点或用户磁盘源码目录。
 
 2026-11-06 Owner 补充确认的首版 UI: 沿用 WP 上方常规面板、左侧工具栏、右侧图层管理与中间画板, 在编辑区域底部增加 ADA 悬浮功能面板, 提供提示词、模型选择、生成操作及结果查看入口。它是作品内的生成面板, 不提供 Agent 对话, 不嵌入后台 Session。复用 WP UI 不等于开放全部 WP 能力, 仍受首版能力和保存合同约束; 专用 UI 留待后续, 本轮不要求重做工具栏/图层面板、完整无界面 SDK 或通用插件框架。
 
-面板及业务 adapter 由 ADA 持有, 通过确定版本的 WP 包组合成编辑页面。若选 B, 面板与 WP 同在 iframe 内的编辑页面, 经受约束的宿主通信提交命令、取得模型选项、读取 Artifact 与结果; 若选 A, 同一业务合同通过异步函数适配。WP 只提供通用捕获、资源输入和编辑命令, 不导入 ADA 模型/Provider/Artifact 合同, 不修改 vendor 包承载专用 UI。03C 验证这种组合的最小构建/挂载方式与输入隔离, 不能默认现有端口已满足全部扩展。
+面板及业务 adapter 由 ADA 持有, 通过确定版本的 WP 包组合成编辑页面。正式选用 B, 面板与 WP 同在 iframe 内的编辑页面, 经受约束的宿主通信提交命令、取得模型选项、读取 Artifact 与结果; A 的异步函数适配只保留为实验。WP 只提供通用捕获、资源输入和编辑命令, 不导入 ADA 模型/Provider/Artifact 合同, 不修改 vendor 包承载专用 UI。03C 验证这种组合的最小构建/挂载方式与输入隔离, 不能默认现有端口已满足全部扩展。
 
-面板不能导致后台工作区重挂载或抢输入。提示词输入/IME、模型下拉与结果操作不得穿透为绘画或后台快捷键; 回到画板后恢复绘画输入, 关闭面板弹出层不等于关闭作品。控制底部遮挡, 窗口缩放后必要操作仍可达。03C 只做同一薄面板与受控宿主往返验证, 正式平台生成/Artifact/Results 接线归 03E, 不以旧原型证据追认新增面板已通过。承载仍待 Owner 确认。
+面板不能导致后台工作区重挂载或抢输入。提示词输入/IME、模型下拉与结果操作不得穿透为绘画或后台快捷键; 回到画板后恢复绘画输入, 关闭面板弹出层不等于关闭作品。控制底部遮挡, 窗口缩放后必要操作仍可达。03C 只做同一薄面板与受控宿主往返验证, 正式平台生成/Artifact/Results 接线归 03E, 不以旧原型证据追认新增面板已通过。Owner 已确认 iframe；人工/设备与正式平台验收仍按 03D/03F 完成。
 
-方案 A: 全屏容器直接挂载 WebPainter 编辑模块, 用函数接口对接宿主。方案 B: 全屏容器加载本地 iframe, 用消息适配同一份宿主接口。两者产品界面相同; 不再预先将 iframe 冻结为最终架构。直接挂载不等于将像素文档放进 ADA store。
+正式方案 B: 全屏容器加载 ADA 自有本地 iframe 页面, 用消息适配宿主接口。方案 A 曾作为直接挂载对照, 现仅保留为隔离实验。选型基于既有 UI 隔离与维护边界, 不宣称 iframe 更快、零开销或独立进程。
 
 WebPainter 当前 React 19.3、ADA React 18.3, 且 `src/main.tsx` 安装全局启动、关闭、恢复、更新和错误处理。A 需要验证独立 React root 或其他最小兼容方式及 CSS/全局事件治理, 不假设可直接导入 App, 不自动全局升级 React。B 需要验证焦点、消息、二进制交接与资源路径; iframe 不保证独立 CPU 线程或自动消除卡顿, 也不替代 API 的身份检查。
 
 共用部分是可启动/销毁的 embedded lifecycle 和宿主端口, 复用 UI/内核, 不启动独立 Electron、不注入另一套 preload、不注册自身更新器/窗口退出/独立恢复调度。保存和 PSD 下载交给宿主。独立桌面 boot 保持原行为, 沿用 Platform 分界, 不建设通用宿主框架。
 
-两种承载只各做一个薄验证入口, 共用同一内核和测试作品。比较 WebGPU、pointer/pressure、焦点/IME、快捷键、拖放、实际拖动/保存延迟和内存, 再选择一种生产承载; 不维护两套完整产品。热路径不经过宿主, 三维 producer 也留在编辑模块一侧。
+两种承载已按同一内核和测试作品完成有限对照。后续只发展 iframe 正式路径, 对 WebGPU、pointer/pressure、焦点/IME、快捷键、拖放、输出和资源保留对应检查; 不维护两套完整产品。热路径不经过宿主, 三维 producer 也留在编辑模块一侧。
 
 ```text
 ADA Canvas / Artifact / Generation / Profile owners
@@ -176,4 +178,4 @@ Three.js 正式编辑另开后续任务。03C 只附带一个有界内容输入�
 | 平台已有 Artifact 修订/载荷/发布 owner | ADA `apps/api-node/src/artifact-store.ts`, `packages/contracts/src/index.ts` | 图层文档类型、引用与 CAS 扩展 |
 | 现有 Markdown 创建/保存有捕获身份与恢复处理 | ADA `apps/web/src/project/services/canvas-document-creation-command.ts`, `canvas-document-save-command.ts` | 复用边界而非复用 Markdown body API |
 
-当前已确认独立全屏产品界面; 首版具体工具与原生保存合同仍待审查, A/B 由 03C 对照后定案。Three.js 内容传递仍是有界验证问题。任务拆分不自动授权执行。
+当前已确认独立全屏产品界面及本地 iframe 承载; 首版具体工具与原生保存合同由 03B/03D 冻结并验证。Three.js 内容传递仍是有界验证问题。任务拆分不自动授权执行。

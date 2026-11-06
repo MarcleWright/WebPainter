@@ -1,5 +1,20 @@
 # Task 03: ADA 集成架构规划
 
+## Current Decision And Remaining Execution
+
+2026-11-06：Owner 确认本地 iframe；03C 有限面板原型已独立 review Approved，原两项 P2 已关闭。详见 [03C 当前选型](2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision)。以下旧 Status/交接按历史时点保留；承载选择不再阻塞后续，设备/正式宿主等未验收项不升级为通过。03B/D/E/F 尚未实施，本次仅调整文档。
+
+后续可在 Owner 一次性 coder 授权下连续执行 **03B -> 03D -> 03E -> 03F**、分阶段本地提交、最后统一验证和独立 review，不再为 A/B 选择或例行阶段切换停下。必须保留以下依赖门槛，不能等全部写完才首次测试：
+
+- 03B：先在 WP main 实现通用 codec 并证明支持字段/像素/可编辑往返与非法输入拒绝，再将 main 合入 embedded，刷新固定包并验证 iframe 接口；main 不导入 embedded/ADA。可在获授权后为 WP main 使用独立 worktree，避免切换当前含文档改动的工作区。
+- 03D：用正式 ADA Electron/资源协议和最小必要 CSP 接通 iframe 与 Canvas 正式入口，验证真实平台 owner 的保存/恢复/CAS/旧回执/预览和 Profile 续期；使用隔离测试数据，不依赖实验 CSP 替换或 mock 保存。Direct 不接生产。
+- 03E：在 ADA 底部面板接入既有模型配置、GenerationRuntime 和 Artifact/Results owner，完成准确 D/r -> S -> B -> Results -> 显式加层；自动验证可控制 Provider，但发布与关联 owner 使用真实实现。未授权的真实/付费 Provider 不调用。
+- 03F：在可用环境完成最终 iframe 与 WP 独立入口的有限打包、离线、输入、PSD 检查。缺少硬件/Photoshop/真实模型授权的项列 Pending 和复现步骤；可执行的自动检查及正确性缺陷不能仅标 Pending 绕过。首版代码完成、独立 review、Owner 人工验收、发布分别给结论。
+
+每阶段必要检查通过后提交，后续失败回到对应 owner 修复并重验；最后汇总精确配套版本、阶段提交、执行证据及未验收项，交 **ADA集成-REV** 一次统一 review。若遇到破坏数据的设计冲突、前置合同不成立或必须改变已确认范围，报告具体阻塞；不以连续实施为由忽略失败。常规实现细节不逐项请求确认。
+
+跨仓库代码/本地提交，以及 main -> embedded 的必要本地同步，须由后续 coder 指令明确授权；不把该计划当成推送、ADA main/dev 合并、发布、真实用户库迁移或正式 3D/GLB 实施授权。执行时同步 ADA 自有架构/任务中的 iframe 决策，历史原型记录保留原证据范围。
+
 ## Status
 
 本轮 Owner 仅授权 03A 与 03C 有限原型/测试及向 ADA集成-REV 发评审请求。03A 已实施待 review；03C 对照完成但总体 **Inconclusive**，承载未定案。已建 integration/embedded，未提交、推送、合并、发 PR 或发布；03B/D/E/F 未实施。
@@ -18,7 +33,7 @@
 
 ## Proposed Scope
 
-以 [ADA_INTEGRATION](../../architecture/ADA_INTEGRATION.md) 为合同草案, [ADR-0003](../decisions/ADR-0003_ada-embedded-editor.md) 记录提案。保留内核与有限首版, 直接挂载/iframe 共用端口与业务, 经对照选择承载。原生保存与 PSD 分开; 首版工具细目仍需审查。
+以 [ADA_INTEGRATION](../../architecture/ADA_INTEGRATION.md) 为合同草案, [ADR-0003](../decisions/ADR-0003_ada-embedded-editor.md) 记录提案。保留内核与有限首版, 经对照后已确认本地 iframe, Direct 仅保留为实验。原生保存与 PSD 分开; 首版工具细目仍需审查。
 
 Owner 已确认首版沿用 WP 上方面板/左工具栏/右图层/中间画板, 只增加底部 ADA 悬浮功能面板, 用于提示词、模型选择、生成及结果查看, 无 Agent 对话; 专用 UI 留待后续。WP main 保留完整独立能力, ADA 仅开放首版能力。03C 补同一薄面板的布局/输入/受控通信比较; 03D 负责 Canvas 工具栏新建作品、作品节点重开及保存退出; 03E 负责正式生成/Artifact/持久 Results/显式加层。正式入口不是现有实验按钮, 旧原型证据不覆盖新增面板。
 
@@ -46,7 +61,7 @@ Owner 已确认首版沿用 WP 上方面板/左工具栏/右图层/中间画板,
 | --- | --- | --- |
 | [03A 编辑边界与宿主端口](2026-11-06_03A_editor-boundary.md) | 重新核对最新 HEAD 与保存/关闭修复状态 | 可启动/销毁的编辑模块、共享 DTO/端口、首版能力合同 |
 | [03B 原生文档 codec](2026-11-06_03B_native-document-codec.md) | 03A 数据/能力合同 | 可重复恢复的首版 native 载荷, 不依赖宿主传输 |
-| [03C 全屏承载比较](2026-11-06_03C_carrier-comparison.md) | 03A | 两个薄入口实测后选一个, 有限三维输入探针 |
+| [03C 全屏承载比较](2026-11-06_03C_carrier-comparison.md) | 03A | 已确认 iframe；Direct 仅实验，三维探针未验收 |
 | [03D ADA 作品闭环](2026-11-06_03D_ada-document-workflow.md) | 03B + 03C 定案, 保存/关闭修复收口 | 文档节点创建/编辑/保存重开/预览/恢复 |
 | [03E 生成与 Results](2026-11-06_03E_editor-generation.md) | 03D | D/r -> S -> B -> Results -> 显式加层 |
 | [03F 离线/PSD/产品验收](2026-11-06_03F_offline-psd-acceptance.md) | 03D, 最终集成验收需 03E | 固定构建包的完整首版闭环与未验收清单 |

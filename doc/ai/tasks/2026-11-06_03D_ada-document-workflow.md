@@ -2,11 +2,11 @@
 
 ## Status
 
-Planned / 待审查及实施授权。依赖 [03B](2026-11-06_03B_native-document-codec.md) 和 [03C](2026-11-06_03C_carrier-comparison.md) 定案; 既有保存关闭修复需复审/必要人工收口。父任务 [03](2026-11-06_03_ada-integration-architecture.md)。
+Planned / 待审查及实施授权。依赖 [03B](2026-11-06_03B_native-document-codec.md) 和 [03C](2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision) 已确认的本地 iframe; 既有保存关闭修复需复审/必要人工收口。父任务 [03](2026-11-06_03_ada-integration-architecture.md)。
 
 ## Task Brief And Owners
 
-用所选承载接通真实平台, 完成创建、原图加入、核心编辑、保存/恢复、重开、预览和退出。ADA contracts、artifact-store、引用/representation owner、Canvas command/runtime 负责平台事实; WebPainter codec/session/history 负责编辑。参考原 Markdown 创建/保存的身份及失败处理, 不复用其 body API 或 document kind 语义。
+用已确认的本地 iframe 接通真实平台, 完成创建、原图加入、核心编辑、保存/恢复、重开、预览和退出。ADA contracts、artifact-store、引用/representation owner、Canvas command/runtime 负责平台事实; WebPainter codec/session/history 负责编辑。参考原 Markdown 创建/保存的身份及失败处理, 不复用其 body API 或 document kind 语义。
 
 ## Branch Scope
 
@@ -24,6 +24,8 @@ Planner 已独立核对 ADA e9f45893 的 `ProfileRuntimeRoot.tsx`, `profile-conn
 - 不把关闭确认直接注册成所有 quiescence 的无差别 handler。沿用现有请求停稳/超时机制, 续期只处理必要网络操作, 不因作品 dirty 要求保存或阻塞续期; 对现有 handler 保持兼容。若实际 instance 改变, 不沿同实例续期路径自动绑定旧会话。
 
 ## Change Contract
+
+- 正式 ADA 自有 iframe 页面组合固定 WP 包与底部面板, 使用实际 ADA Electron/本地资源协议, 同步 HTML 与桌面响应头的最小必要 CSP, 核对 WebGPU/WASM/字体/资源加载及消息身份校验。不得沿用测试响应替换作为正式可用证据; 不为打开 iframe 全局放宽到任意来源或开放 Node。Direct 只隔离保留, 普通生产入口不提供 A/B 切换。
 
 - 冻结具体 native Artifact kind、payload roles、源引用、创建/读取/expectedRevision 保存合同和 schema 迁移范围。按 ADA 原 schema/版本机制升级, 不增加平行资产数据库或历史版本服务。
 - Canvas toolbar 提供独立的新建绘画作品按钮, 与 Markdown 文档入口分开; 创建 D 与独立节点后打开全屏编辑器。已有作品从其图层文档节点重开, 实施时按既有节点交互明确编辑按钮或双击入口。普通产品入口不得依赖 03C 查询参数/实验按钮。退出恢复原 Canvas 视口/选择, dirty 时经过保存/放弃/取消。原 Image 不改绑, 双击 Image 不创建 D, 内部图层不成为 XYFlow 节点。
