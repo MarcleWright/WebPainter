@@ -650,6 +650,7 @@ export function commitSmartContents(child: DocumentSession): boolean {
     smartParents.delete(child.id);
     return false;
   }
+  if (!parent.canEdit() || !child.canEdit()) return false;
   const src = parent.doc.smartSources.get(link.sourceId);
   if (!src) return false;
   const bytes = exportPsd(child.doc);
@@ -684,6 +685,7 @@ export async function replaceSmartContents(): Promise<void> {
     const ext = (f.name.split('.').pop() ?? '').toLowerCase();
     const src = { id: l.sourceId, kind: 'embedded' as const, name: f.name, fileType: ext, data: f.data };
     const dec = await decodeSmartSource(src);
+    if (editor.session(s.id) !== s || !s.canEdit()) return;
     recordStateChange(s.doc, s.history, 'Replace Contents', () => {
       s.doc.smartSources.set(src.id, { ...src, decoded: dec });
       for (const layer of s.doc.walk()) {

@@ -470,6 +470,7 @@ function applyWarp(s: DocumentSession, l: Layer, base: Rect, grid: WarpGrid, mes
 
 /** Applies a document-space homography to layers as one history step (macro replay). */
 export function transformLayersByMatrix(session: DocumentSession, ids: LayerId[], H: Homography, affine: boolean): boolean {
+  if (!session.canEdit()) return false;
   const cmds: ReplaceLayerCommand[] = [];
   for (const id of ids) {
     const live = session.doc.getLayer(id);

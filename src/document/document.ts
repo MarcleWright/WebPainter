@@ -65,6 +65,8 @@ export class CelenneDocument {
   globalLight = { angle: 120, altitude: 30 };
   /** Structural revision (layer tree / properties) for UI subscriptions. */
   rev = 0;
+  /** Session-owned guard for shared mutation helpers; output snapshots remain editable in isolation. */
+  editingAllowed: () => boolean = () => true;
 
   private listeners = new Set<DocumentListener>();
   private pending: DocumentChange[] = [];

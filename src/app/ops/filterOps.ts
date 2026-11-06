@@ -1,3 +1,4 @@
+import { editor } from '../editor';
 /** Filter application: destructive (pixels/masks/channels) or smart filters on smart objects. */
 import { editColor, ensureCompanion, isCmykDoc, isLabDoc, labRgbView, labToRgbUnclamped, labViewColor, plateColor, rgbToLabUnclamped } from '../../color/plates';
 import type { TiledRaster } from '../../image-engine/tiledRaster';
@@ -103,6 +104,8 @@ export async function applyFilter(id: string, params: FilterParams): Promise<boo
   const plates = filterPlates(s, target, res.raster);
   let cancel: (() => void) | null = null;
   ui.set((st) => ({ progress: st.progress.map((x) => (x.label.startsWith(`Applying ${name}`) ? { ...x, cancel: () => cancel?.() } : x)) }));
+  let applied = false;
+  const writes: { raster: TiledRaster; data: Float32Array }[] = [];
   try {
     const sel = s.doc.selection;
     const cov = !sel.isEmpty() && target.kind !== 'selection' ? sel.read(region) : null;
@@ -123,15 +126,18 @@ export async function applyFilter(id: string, params: FilterParams): Promise<boo
           if (kk <= 0) continue;
           for (let c = 0; c < ch; c++) result[wi + c] += (out.data[wi + c] - result[wi + c]) * kk;
         }
-      pl.raster.writeFloat(lr, result);
+      writes.push({ raster: pl.raster, data: result });
     }
+    if (!s.canEdit() || editor.session(s.id) !== s) return false;
+    applied = true;
+    for (const write of writes) write.raster.writeFloat(lr, write.data);
     if (target.kind === 'layer') { res.raster.compact(); res.raster.companion?.compact(); }
     const after = res.raster.snapshot();
     s.push(new ApplyFilterCommand(def.name.replace('…', ''), target, before, after, work, { action: 'filter.apply', args: { id, params } }), true);
     emitTargetChange(s.doc, target, work);
     return true;
   } catch (e) {
-    res.raster.restore(before);
+    if (applied) res.raster.restore(before);
     if ((e as Error).message !== 'Cancelled') ui.toast('error', `${def.name.replace('…', '')} failed`, (e as Error).message);
     return false;
   } finally {
@@ -201,6 +207,8 @@ export async function applyFilterStack(stack: { id: string; params: FilterParams
   const before = res.raster.snapshot();
   const p = ui.progress('Filter Gallery… 0%');
   const plates = filterPlates(s, target, res.raster);
+  let applied = false;
+  const writes: { raster: TiledRaster; data: Float32Array }[] = [];
   try {
     const sel = s.doc.selection;
     const cov = !sel.isEmpty() && target.kind !== 'selection' ? sel.read(region) : null;
@@ -224,14 +232,17 @@ export async function applyFilterStack(stack: { id: string; params: FilterParams
           if (k <= 0) continue;
           for (let c = 0; c < ch; c++) result[wi + c] += (current[wi + c] - result[wi + c]) * k;
         }
-      pl.raster.writeFloat(lr, result);
+      writes.push({ raster: pl.raster, data: result });
     }
+    if (!s.canEdit() || editor.session(s.id) !== s) return false;
+    applied = true;
+    for (const write of writes) write.raster.writeFloat(lr, write.data);
     if (target.kind === 'layer') { res.raster.compact(); res.raster.companion?.compact(); }
     s.push(new ApplyFilterCommand('Filter Gallery', target, before, res.raster.snapshot(), work, record), true);
     emitTargetChange(s.doc, target, work);
     return true;
   } catch (e) {
-    res.raster.restore(before);
+    if (applied) res.raster.restore(before);
     if ((e as Error).message !== 'Cancelled') ui.toast('error', 'Filter Gallery failed', (e as Error).message);
     return false;
   } finally {

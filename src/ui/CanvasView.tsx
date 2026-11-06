@@ -563,6 +563,7 @@ export function CanvasView() {
       return;
     }
     if (e.button === 2) return;
+    if (!s.canEdit()) { ui.toast("info", "This document is busy saving or closing."); return; }
     // Guides (with the Move tool, like professional editors).
     if (editor.currentToolId === 'move' && s.mode.kind === 'none') {
       const gid = guideAt(p);

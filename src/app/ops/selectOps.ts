@@ -25,6 +25,7 @@ import { addMask, duplicateLayers } from './layerOps';
 const lastSelection = new Map<string, RasterSnapshot>();
 
 export function changeSelection(s: DocumentSession, label: string, fn: () => void, record?: RecordedOp): void {
+  if (!s.canEdit()) return;
   const before = s.doc.selection.snapshot();
   const cmd = editRaster(s.doc, { kind: 'selection' }, label, () => {
     fn();

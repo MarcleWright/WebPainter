@@ -27,6 +27,12 @@ export function addHistoryHook(h: (s: DocumentSession) => void): void {
 export class DocumentSession {
   readonly id = newId('sess');
   readonly history: History;
+  outputPending: Promise<boolean> | null = null;
+  closePending: Promise<boolean> | null = null;
+  editProtected = false;
+  private disposed = false;
+  canEdit(): boolean { return !this.editProtected && !this.disposed; }
+
   /** Serialize recovery writes/removal for this document only. */
   recoveryWrite: Promise<void> = Promise.resolve();
   readonly engine: RenderEngine;
@@ -50,6 +56,8 @@ export class DocumentSession {
     initialLabel = 'Open',
   ) {
     this.history = new History(doc, initialLabel);
+    this.history.canMutate = () => this.canEdit();
+    doc.editingAllowed = () => this.canEdit();
     this.engine = new RenderEngine(doc);
     this.savedEntryId = this.history.current.id;
     const top = doc.root.children[doc.root.children.length - 1];
@@ -93,8 +101,8 @@ export class DocumentSession {
     return this.history.current.id !== this.savedEntryId;
   }
 
-  markSaved(): void {
-    this.savedEntryId = this.history.current.id;
+  markSaved(entry = this.history.current.id): void {
+    this.savedEntryId = entry;
     this.notify();
   }
 
@@ -141,6 +149,7 @@ export class DocumentSession {
 
   /** Where painting tools write. Null when the target is not paintable. */
   paintTarget(quickMask: boolean): RasterTarget | null {
+    if (!this.canEdit()) return null;
     if (quickMask) return { kind: 'selection' };
     if (this.activeChannelId) return { kind: 'channel', channelId: this.activeChannelId };
     const l = this.activeLayer();
@@ -153,6 +162,7 @@ export class DocumentSession {
 
   /** Why painting is not possible (for user-facing messages). */
   paintBlockReason(quickMask: boolean): string | null {
+    if (!this.canEdit()) return "This document is busy saving or closing.";
     if (quickMask || this.activeChannelId) return null;
     const l = this.activeLayer();
     if (!l) return 'Select a layer to paint on.';
@@ -173,6 +183,7 @@ export class DocumentSession {
   }
 
   dispose(): void {
+    this.disposed = true;
     if (this.offloadTimer) clearTimeout(this.offloadTimer);
     this.unsub.forEach((u) => u());
     this.engine.dispose();

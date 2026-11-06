@@ -50,7 +50,9 @@ export async function ensureDecoded(doc: CelenneDocument, layer: SmartObjectLaye
   if (src.decoded) return true;
   if (src.decodeError) return false;
   try {
-    src.decoded = await decodeSmartSource(src);
+    const decoded = await decodeSmartSource(src);
+    if (!doc.editingAllowed()) return false;
+    src.decoded = decoded;
     return true;
   } catch (e) {
     src.decodeError = (e as Error).message;
@@ -60,6 +62,7 @@ export async function ensureDecoded(doc: CelenneDocument, layer: SmartObjectLaye
 
 /** Renders the smart object from its source (requires a decoded source). */
 export function renderSmartObject(doc: CelenneDocument, layer: SmartObjectLayer): void {
+  if (!doc.editingAllowed()) return;
   const src = doc.smartSources.get(layer.sourceId);
   const dec = src?.decoded;
   if (!dec) return; // keep the preserved (Photoshop-rendered) pixels

@@ -54,6 +54,7 @@ export function allActions(): Action[] {
 }
 
 export async function run(id: string, args?: Record<string, unknown>): Promise<void> {
+  if (editor.active && !editor.active.canEdit() && !/^(file\.|view\.|window\.|app\.)/.test(id)) { ui.toast("info", "This document is busy saving or closing."); return; }
   const a = registry.get(id);
   if (!a) {
     console.warn(`Unknown action ${id}`);

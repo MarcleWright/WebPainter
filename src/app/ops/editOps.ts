@@ -188,6 +188,7 @@ export async function paste(mode: 'normal' | 'inPlace' | 'into' = 'normal'): Pro
     // Images from other apps are sRGB.
     convertRasterSpace(raster, { mode: 'rgb', profile: { name: 'sRGB', builtin: 'srgb' } }, spaceOfDoc(s.doc));
   }
+  if (!s.canEdit() || editor.session(s.id) !== s) return;
   const sel = s.doc.selection;
   let x: number, y: number;
   if (mode === 'inPlace' && srcBounds) { x = srcBounds.x; y = srcBounds.y; }
@@ -397,7 +398,7 @@ export async function inpaintRegion(s: DocumentSession, mask: TiledRaster, label
       result = await provider.inpaint(req, () => cancelled, (f) => p.update(f));
       resultPlates = native ? rgbToPlates(s.doc, result, work.w * work.h) : [result];
     }
-    if (cancelled) return false;
+    if (cancelled || !s.canEdit() || editor.session(s.id) !== s) return false;
     // Blend with soft mask edges.
     const soft = m;
     if (toNewLayer || l.kind !== 'pixel') {

@@ -174,6 +174,7 @@ export class MoveTool implements Tool {
   }
 
   down(h: ToolHost, p: ToolPointer) {
+    if (!h.session.canEdit()) { toast("This document is busy saving or closing."); return; }
     this.moveHost = h; this.moveResult = 'none';
     const s = h.session;
     const o = opts().move;

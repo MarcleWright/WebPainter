@@ -65,6 +65,7 @@ export function editRaster(
   record?: RecordedOp,
   opts: { labRaw?: boolean } = {},
 ): RasterEditCommand | null {
+  if (!doc.editingAllowed()) return null;
   const t = resolveTarget(doc, target);
   if (!t) return null;
   const before = t.raster.snapshot();

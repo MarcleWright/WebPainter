@@ -13,6 +13,7 @@ import { hasRaster } from '../../document/types';
 export function need(): DocumentSession | null {
   const s = editor.active;
   if (!s) ui.toast('info', 'Open or create a document first.');
+  if (s && !s.canEdit()) { ui.toast('info', 'This document is busy saving or closing.'); return null; }
   return s;
 }
 

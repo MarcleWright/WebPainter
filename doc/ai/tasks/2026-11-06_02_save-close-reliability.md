@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready / 2026-11-06 用户确认方案审查通过, 授权后续 coder 按本文实施、验证并形成本地提交; 不推送、不发布。本轮只归档任务及关联文档, 业务实现尚未开始。方案通过不代表实现验收通过。
+Implemented / 2026-11-06 已按授权实现并完成定向自动验证, 待独立代码复审和人工验收。未推送、未发布; 方案通过不代表实现验收通过。
 
 关联 [默认接入任务 01](2026-11-06_01_default-gpu-selection-move.md): GPU 默认路径已实现, 但实现复审为 Changes Requested。本任务同时承接原有文件生命周期缺陷与本次新增回归; 拆分任务不免除回归修复责任, 任务 01 须在关联修复复审通过后结合原有人工验收收口。
 
@@ -82,11 +82,37 @@ PhotoCraft 固定参考为 v0.20.2 / `7c12f647150f8e7b2e07718f7993b1fcaa57fefe`,
 
 ## Execution Report
 
-尚未实施。本轮仅创建任务并同步关联文档; 未改业务代码, 未运行代码测试或重新测量性能。
+2026-11-06 在当前实现上完成有限修复, 保留 GPU 默认选路与像素管线。修复为本记录所在的新增本地提交, 精确 hash 以 Git 日志和交付报告为准。
+
+### 实现与保护点
+
+- Session 持有输出请求、关闭请求和快照/确认期间的编辑保护。文件选择期间仅占用输出请求; 快照前再次完成原目标的 Move/文字收尾并加保护, 保持至写盘、结果处理和恢复清理结束。重复输出直接提示忙并返回 false, 重复关闭复用已有关闭请求; Close All/应用退出沿用现有 closeSession/closeAll 链路。正在使用的其他工具须先结束后再保存。
+- 手动输出按目标路径的分隔符、大小写和点段生成竞争键, 拒绝同路径并发或覆盖其他已打开会话绑定的文件。沿用平台选定的路径, 不增加符号链接识别或跨进程锁。路径/格式/名称在非副本写入成功后独立绑定; 保存点记录实际写入 entry, 意外版本变化继续 dirty。关闭等输出完成, 保护提示和清理阶段, Save 后检查 modified, 最终移除前再核对身份及 entry/rev。清理失败不再吞掉异常而继续关闭, 可释放保护后重试。
+- 真实修改入口: CanvasView 指针进入点、Move.down、Session.paintTarget/paintBlockReason（画笔等）、App 工具快捷键及 actions.run; operations 的 need/needLayer 覆盖属性和普通菜单操作。History 的 push/undo/redo/goto/rejectLast 和共享 editRaster/editLayer/recordStateChange 也检查目标保护。Layer Style 的直接预览与恢复、宏矩阵变换及智能对象更新接入同一目标检查。已关闭会话不再允许这些入口修改。
+- 异步结果: 滤镜/Filter Gallery 在私有输入上计算全部 plate, 检查原会话仍存在且可编辑后一次写回; 保护期间到达的结果拒绝应用。置入、替换智能对象、智能对象解码、选择、粘贴与 inpaint 通过目标/共享修改点保护。恢复写入和删除继续沿每会话 recoveryWrite 串行; 自动保存每次 yield 后及排队写入前跳过输出/关闭中的目标, 手动清理前仍检查保存检查点。
+
+### 验证结果
+
+P-MOVE、moveSelectionReference、floatingSelection、共享 GPU compositor/preview 与 moveOutput 共六文件 87 项通过。P-BUILD 通过（含 typecheck; 仍有既有 Vite URL/模块外置警告）。P-DOC UTF-8/相对链接/材料忽略及 git diff --check 通过。未重测 4K 性能, 未改 GPU 合成算法。
+
+| 验收 | 已执行的自动证据 |
+| --- | --- |
+| S1 | 真实 Move 和画笔、属性、undo 在延迟 Save As 期间不改目标; A→B 绑定与下一次 Save 写 B; PSD 重开像素比较沿用既有用例 |
+| S2 | 关闭 Save 延迟写盘中注入意外 rev 后保留 dirty/会话/恢复; 保存中 Close/force 等待, Close All 遇写盘失败不移除目标 |
+| S3 | 路径选择取消、编码异常、写盘拒绝均保留绑定/dirty, 释放保护后可重试; 清理异常保留会话后可重试 |
+| S4 | 同文档重复保存拒绝; 同路径写入竞争及另一文档绑定冲突拒绝; A 保存期间 B 的实际属性编辑有效; 已关闭目标无晚到状态回写 |
+| S5 | 输出前 Move 只确认一次, 重复 pointerup 不新增历史; 保存后新编辑再 undo 回写入 entry 为 clean; 副本及 PNG 不改变原绑定/保存点 |
+| S6 | 受控恢复写入完成后才删除; 自动保存跳过占用目标; 最终清理和关闭确认期间实际修改被阻止; 重复 Close 不重复提示, Cancel 保留、Don't Save 关闭 |
+
+另用真实异步 FilterDef/runFilterAsync/applyFilter 控制结果完成点, 验证保存保护期间不会写入像素或历史。受控测试只替换平台 I/O 与等待点, 不伪造 Move/Session/History 提交。
+
+### 未完成验收
+
+本轮未执行正常生产窗口的人工 4K 保存/另存为/重开、保存期间人工拖动/undo/属性/原生窗口关闭操作, 未取得用户正常入口复验。实际磁盘失败/断电、跨进程竞争、完整格式与硬件矩阵未执行。应用退出复用 closeAll 的源码链路及领域测试, 不等于原生窗口退出人工验收。上述项目均不标记通过; 保持待独立 reviewer 复审, 不据方案通过或自动测试通过宣布任务 01 的人工收口。
 
 ## Review Result
 
-2026-11-06 用户确认方案审查 Approved。实现完成后另作独立代码复审; 当前未实施、未验收。后续交付遵循 [AI_WORKFLOW](../AI_WORKFLOW.md), 不自动创建执行循环或独立 reviewer 文件。
+2026-11-06 用户确认方案审查 Approved。实现完成后另作独立代码复审; 当前已实施并有自动证据, 未经独立实现复审或人工验收。后续交付遵循 [AI_WORKFLOW](../AI_WORKFLOW.md), 不自动创建执行循环或独立 reviewer 文件。
 
 ## Context Delta
 

@@ -48,6 +48,7 @@ export interface HistorySnapshot {
 export type HistoryListener = () => void;
 
 export class History {
+  canMutate: () => boolean = () => true;
   entries: HistoryEntry[];
   /** Index of the current state in `entries`. */
   index = 0;
@@ -89,6 +90,7 @@ export class History {
    * Redo branch is discarded (standard linear history).
    */
   push(cmd: Command, alreadyApplied = false): void {
+    if (!this.canMutate()) return;
     if (!alreadyApplied) this.doc.batch(() => cmd.do(this.doc));
     // Discard redo branch.
     for (const e of this.entries.splice(this.index + 1)) e.command?.dispose?.();
@@ -114,6 +116,7 @@ export class History {
   }
 
   undo(): boolean {
+    if (!this.canMutate()) return false;
     if (!this.canUndo) return false;
     const e = this.entries[this.index];
     this.doc.batch(() => e.command!.undo(this.doc));
@@ -125,6 +128,7 @@ export class History {
 
   /** Reverts and discards the newest step (a step the document's mode does not allow). */
   rejectLast(): void {
+    if (!this.canMutate()) return;
     if (!this.canUndo || this.index !== this.entries.length - 1) return;
     const e = this.entries[this.index];
     this.doc.batch(() => e.command!.undo(this.doc));
@@ -136,6 +140,7 @@ export class History {
   }
 
   redo(): boolean {
+    if (!this.canMutate()) return false;
     if (!this.canRedo) return false;
     const e = this.entries[this.index + 1];
     this.doc.batch(() => e.command!.do(this.doc));
@@ -147,6 +152,7 @@ export class History {
 
   /** Jumps to a history state (history panel click). */
   goto(index: number): void {
+    if (!this.canMutate()) return;
     if (index < 0 || index >= this.entries.length || index === this.index) return;
     this.doc.batch(() => {
       while (this.index > index) {
@@ -242,6 +248,7 @@ export class DocumentStateCommand implements Command {
 
 /** Runs `mutate` and records it as a DocumentStateCommand. */
 export function recordStateChange(doc: CelenneDocument, history: History, label: string, mutate: () => void, record?: RecordedOp): void {
+  if (!doc.editingAllowed()) return;
   const before = captureState(doc);
   doc.batch(mutate);
   const after = captureState(doc);

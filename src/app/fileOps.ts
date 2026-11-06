@@ -26,9 +26,37 @@ import { builtinProfileName, BuiltinProfileId } from '../color/icc';
 /** Finish only this target's Move; recheck after every asynchronous dialog/yield. */
 export function prepareMoveOutput(s: DocumentSession): boolean {
   if (editor.session(s.id) !== s) return false;
+  const tool = editor.currentTool;
+  if (editor.active === s && tool?.id !== 'move' && tool?.id !== 'type' && tool?.busy?.()) { ui.toast('info', 'Finish the current tool before saving.'); return false; }
   const result = editor.finishMove(s);
   return result !== 'failed' && result !== 'cancelled';
 }
+
+// Only manual file operations use these per-document/per-path reservations; requests are rejected, not queued.
+const writingPaths = new Map<string, DocumentSession>();
+function pathKey(path: string): string {
+  const parts: string[] = [];
+  for (const p of path.replace(/\\/g, '/').split('/')) { if (p === '.' || !p) continue; if (p === '..' && parts.length) parts.pop(); else parts.push(p); }
+  return parts.join('/').toLowerCase();
+}
+function claimPath(s: DocumentSession, path: string): boolean {
+  const key = pathKey(path);
+  if (writingPaths.has(key) || editor.sessions.some(other => other !== s && other.doc.filePath && pathKey(other.doc.filePath) === key)) {
+    ui.toast('warning', 'This file is already in use by another document or save.', 'Close the other document or choose another path.'); return false;
+  }
+  writingPaths.set(key, s); return true;
+}
+async function outputRequest(s: DocumentSession | null, run: (s: DocumentSession) => Promise<boolean>): Promise<boolean> {
+  if (!s || editor.session(s.id) !== s) return false;
+  if (s.outputPending || s.closePending) { ui.toast('info', 'This document is busy saving or closing.'); return false; }
+  const pending = Promise.resolve().then(() => run(s)).catch(error => { ui.toast('error', 'File operation failed', errMsg(error)); return false; });
+  s.outputPending = pending;
+  try { return await pending; }
+  finally { s.editProtected = false; s.outputPending = null; if (editor.session(s.id) === s) s.notify(); }
+}
+export function save(s: DocumentSession | null = editor.active): Promise<boolean> { return outputRequest(s, saveImpl); }
+export function saveAs(s: DocumentSession | null = editor.active, asCopy = false): Promise<boolean> { return outputRequest(s, target => saveAsImpl(target, asCopy)); }
+export function exportAs(s: DocumentSession | null = editor.active, formatId?: string, opts: import('../formats/registry').ExportOptions = {}): Promise<boolean> { return outputRequest(s, target => exportAsImpl(target, formatId, opts)); }
 
 export interface NewDocumentSpec {
   name: string;
@@ -222,19 +250,23 @@ async function writeDocument(s: DocumentSession, path: string, asCopy: boolean):
     // Never silently flatten: flat formats are always saved as a copy.
     asCopy = true;
   }
+  if (!claimPath(s, path)) return false;
   const p = ui.progress(`Saving ${basename(path)}…`);
   try {
     await new Promise((r) => setTimeout(r, 16));
     if (!prepareMoveOutput(s)) return false;
+    s.editProtected = true; s.notify();
     const checkpoint = snapshotDocument(s.doc), entry = s.history.current.id, revision = s.doc.rev;
     const bytes = await exporter.export(checkpoint, { maximizeCompatibility: true, psb, selectedLayerIds: s.selectedLayers().map((l) => l.id), onProgress: (f, label) => p.update(f, `Saving ${basename(path)} — ${label}`) });
     await platform().writePath(path, bytes);
     const stamp = !asCopy ? await statMtime(path) : 0;
-    if (!asCopy && editor.session(s.id) === s && !editor.moving(s) && s.history.current.id === entry && s.doc.rev === revision) {
+    if (!asCopy && editor.session(s.id) === s) {
       s.doc.filePath = path;
       s.doc.fileFormat = exporter.id;
       s.doc.name = basename(path).replace(/\.[^.]+$/, '');
-      s.markSaved();
+      s.markSaved(entry);
+      // An unexpected non-command mutation cannot be hidden by a historical savepoint.
+      if (s.doc.rev !== revision && s.history.current.id === entry) s.markUnsaved();
       fileStamps.set(s.id, stamp);
       if (editor.session(s.id) === s && !editor.moving(s) && s.history.current.id === entry && s.doc.rev === revision) await clearRecovery(s, entry, revision);
     }
@@ -247,29 +279,30 @@ async function writeDocument(s: DocumentSession, path: string, asCopy: boolean):
     ui.toast('error', `Could not save "${basename(path)}"`, errMsg(e), 10000);
     return false;
   } finally {
+    writingPaths.delete(pathKey(path));
     p.done();
   }
 }
 
-export async function save(s: DocumentSession | null = editor.active): Promise<boolean> {
+async function saveImpl(s: DocumentSession | null = editor.active): Promise<boolean> {
   if (!s || !prepareMoveOutput(s)) return false;
   const path = s.doc.filePath;
   if (!path || !isLayeredFormat(path) || !platform().canWriteInPlace) {
     if (path && !isLayeredFormat(path)) ui.toast('info', 'Saving as PSD to keep layers and editability.', `"${basename(path)}" is a flat format; the original file is left unchanged.`);
-    return saveAs(s);
+    return saveAsImpl(s);
   }
   // Prevent accidental overwrite of a file changed by another program.
   const before = fileStamps.get(s.id) ?? 0;
   const now = await statMtime(path);
   if (editor.prefs.general.confirmOverwrite && before && now && Math.abs(now - before) > 1) {
     const r = await platform().confirm(`"${basename(path)}" was changed by another program since it was opened.`, 'Overwrite the file with this document?', ['Overwrite', 'Save As…', 'Cancel']);
-    if (r === 1) return saveAs(s);
+    if (r === 1) return saveAsImpl(s);
     if (r !== 0) return false;
   }
   return writeDocument(s, path, false);
 }
 
-export async function saveAs(s: DocumentSession | null = editor.active, asCopy = false): Promise<boolean> {
+async function saveAsImpl(s: DocumentSession | null = editor.active, asCopy = false): Promise<boolean> {
   if (!s || !prepareMoveOutput(s)) return false;
   const base = s.doc.filePath ? basename(s.doc.filePath).replace(/\.[^.]+$/, '') : s.doc.name;
   const suggestedExt = s.doc.width > 30000 || s.doc.height > 30000 ? 'psb' : 'psd';
@@ -289,7 +322,7 @@ export async function saveCopy(s: DocumentSession | null = editor.active): Promi
 }
 
 /** Export As: flattened export to a web/raster format with options. */
-export async function exportAs(s: DocumentSession | null = editor.active, formatId?: string, opts: import('../formats/registry').ExportOptions = {}): Promise<boolean> {
+async function exportAsImpl(s: DocumentSession | null = editor.active, formatId?: string, opts: import('../formats/registry').ExportOptions = {}): Promise<boolean> {
   if (!s || !prepareMoveOutput(s)) return false;
   const exp = exporters.find((e) => e.id === (formatId ?? 'png'));
   if (!exp || !exp.available) {
@@ -298,11 +331,13 @@ export async function exportAs(s: DocumentSession | null = editor.active, format
   }
   const path = await platform().chooseSavePath(`${s.doc.name}.${exp.extension}`, [{ name: exp.label, extensions: [exp.extension] }]);
   if (!path) return false;
+  if (!claimPath(s, path)) return false;
   const p = ui.progress(`Exporting ${basename(path)}…`);
   try {
     await new Promise((r) => setTimeout(r, 16));
     if (s.doc.canvas.bitDepth > 8 && !exp.supports16) ui.toast('info', `${exp.label} is 8-bit only; the export is converted from ${s.doc.canvas.bitDepth}-bit. Your document keeps its bit depth.`);
     if (!prepareMoveOutput(s)) return false;
+    s.editProtected = true; s.notify();
     const bytes = await exp.export(snapshotDocument(s.doc), opts);
     await platform().writePath(path, bytes);
     if (editor.session(s.id) !== s) return true;
@@ -312,6 +347,7 @@ export async function exportAs(s: DocumentSession | null = editor.active, format
     ui.toast('error', 'Export failed', errMsg(e));
     return false;
   } finally {
+    writingPaths.delete(pathKey(path));
     p.done();
   }
 }
@@ -321,17 +357,29 @@ export async function exportAs(s: DocumentSession | null = editor.active, format
 // ---------------------------------------------------------------------------------------------
 export async function closeSession(s: DocumentSession | null = editor.active, force = false): Promise<boolean> {
   if (!s) return true;
-  editor.finishMove(s, false);
-  if (s.modified && !force) {
-    editor.activate(s.id);
-    const r = await platform().confirm(`Save changes to "${s.doc.name}" before closing?`, 'Your changes will be lost if you don’t save them.', ['Save', 'Don’t Save', 'Cancel']);
-    if (r === 2 || r < 0) return false;
-    if (r === 0 && !(await save(s))) return false;
-  }
-  await clearRecovery(s);
-  fileStamps.delete(s.id);
-  editor.removeSession(s.id);
-  return true;
+  if (s.closePending) return s.closePending;
+  const closing = Promise.resolve().then(async () => {
+    if (s.outputPending && !(await s.outputPending)) return false;
+    if (editor.session(s.id) !== s) return true;
+    editor.finishMove(s, false);
+    if (textEditState()?.sessionId === s.id) commitTextEdit();
+    s.editProtected = true; s.notify();
+    if (s.modified && !force) {
+      editor.activate(s.id);
+      const r = await platform().confirm(`Save changes to "${s.doc.name}" before closing?`, 'Your changes will be lost if you don’t save them.', ['Save', 'Don’t Save', 'Cancel']);
+      if (r === 2 || r < 0) return false;
+      if (r === 0 && (!(await saveImpl(s)) || s.modified)) return false;
+    }
+    if (editor.session(s.id) !== s) return true;
+    const entry = s.history.current.id, revision = s.doc.rev;
+    await clearRecovery(s);
+    if (editor.session(s.id) !== s) return true;
+    if (s.history.current.id !== entry || s.doc.rev !== revision) return false;
+    fileStamps.delete(s.id); editor.removeSession(s.id); return true;
+  }).catch(error => { ui.toast('error', 'Could not close document', errMsg(error)); return false; });
+  s.closePending = closing;
+  try { return await closing; }
+  finally { s.closePending = null; s.editProtected = false; if (editor.session(s.id) === s) s.notify(); }
 }
 
 export async function closeAll(except?: string): Promise<boolean> {
@@ -347,7 +395,7 @@ export async function revert(s: DocumentSession | null = editor.active): Promise
   const ok = await platform().confirm(`Revert "${s.doc.name}" to the saved version?`, 'All changes since the last save will be discarded.', ['Revert', 'Cancel']);
   if (ok !== 0) return;
   const path = s.doc.filePath;
-  await closeSession(s, true);
+  if (!(await closeSession(s, true))) return;
   await openPath(path);
 }
 
@@ -376,6 +424,7 @@ export async function placeFile(linked: boolean): Promise<void> {
   const src: SmartObjectSource = { id: uuid(), kind: linked && f.path ? 'linked' : 'embedded', name: f.name, fileType: ext === 'jpeg' ? 'jpg' : ext, data: linked ? undefined : f.data, linkedPath: linked ? f.path ?? undefined : undefined };
   try {
     const dec = await decodeSmartSource(src, f.data);
+    if (editor.session(s.id) !== s || !s.canEdit()) return;
     src.decoded = dec;
     s.doc.smartSources.set(src.id, src);
     // Fit inside the canvas like "Place Embedded".
@@ -400,7 +449,7 @@ export async function placeFile(linked: boolean): Promise<void> {
 export async function clearRecovery(s: DocumentSession, entry?: string, revision?: number): Promise<void> {
   const removal = s.recoveryWrite.catch(() => {}).then(async () => {
     if (entry !== undefined && (editor.session(s.id) !== s || editor.moving(s) || s.history.current.id !== entry || s.doc.rev !== revision)) return;
-    await platform().recovery.remove(s.id).catch(() => {});
+    await platform().recovery.remove(s.id);
   });
   s.recoveryWrite = removal;
   await removal;

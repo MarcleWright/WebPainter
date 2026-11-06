@@ -13,7 +13,7 @@
 | 预览与正式数据如何分工 | [交互预览主线](architecture/INTERACTIVE_PREVIEW.md) |
 | 原型具体验证什么、怎样判定 | [原型验证任务 02](ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md) |
 | 去掉实验开关、默认接入优化 | [默认接入任务](ai/tasks/2026-11-06_01_default-gpu-selection-move.md), 已实现, 复审要求修复 |
-| 稳定保存与关闭, 修复路径回归 | [保存与关闭可靠性任务](ai/tasks/2026-11-06_02_save-close-reliability.md), 方案已通过, 待 coder 实施 |
+| 稳定保存与关闭, 修复路径回归 | [保存与关闭可靠性任务](ai/tasks/2026-11-06_02_save-close-reliability.md), 已实现, 待独立复审及人工验收 |
 | PhotoCraft 值得借鉴什么 | [PhotoCraft 源码对照](architecture/PHOTOCRAFT_REFERENCE.md) |
 | 4K 问题证据、测量限制与成本 | [4K 评估](engineering/4K_SELECTION_ASSESSMENT.md) |
 | 本地运行和远程配置 | [开发环境](engineering/DEV_SETUP.md) |

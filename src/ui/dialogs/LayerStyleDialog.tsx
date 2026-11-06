@@ -53,7 +53,7 @@ export function LayerStyleDialog({ close, layerId, effect }: { close: () => void
   // Live preview: mutate the layer directly; restored on cancel.
   useEffect(() => {
     const l = s.doc.getLayer(layerId);
-    if (!l) return;
+    if (!l || !s.canEdit()) return;
     l.effects = structuredClone(fx);
     l.opacity = opacity;
     l.fillOpacity = fill;
@@ -65,7 +65,7 @@ export function LayerStyleDialog({ close, layerId, effect }: { close: () => void
 
   const restore = () => {
     const l = s.doc.getLayer(layerId);
-    if (!l) return;
+    if (!l || !s.canEdit()) return;
     const o = original.current;
     l.effects = o.fx ? structuredClone(o.fx) : null;
     l.opacity = o.opacity;
@@ -76,6 +76,7 @@ export function LayerStyleDialog({ close, layerId, effect }: { close: () => void
     s.doc.emit({ type: 'layer', layerId });
   };
   const ok = () => {
+    if (!s.canEdit()) return;
     restore();
     const o = original.current;
     const cmds = [];
@@ -87,6 +88,7 @@ export function LayerStyleDialog({ close, layerId, effect }: { close: () => void
     close();
   };
   const cancel = () => {
+    if (!s.canEdit()) return;
     restore();
     close();
   };
@@ -135,7 +137,7 @@ export function LayerStyleDialog({ close, layerId, effect }: { close: () => void
   );
   const angleRow = (k: EffectKind, e: { angle: number; useGlobalLight?: boolean }) => (
     <div className="row wrap">
-      <NumberField label="Angle" value={e.useGlobalLight ? light.angle : e.angle} onChange={(v) => { if (e.useGlobalLight) { s.doc.globalLight.angle = v; setFx(structuredClone(fx)); } else update(k, sel.index, { angle: v }); }} unit="°" />
+      <NumberField label="Angle" value={e.useGlobalLight ? light.angle : e.angle} onChange={(v) => { if (!s.canEdit()) return; if (e.useGlobalLight) { s.doc.globalLight.angle = v; setFx(structuredClone(fx)); } else update(k, sel.index, { angle: v }); }} unit="°" />
       {'useGlobalLight' in e && <Check label="Use Global Light" checked={!!e.useGlobalLight} onChange={(v) => update(k, sel.index, { useGlobalLight: v })} />}
     </div>
   );
@@ -206,7 +208,7 @@ export function LayerStyleDialog({ close, layerId, effect }: { close: () => void
             <Slider label="Size" value={x.size} min={0} max={250} unit="px" onChange={(v) => update(k, 0, { size: v })} />
             <Slider label="Soften" value={x.soften} min={0} max={16} unit="px" onChange={(v) => update(k, 0, { soften: v })} />
             {angleRow(k, x)}
-            <NumberField label="Altitude" value={x.useGlobalLight ? light.altitude : x.altitude} onChange={(v) => (x.useGlobalLight ? ((s.doc.globalLight.altitude = v), setFx(structuredClone(fx))) : update(k, 0, { altitude: v }))} unit="°" />
+            <NumberField label="Altitude" value={x.useGlobalLight ? light.altitude : x.altitude} onChange={(v) => s.canEdit() && (x.useGlobalLight ? ((s.doc.globalLight.altitude = v), setFx(structuredClone(fx))) : update(k, 0, { altitude: v }))} unit="°" />
             <div className="row"><span className="muted" style={{ width: 90 }}>Highlight</span><BlendSelect value={x.highlightMode} onChange={(m) => update(k, 0, { highlightMode: m })} width={100} /><ColorSwatch color={x.highlightColor} onClick={() => colorPick(x.highlightColor, (c) => update(k, 0, { highlightColor: c }))} /><NumberField value={Math.round(x.highlightOpacity * 100)} onChange={(v) => update(k, 0, { highlightOpacity: v / 100 })} unit="%" width={42} /></div>
             <div className="row"><span className="muted" style={{ width: 90 }}>Shadow</span><BlendSelect value={x.shadowMode} onChange={(m) => update(k, 0, { shadowMode: m })} width={100} /><ColorSwatch color={x.shadowColor} onClick={() => colorPick(x.shadowColor, (c) => update(k, 0, { shadowColor: c }))} /><NumberField value={Math.round(x.shadowOpacity * 100)} onChange={(v) => update(k, 0, { shadowOpacity: v / 100 })} unit="%" width={42} /></div>
             <div className="faint">Gloss contours and texture are preserved from PSD; rendering uses a linear contour.</div>

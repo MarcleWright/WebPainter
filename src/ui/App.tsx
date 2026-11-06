@@ -50,7 +50,7 @@ function onGlobalKeyDown(e: KeyboardEvent) {
   if (useApp.getState().dialogs.length) return;
   const host = editor.hostFactory?.();
   // The active tool gets first refusal (Enter/Esc commit/cancel, arrow nudges, Delete for paths…).
-  if (host && editor.currentTool?.keyDown?.(host, e)) {
+  if (host && host.session.canEdit() && editor.currentTool?.keyDown?.(host, e)) {
     e.preventDefault();
     return;
   }
