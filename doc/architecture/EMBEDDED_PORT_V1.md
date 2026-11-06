@@ -6,6 +6,8 @@
 
 `src/embedded/contract.ts` 仅含 DTO/type。`initializeEditor(host)` 管理一个活动编辑器，复用原 `Editor`、`DocumentSession`、History、`prepareMoveOutput`、`save` 和 `closeSession`。没有第二份像素或历史存储，不导入 ADA 包。初始化不导入独立 main，不安装 autosave、recovery scheduler、updater、退出或 launch-file handlers，也不激活 plugins。
 
+03C 面板有限原型新增 client `mountPage(container, host)`：懒加载同一 UI/core，使用当前 document 的样式/键盘作用域，供宿主自有组合页面使用；`mountDirect` 仍使用 Shadow root。宿主负责同页面其他 UI 的输入隔离和生命周期。`mountPage` 不增加业务端口或改变 v1/native 版本，ADA 面板与受控生成合同完全在 ADA；验证及配套包见 [03C 补验](../ai/tasks/2026-11-06_03C_carrier-comparison.md#bottom-panel-bounded-prototype)。
+
 | API/事件 | 语义 |
 | --- | --- |
 | `open(binding, resourceToken)` | 宿主异步读取受控资源；空编辑器才可打开。解析后再核对 generation，不将迟到内容加到新实例 |
@@ -57,4 +59,4 @@
 | Viewport / GPU | 原 renderer cleanup；清失效诊断引用。A 的共享 GPU device/cache 是 realm 级缓存，未证明 destroy 后 GPU 驱动内存归零；B 删除 iframe 释放页面作用域，不声称独立 OS 进程或安全沙箱 |
 | main 的 recovery/update/window/file/error handlers | embedded 不注册；独立 boot 保留 |
 
-36 项本轮定向检查和实窗范围见任务记录；全工具、完全离线、Photoshop、Provider、Profile/CAS 均没有由此获得验收。
+03A 阶段的 36 项检查和旧实窗范围见原任务记录；03C 本轮面板补验及保留回归另行记录，不混算旧证据。全工具、完全离线、Photoshop、Provider、Profile/CAS 均没有由此获得验收。

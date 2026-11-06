@@ -10,6 +10,29 @@
 
 阶段检查：WP typecheck、embeddedLifecycle/embeddedRpc **9/9** 通过。下一步先提交此通用入口，再从干净的确切 commit 重新构建固定包，ADA 校验并复制后验证两条路径。最终本轮证据、配套提交及未验收项在本节续记；阶段提交不是验收。
 
+### Panel Prototype Final Evidence
+
+本轮面板与受控链路已实施、统一自查通过，**等待 ADA集成-REV 一次独立 review 与 Owner 承载选择；总体仍 Inconclusive**。两仓库运行代码阶段分别为 WP `c9acf842177d624e1b972d650865811169892bfc`、ADA `d8ea30df`/`61ac16577653b8c652c5194d8bbb5ada246e90f7`；最终详细证据、命令和成本比较由 [ADA 本轮记录](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03AC_webpainter-carrier-prototype.md#bottom-panel-bounded-prototype) 拥有。本仓库仅通用入口/manifest 与必要记录，不含 ADA 面板业务；后续文档提交不改变源包标记。
+
+| 配套 / 验证 | 本轮实际结果 |
+| --- | --- |
+| WP main ref / merge-base | `ef3eea87beb00b2c79c6f1e4902e4a5739ef8557`，未移动 |
+| 新 embedded 构建 | 干净 `c9acf842177d624e1b972d650865811169892bfc`，`uncommitted=false`；bundleHash `f6e695f341b151a5858d8a3444475f0d177e8342b20cd0f0d9809b09876a1088`；sourceHash `7e430e67013d3b4d55a823c4ca1a511d1b77dbeb970212cb9eb54196dd2d8f23`；port=1/native=null |
+| 固定包验证 | 175 文件、13,060,109 bytes，WP dist / ADA public / ADA dist SHA256 一致。旧包 53ef5988… 不追认为新 commit 构建 |
+| ADA 最终构建 | 从干净 `61ac1657` 执行；main ref/merge-base `3c70a6d57ccaed56dd15566ad4b946f666cac85b`；非 desktop 发布包 |
+| WP / ADA 必要门槛 | WP `npm run build`（含类型、renderer、Electron）、端口 lifecycle/RPC **9/9**；ADA typecheck/build、面板合同/失败重试/RPC 自测、旧壳和 P2 **29/29** 通过 |
+| 面板实窗 A/B | **2/2**：同模型、提示词、4K 作品与笔画；输入隔离、画板恢复绘画、受控快照/预览、关闭重开、原 DOM/测试上下文与后台诊断键恢复通过。1440×1000 / 820×600，收起48px，小窗可继续绘画和 Return |
+| 快照证据 | 作品 SHA256 仍 `6412ae9b…`；笔画前后快照摘要不同，A/B 笔画后均 4,083,139 bytes / SHA256 `a2c18d6d23ab4c0946277a02054bf909affe069fc0c83c4d109c6ffc1cad9b0d`。预览固定 640×360 SVG，不改历史/加层，不发布 Artifact |
+| 已审 P2 保留回归 | 新包/最终构建定向实窗 **6/6**，真实 dirty 场景 32 次取消保留文档，明确 Save/Discard 通过；不是旧包结果复用 |
+
+A 使用 WP Shadow root 与 ADA 自有 Shadow 面板，直接调用受控合同；B 使用 **ADA 自有 iframe 页面**，在同 document 挂 WP mountPage 与完全相同面板，有限 DTO/RPC 回父宿主，不在父页装第二个活动内核。原通用 mountIframe 保留兼容，当前 B 补验不再直接打开 WP 的 embedded.html；不是在包内注入/修改业务代码。
+
+**工程暂推荐 B，未替 Owner 定案。** A 少业务 RPC，但仍需持续治理共页 window、CSS/portal、React roots 和 composedPath，实窗 WP 字号/排版与 B 有差异；B 更接近 WP 常规页面，成本转为 ADA 页面/RPC 签名、握手/释放和 CSP/焦点验收。面板/业务合同本身一份。B structured clone 仍复制快照；A/B 都需稳定合成/PNG 编码，不以单次耗时认定快慢/零开销。
+
+**Pending / Inconclusive**：人工真实 IME、原生下拉/焦点手感、手绘板、剪贴板/拖放、全快捷键/极端窗口；正式 ADA Electron/CSP 与真实业务 Session/Canvas/Gallery 上下文；离线冷缓存/长时 GPU/驱动内存。测试仍用 WP Electron 44.4.5/Chromium 152、RTX A5000、可见临时 profile、测试 app 协议/CSP，composition 是脚本事件；普通后台 Profile 探测被测试 CSP 在网络前拦截，未访问业务数据库。不能代替人工验收或证明全 WP 功能/格式可恢复。native/Artifact/Results/真实 Provider/加层及 GLB 未实施或补验。
+
+最终原始材料只在被忽略目录：ADA `.packaging/wp-03c-panel/final-{window,p2-window}/results.json`、截图/日志及 `final-versions.json`，WP `doc/material/03c-panel-{build,tests}.log`；不混入提交。双方分别本地阶段提交，无原子跨仓提交，未开新分支/推送/合并/发布。向 ADA集成-REV 发送一次统一 review 后暂停，03B/D/E/F 未推进。
+
 ## Status
 
 Finite prototype complete / **Inconclusive**，2026-11-06。Owner 本轮授权仅 03A 与 03C 有限原型/测试。依赖 [03A](2026-11-06_03A_editor-boundary.md)，没有实施 03B、03D/03E/03F。等待独立 review、Owner 确认承载及后续授权。
