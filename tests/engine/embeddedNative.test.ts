@@ -63,3 +63,7 @@ it('a late native receipt cannot mark an untracked newer document mutation clean
   const h=host();const s=await open(h);edit();h.save=vi.fn(async()=>{s.doc.emit({type:'meta'});});
   expect(await api!.save()).toBe(false);expect(s.modified).toBe(true);expect(s.canEdit()).toBe(true);
 });
+it('oversized PNG is a preview failure, not a failed manual native save',async()=>{
+  const h=host();const s=await open(h);edit();const png=exporters.find(x=>x.id==='png')!,original=png.export;png.export=async()=>new Uint8Array(32*1024*1024+1);
+  try{expect(await api!.save()).toBe(true);expect(vi.mocked(h.save).mock.calls[0][0].preview===undefined).toBe(true);edit();await expect(api!.saveAndCapture()).rejects.toThrow('preview');expect(h.save).toHaveBeenCalledTimes(1);expect(s.modified).toBe(true);}finally{png.export=original;}
+});

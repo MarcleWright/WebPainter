@@ -95,7 +95,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
     s.editProtected=true;s.notify();
     const pending=Promise.resolve().then(async()=>{
       const checkpoint=snapshotDocument(s.doc),bytes=encodeNative(checkpoint);let preview:Uint8Array|undefined;
-      try{preview=await exporters.find(x=>x.id==='png')!.export(checkpoint,{});}catch(e){if(requirePreview)throw e;host.error({generation,message:'Native checkpoint captured; preview unavailable: '+String(e)});}
+      try{const captured=await exporters.find(x=>x.id==='png')!.export(checkpoint,{});if(captured.byteLength>32*1024*1024)throw Error('Composite preview exceeds 32 MiB portable limit');preview=captured;}catch(e){if(requirePreview)throw e;host.error({generation,message:'Native checkpoint captured; preview unavailable: '+String(e)});}
       const output:Output={...op,format:'wpnative',bytes,preview,checkpoint:entry};
       if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry||s.doc.rev!==revision)throw Error('Stale native checkpoint');
       if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry||s.doc.rev!==revision)throw Error('Stale native receipt');s.markSaved(entry);}
