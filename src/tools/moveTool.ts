@@ -276,7 +276,10 @@ export class MoveTool implements Tool {
     }
     const sel = s.doc.selection;
     const gpu = gpuCompositor();
-    const initialBounds = sel.bounds(s.doc.bounds);
+    // A valid float can be entirely outside the canvas; its original dimensions remain authoritative.
+    const candidate = this.floating;
+    const f = candidate && !p.alt && candidate.layerId === layer.id && candidate.raster === layer.raster && candidate.rasterVersion === layer.raster.version && candidate.selVersion === sel.version ? candidate : null;
+    const initialBounds = f ? f.rect : sel.bounds(s.doc.bounds);
     if (!initialBounds) return;
     const enabled = import.meta.env.DEV && (globalThis as unknown as { __webPainterTask02?: boolean }).__webPainterTask02 === true;
     let fallback: string | null = null;
@@ -294,8 +297,7 @@ export class MoveTool implements Tool {
     const before = layer.raster.snapshot();
     const selBefore = sel.snapshot();
     // Still floating from the last drag: move the same pixels again (Alt-drag stamps a copy instead).
-    const f = this.floating;
-    if (f && !p.alt && f.layerId === layer.id && f.raster === layer.raster && f.rasterVersion === layer.raster.version && f.selVersion === sel.version) {
+    if (f) {
       const at = { x: f.rect.x + f.ox, y: f.rect.y + f.oy, w: f.rect.w, h: f.rect.h };
       this.drag = { kind: 'float', layerId: layer.id, start: { x: p.x, y: p.y }, before, selBefore, float: f.float, floatCov: f.floatCov, cutState: f.cutState, rect: f.rect, ox: f.ox, oy: f.oy, baseSelVersion: f.baseSelVersion, dx: 0, dy: 0, lastDirty: at };
       if (supported) try { this.prepareFloatPreview(h, this.drag as FloatDrag, layer.raster, gpu!); } catch (error) { this.drag = null; toast(`Move preview failed: ${String(error)}`); }
@@ -479,16 +481,20 @@ export class MoveTool implements Tool {
         const after = next.snapshot(), selAfter = this.floatSelection(d, ox, oy);
         const from = { ...d.rect, x: d.rect.x + d.ox, y: d.rect.y + d.oy }, to = { ...d.rect, x: d.rect.x + ox, y: d.rect.y + oy };
         const dirty = expand(union(union(from, to)!, d.rect)!, 1);
-        const historyId = s.history.current.id;
+        const command = new CompositeCommand('Move', [new RasterEditCommand('Move', { kind: 'layer', layerId: layer.id }, d.before, after, dirty), new RasterEditCommand('Move', { kind: 'selection' }, d.selBefore, selAfter, dirty)]);
         this.clearFloatPreview(d);
         try {
           layer.raster.restore(after); sel.restore(selAfter);
           sel.moved = { version: sel.version, baseVersion: d.baseSelVersion, dx: ox, dy: oy, mdx: ox, mdy: oy };
-          s.push(new CompositeCommand('Move', [new RasterEditCommand('Move', { kind: 'layer', layerId: layer.id }, d.before, after, dirty), new RasterEditCommand('Move', { kind: 'selection' }, d.selBefore, selAfter, dirty)]), true);
+          s.push(command, true);
         } catch (error) {
-          try { if (s.history.current.id !== historyId) s.history.rejectLast(); }
-          finally { layer.raster.restore(d.before); sel.restore(d.selBefore); }
-          throw error;
+          if (s.history.current.command === command) {
+            // History has committed and normally discarded redo; an observer failed afterwards.
+            console.warn('Move committed, but a history notification failed:', error);
+          } else {
+            layer.raster.restore(d.before); sel.restore(d.selBefore);
+            throw error;
+          }
         }
         this.floating = { layerId: layer.id, raster: layer.raster, rasterVersion: layer.raster.version, selVersion: sel.version, float: d.float, floatCov: d.floatCov, cutState: d.cutState, rect: d.rect, ox, oy, baseSelVersion: d.baseSelVersion };
         try { s.doc.emit({ type: 'pixels', layerId: layer.id, rect: dirty }, { type: 'selection' }); }

@@ -4,6 +4,8 @@
 
 Executed as a restricted experiment / Inconclusive。已实现与完成可执行的有限验证, 人工窗口体验及用户验收未完成。
 
+2026-11-06 独立代码审查为 Changes Requested; 两项 P2 已按下文局部修复, 待独立复审。原型体验结论仍为 Inconclusive。
+
 主线已由用户确定, 见 [ADR-0002](../decisions/ADR-0002_floating-selection-webgpu-prototype.md)。下述为本任务的实现与验证范围。
 
 ## Task Brief
@@ -183,7 +185,35 @@ C0/C1 在一次固定最终位移各取原位置、新位置、边缘三处 32×
 
 ## Review Result
 
-任务方案已获用户审查; 本次未新增独立代码审查。有限自动证据不替代人工体验或发布验收。
+2026-11-06 独立审查 `dc28f4e` 相对原始 `a659900`: Changes Requested。复跑现有移动/参考/浮动选区及共享 GPU 合成/预览共 69 项测试通过, P-BUILD 通过; 额外运行时复现确认下述两项 P2。尚未进行修复复审, 有限自动证据不替代人工体验或发布验收。
+
+## Repair Adjustment - 2026-11-06
+
+状态: 局部修复与定向验证已完成, 待独立复审。保留既有三个阶段提交, 未重做性能基线或更换渲染路线。
+
+### Findings And Scope
+
+- **R1 / P2: 完全越界后无法继续移动。** `src/tools/moveTool.ts:279` 在复用已有 floating 前调用裁剪到画布的 selection.bounds, 无交集即返回。复现: 64 x 48 文档, (4,4) 的 8 x 8 选区先向右移 100 px, 松手后在该选区位置再次按下并拖回。当前无法开始第二次拖动, 原始 a659900 可以; 关闭实验开关同样回归。修复有效 floating 复用与新提取边界检查的顺序, GPU 支持/容量判断使用实际复用片段尺寸, 不为修复重新裁切既有浮动内容。
+- **R2 / P2: 失败回滚丢失 redo 分支。** `src/tools/moveTool.ts:487` 的 push 会经真实 History.push 丢弃旧 redo 分支; 入栈后的通知抛错时, catch 的 rejectLast 不能找回旧分支。复现: 先建立可 redo 的步骤, 移动后在历史通知中注入一次异常, 当前像素退回但 canRedo 变 false。区分真正提交失败与成功入栈后的通知失败; 已提交后仅通知失败时应保留一致的像素/选区/历史并报告通知问题, 不误走数据回滚。若实现选择回滚, 必须完整恢复提交前历史及 redo, 不能只恢复当前 entry id。
+
+主要 owner 为 MoveTool 和现有移动测试; R2 确有需要时可最小调整既有 History/Session 的提交与通知边界, 不改变正常分支截断、历史容量和一次拖动一次撤销规则。保留 GPU 图层内合成、默认实验开关及不支持场景回退。不新增事务框架、调度系统、测试平台或额外功能。
+
+### Acceptance And Validation
+
+- R1: 在默认路径及受支持的 GPU 实验路径分别验证 A -> 完全越界的 B -> A, 第二次可开始且恢复正确像素/选区; 两次拖动独立 undo/redo, 第二次取消也应正确。仅验证越界后 undo 不能代替继续拖回。
+- R2: 使用真实 MoveTool、Session、History 运行故障测试。提交前写回失败时, 像素、选区、history entries/index 与原 redo 分支保持不变; 入栈后通知异常时, 按上述明确选择得到完整提交或完整回滚, 不允许混合状态, 不误报为已回滚。正常移动仍截断 redo, 重复 up 不新增历史。
+- 将本地审查复现转为仓库内聚焦回归测试, 不依赖 `.local-artifacts/` 的临时文件或复制原版 MoveTool 作为长期测试依赖。复现材料仅供定位, 断言应针对用户可观察行为与真实历史状态。
+- Preset: P-MOVE、P-BUILD、P-DOC; 加跑现有 moveSelectionReference、floatingSelection 以及共享 GPU compositor/preview 测试。只执行一次相应检查, 有修复改动再重跑受影响项。
+- 不重新跑全套 4K 基线, 不扩大格式/故障矩阵。若改动实际影响准备、渲染或交接性能, 补最小相关测量并说明。人工实窗验收仍待执行者在可交互桌面核对, 用户随后试用; 未执行继续标记未执行, 修复通过不自动将原型改判 Go。
+
+### Delivery
+
+修复提交为包含本记录的本地提交（具体 hash 见该提交的 Git 日志）。保留既有三个提交; 不推送、不发布。
+
+- R1: 先确认已有 floating 的身份和版本, 再决定是否需要取画布内新选区边界; 复用时按原片段尺寸判断 GPU atlas 容量。默认路径与实际 WebGPU 实验路径均测试完全越界、再次按下、取消、拖回及两次独立 undo/redo, 并比较完整测试区域的像素和选区。
+- R2: 提交前写回失败回滚像素和选区, 保留原 history entries/index 与 redo; 命令已进入真实 History 后, 即便后续通知抛错也保留完整提交和正常截断后的历史, 记录警告并继续发出文档更新。测试使用真实 MoveTool、Session、History, 覆盖旧 redo 重放、入栈通知异常、正常截断 redo、重复 up 和 undo/redo。
+- 验证: P-MOVE、旧路径参考、floatingSelection、共享 GPU compositor/preview 共 5 文件 72 项通过; 新增正常分支断言后重跑受影响的 floatingSelection 8 项通过。P-BUILD 通过（含 typecheck, 有既有 Vite 警告）; 测试补充后重新 typecheck 通过。P-DOC 编码、相对链接、材料忽略和 diff 检查通过。改动限于复用判断和提交异常分支, 未修改预览渲染或拖动采样, 不重跑 4K 性能基线。
+- 人工实窗验收和用户试用本轮未执行; 保留原任务 Inconclusive, 不视修复测试通过为 Go。完整 device-lost、资源审计及保存并发等后续项仍未执行。
 
 ## Context Delta
 
@@ -191,3 +221,4 @@ C0/C1 在一次固定最终位移各取原位置、新位置、边缘三处 32×
 - Changed: 主线仍为 WebGPU 稳定资源预览; 原型验证缩为有限实窗前后对照和必要正确性检查。执行安排为准备/核心/验证三个串行阶段, 每阶段一次本地提交; 完整性能/兼容性设施后移。
 - Avoid: 不把 CPU 全量改写优化、顶部图片覆盖、稀释输入或忽略效果当作成功; 不把离屏数字当生产窗口 FPS。
 - Follow-up: 完整性能/精细 GPU 读回/故障注入/资源审计、16 位及复杂组合、正式基准维护、拖动与持久化读取一致性、ADA 接入和离线/PSD 验收后续定义。后续工作由 AI_CONTEXT 与产品方向索引, 不自动扩大范围。
+- Repair: R1、R2 已按 Repair Adjustment 局部修复并验证, 保留现有实现与提交; 待独立复审, 体验结论仍为 Inconclusive。

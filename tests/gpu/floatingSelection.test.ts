@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { testDevice, maxDiff } from '../helpers/gpu';
 import { GpuCompositor } from '../../src/gpu/compositor';
@@ -174,5 +174,53 @@ it('unsupported 16-bit documents use the existing path', () => {
   const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
   const t=new MoveTool(),version=l.raster.version;t.down(host,pt(6,6));t.move(host,pt(12,10));
   expect(session.engine.getOverride(l.id)).toBeUndefined();expect(l.raster.version).toBeGreaterThan(version);t.cancel(host);
+  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+});
+
+it('reuses a fully off-canvas float in the GPU path, including cancellation and history', () => {
+  if (!gpu) throw new Error('GPU unavailable'); setGpuCompositor(gpu);
+  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
+  const doc = newDoc(64,48), pixels = new Uint8ClampedArray(64*48*4);
+  for (let i=0;i<64*48;i++) { pixels[i*4]=i%251; pixels[i*4+1]=100; pixels[i*4+3]=255; }
+  const l=createPixelLayer('outside',8,TiledRaster.fromPixels(64,48,4,8,pixels)); add(doc,l);
+  const session=editor.addDocument(doc);session.setActive(l.id);
+  doc.selection.combine({x:4,y:4,w:8,h:8},new Float32Array(64).fill(1),'replace');
+  const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+  const region={x:0,y:0,w:160,h:48}, state=()=>({pixels:l.raster.readPixels(region),selection:doc.selection.mask.readPixels(region)});
+  const a=state(), t=new MoveTool();
+  t.down(host,pt(6,6));t.move(host,pt(106,6));expect(session.engine.getOverride(l.id)?.gpu?.floating).toBeTruthy();t.up(host);
+  expect(doc.selection.bounds(doc.bounds)).toBeNull();const b=state();
+  t.down(host,pt(106,6));expect(t.busy()).toBe(true);t.move(host,pt(6,6));expect(session.engine.getOverride(l.id)?.gpu?.floating).toBeTruthy();t.cancel(host);expect(state()).toEqual(b);
+  t.down(host,pt(106,6));t.move(host,pt(6,6));expect(session.engine.getOverride(l.id)?.gpu?.floating).toBeTruthy();t.up(host);expect(state()).toEqual(a);
+  expect(session.history.undo()).toBe(true);expect(state()).toEqual(b);expect(session.history.undo()).toBe(true);expect(state()).toEqual(a);
+  expect(session.history.redo()).toBe(true);expect(state()).toEqual(b);expect(session.history.redo()).toBe(true);expect(state()).toEqual(a);
+  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+});
+
+it('preserves redo on write failure and keeps the committed move on history notification failure', () => {
+  if (!gpu) throw new Error('GPU unavailable'); setGpuCompositor(gpu);
+  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
+  const doc=newDoc(64,48),pixels=new Uint8ClampedArray(64*48*4);
+  for(let i=0;i<64*48;i++){pixels[i*4]=i%251;pixels[i*4+1]=80;pixels[i*4+3]=255;}
+  const l=createPixelLayer('history',8,TiledRaster.fromPixels(64,48,4,8,pixels));add(doc,l);
+  const session=editor.addDocument(doc);session.setActive(l.id);doc.selection.combine({x:4,y:4,w:8,h:8},new Float32Array(64).fill(1),'replace');
+  const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+  const region={x:0,y:0,w:64,h:48},state=()=>({pixels:l.raster.readPixels(region),selection:doc.selection.mask.readPixels(region)});
+  const t=new MoveTool();t.down(host,pt(6,6));t.move(host,pt(18,6));t.up(host);
+  const redoState=state();expect(session.history.undo()).toBe(true);const before=state();
+  const entries=session.history.entries.slice(), index=session.history.index;expect(session.history.canRedo).toBe(true);
+  t.down(host,pt(6,6));t.move(host,pt(12,6));expect(session.engine.getOverride(l.id)?.gpu?.floating).toBeTruthy();
+  const restore=l.raster.restore.bind(l.raster);let calls=0;l.raster.restore=snap=>{if(calls++===0)throw new Error('write failed');restore(snap);};
+  t.up(host);l.raster.restore=restore;expect(state()).toEqual(before);expect(session.history.entries).toEqual(entries);expect(session.history.index).toBe(index);expect(session.history.canRedo).toBe(true);
+  expect(session.history.redo()).toBe(true);expect(state()).toEqual(redoState);expect(session.history.undo()).toBe(true);
+  t.down(host,pt(6,6));t.move(host,pt(14,6));expect(session.engine.getOverride(l.id)?.gpu?.floating).toBeTruthy();
+  let notifications=0;const stop=session.history.on(()=>{if(notifications++===0)throw new Error('observer failed');});
+  const warning=vi.spyOn(console,'warn').mockImplementation(()=>{});t.up(host);t.up(host);stop();
+  expect(warning).toHaveBeenCalledWith('Move committed, but a history notification failed:',expect.any(Error));warning.mockRestore();
+  const committed=state();expect(committed).not.toEqual(before);expect(session.history.canRedo).toBe(false);expect(session.history.index).toBe(index+1);
+  expect(session.history.undo()).toBe(true);expect(state()).toEqual(before);expect(session.history.redo()).toBe(true);expect(state()).toEqual(committed);
+  expect(session.history.undo()).toBe(true);expect(session.history.canRedo).toBe(true);
+  t.down(host,pt(6,6));t.move(host,pt(16,6));t.up(host);
+  expect(session.history.canRedo).toBe(false);const count=session.history.entries.length;t.up(host);expect(session.history.entries.length).toBe(count);
   editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
 });

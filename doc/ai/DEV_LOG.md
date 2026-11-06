@@ -2,6 +2,14 @@
 
 ## Recent
 
+### 2026-11-06 Task 02 独立审查与局部修复安排
+
+Status: Changes Requested 的两项 P2 已局部修复并验证, 待独立复审。
+
+- 现有 69 项相关测试和构建通过; 额外复现确认越界连续拖动及失败后 redo 一致性问题。
+- 保留三阶段成果, [任务 02 的修复调整](tasks/2026-11-05_02_4k-selection-preview-prototype.md#repair-adjustment---2026-11-06) 记录修复及验证。
+- 本轮新增一个本地修复提交; 实窗体验仍未验收, 保持 Inconclusive。
+
 ### 2026-11-05 浮动选区主线与原型任务规划
 
 Status: 受限原型已执行; 脚本前后数据和自动检查已记录, 人工窗口验收缺失, Inconclusive。

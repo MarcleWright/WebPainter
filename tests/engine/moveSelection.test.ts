@@ -77,4 +77,22 @@ describe('moving selected pixels', () => {
     expect(at(l, 26, 12).a).toBe(0);
     expect(at(l, 46, 12)).toEqual({ r: 6, a: 1 });
   });
+  it('can drag a floating selection completely outside and back, with separate history and cancellation', () => {
+    const { doc, s, l, h } = setup(); const t = new MoveTool();
+    const region = { x: 0, y: 0, w: 160, h: H };
+    const state = () => ({ pixels: l.raster.readPixels(region), selection: doc.selection.mask.readPixels(region) });
+    const a = state();
+    drag(t, h, [8, 12], [108, 12]);
+    expect(doc.selection.bounds(doc.bounds)).toBeNull();
+    const b = state();
+    t.down(h, pt(108, 12)); expect(t.busy()).toBe(true); t.move(h, pt(8, 12)); t.cancel(h);
+    expect(state()).toEqual(b);
+    drag(t, h, [108, 12], [8, 12]); expect(state()).toEqual(a);
+    expect(s.history.undo()).toBe(true); expect(state()).toEqual(b);
+    expect(s.history.undo()).toBe(true); expect(state()).toEqual(a);
+    expect(s.history.redo()).toBe(true); expect(state()).toEqual(b);
+    expect(s.history.redo()).toBe(true); expect(state()).toEqual(a);
+    s.dispose();
+  });
+
 });
