@@ -59,3 +59,7 @@ it('preview failure does not undo a native save; generation capture still requir
   try{expect(await api!.save()).toBe(true);expect(s.modified).toBe(false);expect(vi.mocked(h.save).mock.calls[0][0].preview).toBeUndefined();edit();await expect(api!.saveAndCapture()).rejects.toThrow('preview failed');expect(s.modified).toBe(true);expect(h.save).toHaveBeenCalledTimes(1);}
   finally{png.export=original;}
 });
+it('a late native receipt cannot mark an untracked newer document mutation clean',async()=>{
+  const h=host();const s=await open(h);edit();h.save=vi.fn(async()=>{s.doc.emit({type:'meta'});});
+  expect(await api!.save()).toBe(false);expect(s.modified).toBe(true);expect(s.canEdit()).toBe(true);
+});

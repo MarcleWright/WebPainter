@@ -24,12 +24,12 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
   const assertLive = () => { if (disposed) throw new Error('Editor disposed'); };
   const operation = (): Operation => ({ generation, operationId: `${generation}:${++sequence}`, binding });
   const valid = (op: Operation) => !disposed && op.generation === generation && op.binding === binding;
-  const state = () => ({ generation, open: !!editor.active, dirty: !!editor.active?.modified });
+  const state = () => ({ generation, open: !!editor.active, dirty: !!editor.active?.modified, checkpoint: editor.active?.history.current.id ?? null });
   let lastState: ReturnType<typeof state> | null = null;
   const notify = () => {
     if (disposed) return;
     const current = state();
-    if (lastState && current.generation === lastState.generation && current.open === lastState.open && current.dirty === lastState.dirty) return;
+    if (lastState && current.generation === lastState.generation && current.open === lastState.open && current.dirty === lastState.dirty && current.checkpoint === lastState.checkpoint) return;
     lastState = current;
     try { host.dirty(current); }
     catch (e) { try { host.error({ generation, message: String(e) }); } catch { /* Observers do not own edits. */ } }
@@ -91,14 +91,14 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
   async function nativeCheckpoint(publish:boolean, closing=false,requirePreview=true):Promise<Output> {
     assertLive();const s=editor.active;
     if(host.nativeVersion!==1 || opening || !s || s.outputPending || (s.closePending&&!closing) || !prepareMoveOutput(s))throw Error('Native editor busy or unavailable');
-    const op=operation(),entry=s.history.current.id,protectedBefore=s.editProtected;
+    const op=operation(),entry=s.history.current.id,revision=s.doc.rev,protectedBefore=s.editProtected;
     s.editProtected=true;s.notify();
     const pending=Promise.resolve().then(async()=>{
       const checkpoint=snapshotDocument(s.doc),bytes=encodeNative(checkpoint);let preview:Uint8Array|undefined;
       try{preview=await exporters.find(x=>x.id==='png')!.export(checkpoint,{});}catch(e){if(requirePreview)throw e;host.error({generation,message:'Native checkpoint captured; preview unavailable: '+String(e)});}
       const output:Output={...op,format:'wpnative',bytes,preview,checkpoint:entry};
-      if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry)throw Error('Stale native checkpoint');
-      if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry)throw Error('Stale native receipt');s.markSaved(entry);}
+      if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry||s.doc.rev!==revision)throw Error('Stale native checkpoint');
+      if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry||s.doc.rev!==revision)throw Error('Stale native receipt');s.markSaved(entry);}
       return output;
     });
     s.outputPending=pending.then(()=>true,()=>false);

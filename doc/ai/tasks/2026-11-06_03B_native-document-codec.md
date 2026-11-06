@@ -39,3 +39,5 @@ Planned / 待审查及实施授权。依赖 [03A](2026-11-06_03A_editor-boundary
 ## Execution Report
 
 未执行。输出精确受支持属性清单与包格式、已知损失及测量限制; 不将小图往返当 4K 验收。
+
+03D 端口补强：保存时同时核对 doc.rev 与历史检查点；迟到原生回执不能把未入历史的较新变更标 clean。先复现 1 failed/7 passed，修复后端口三文件17/17及类型通过。dirty 通知增加稳定 history checkpoint，用于宿主恢复候选去重，不逐像素上报。
