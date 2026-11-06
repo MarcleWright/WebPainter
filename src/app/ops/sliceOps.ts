@@ -1,3 +1,5 @@
+import { snapshotDocument } from '../../document/clone';
+import { prepareMoveOutput } from '../fileOps';
 /** Slices: create/edit/delete (undoable), slices from guides, and Export Slices (ZIP of PNGs). */
 import { zipSync } from 'fflate';
 import { ui } from '../store';
@@ -85,12 +87,15 @@ export function slicesFromGuides(): void {
 export async function exportSlices(): Promise<void> {
   const s = need();
   if (!s) return;
-  const d = s.doc;
-  const slices = d.slices.length ? d.slices : [{ id: 'all', name: d.name.replace(/\.[^.]+$/, '') || 'image', rect: d.bounds }];
+  if (!prepareMoveOutput(s)) return;
+  let d = s.doc;
   const path = await platform().chooseSavePath(`${d.name.replace(/\.[^.]+$/, '')}_slices.zip`, [{ name: 'ZIP archive', extensions: ['zip'] }]);
   if (!path) return;
   const p = ui.progress('Exporting slices…');
   try {
+    if (!prepareMoveOutput(s)) return;
+    d = snapshotDocument(s.doc);
+    const slices = d.slices.length ? d.slices : [{ id: 'all', name: d.name.replace(/\.[^.]+$/, '') || 'image', rect: d.bounds }];
     const f = flattenToPixels(d, { depth: 8 });
     const files: Record<string, Uint8Array> = {};
     const used = new Set<string>();

@@ -20,7 +20,6 @@ const pt = (x: number, y: number): ToolPointer => ({ x, y, sx: x, sy: y, pressur
 it('composes float on GPU before layer effects and preserves formal pixels during movement', async () => {
   if (!gpu) throw new Error('GPU unavailable: this test requires a real WebGPU adapter');
   setGpuCompositor(gpu);
-  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
   const doc = newDoc(64, 48); const data = new Uint8ClampedArray(64*48*4);
   for(let i=0;i<64*48;i++) { data[i*4]=i%251; data[i*4+1]=(i*7)%256; data[i*4+2]=(i*11)%256; data[i*4+3]=[0,64,128,255][i%4]; }
   const layer=createPixelLayer('test',8,TiledRaster.fromPixels(64,48,4,8,data)); add(doc,layer);
@@ -76,13 +75,12 @@ it('composes float on GPU before layer effects and preserves formal pixels durin
   doc.emit({type:'pixels',layerId:layer.id,rect:{x:0,y:0,w:1,h:1}});
   t.up(h); expect(layer.raster.readPixels({x:0,y:0,w:1,h:1})).toEqual(new Uint8ClampedArray([255,0,0,255]));
   expect(session.engine.getOverride(layer.id)).toBeUndefined(); expect(session.history.current.id).toBe(historyId);
-  editor.removeSession(session.id); delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+  editor.removeSession(session.id);
 });
 
 it('C2 experimental commit matches the pre-change raster and selection oracle', () => {
   if (!gpu) throw new Error('GPU unavailable');
   setGpuCompositor(gpu);
-  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
   const w=24,h=16,doc=newDoc(w,h),pixels=new Uint8ClampedArray(w*h*4);
   for(let y=0;y<h;y++) for(let x=0;x<w;x++) { const i=(y*w+x)*4; pixels[i]=(x*37+y*11)%256; pixels[i+1]=(x*7+y*29)%256; pixels[i+2]=(x*13+y*19)%256; pixels[i+3]=[0,64,128,255][(x+y)%4]; }
   const layer=createPixelLayer('C2',8,TiledRaster.fromPixels(w,h,4,8,pixels)); add(doc,layer);
@@ -98,12 +96,11 @@ it('C2 experimental commit matches the pre-change raster and selection oracle', 
     '2b25e8a12a305e931b99d7b8cf73ff9cad4fea5570a3deb6562aa3f910256c85',
     'bcb886f547c4855c500d0c01f1c94fcc58d361bd860fae4a091f116b3bdcd0da',
     '55d7d6b246aa6247c6f83c61d7ac286871039063f72698c65ba1e10339ba559a']);
-  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+  editor.removeSession(session.id);
 });
 
 it('C1 GPU preview retains mask, multiply, opacity, and curves at 25 percent', async () => {
   if (!gpu) throw new Error('GPU unavailable'); setGpuCompositor(gpu);
-  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
   const doc=newDoc(128,96);const rgba=new Uint8ClampedArray(128*96*4);
   for(let i=0;i<128*96;i++){rgba[i*4]=i%251;rgba[i*4+1]=(i*7)%256;rgba[i*4+2]=(i*19)%256;rgba[i*4+3]=255;}
   add(doc,createPixelLayer('background',8,TiledRaster.fromPixels(128,96,4,8,rgba)));
@@ -122,12 +119,11 @@ it('C1 GPU preview retains mask, multiply, opacity, and curves at 25 percent', a
   t.up(host);expect(gpu.floatingAtlasResidentTiles).toBe(0);const exact=compositeRegion(doc,rect,{level:2});
   expect(maxDiff(preview!,exact).max).toBeLessThan(2/255);
   expect(l.opacity).toBe(.65);expect(l.blendMode).toBe('multiply');expect(l.mask?.enabled).toBe(true);expect(l.mask!.raster.readPixels({x:0,y:0,w:128,h:96})).toEqual(maskBefore);
-  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+  editor.removeSession(session.id);
 });
 
 it('commit failure rolls back pixels, selection and history', () => {
   if (!gpu) throw new Error('GPU unavailable');setGpuCompositor(gpu);
-  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
   const doc=newDoc(32,24), data=new Uint8ClampedArray(32*24*4).fill(127);
   const l=createPixelLayer('failure',8,TiledRaster.fromPixels(32,24,4,8,data));add(doc,l);
   const session=editor.addDocument(doc);session.setActive(l.id);
@@ -141,12 +137,11 @@ it('commit failure rolls back pixels, selection and history', () => {
   t.up(host);l.raster.restore=restore;
   expect(l.raster.readPixels(region)).toEqual(original);expect(doc.selection.mask.readPixels(region)).toEqual(mask);
   expect(session.history.current.id).toBe(id);expect(session.engine.getOverride(l.id)).toBeUndefined();
-  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+  editor.removeSession(session.id);
 });
 
 it('switching documents cancels the active preview and releases its tiles', async () => {
   if (!gpu) throw new Error('GPU unavailable');setGpuCompositor(gpu);
-  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
   const doc=newDoc(32,24), data=new Uint8ClampedArray(32*24*4).fill(127);
   const l=createPixelLayer('switch',8,TiledRaster.fromPixels(32,24,4,8,data));add(doc,l);
   const first=editor.addDocument(doc);first.setActive(l.id);doc.selection.combine({x:4,y:4,w:8,h:8},new Float32Array(64).fill(1),'replace');
@@ -162,24 +157,22 @@ it('switching documents cancels the active preview and releases its tiles', asyn
   expect(first.engine.getOverride(l.id)).toBeUndefined();expect(gpu.floatingAtlasResidentTiles).toBe(0);
   expect(l.raster.readPixels({x:0,y:0,w:32,h:24})).toEqual(original);expect(first.history.current.id).toBe(id);
   editor.removeSession(second.id);editor.removeSession(first.id);editor.hostFactory=oldFactory;
-  delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+
 });
 
 it('unsupported 16-bit documents use the existing path', () => {
   if (!gpu) throw new Error('GPU unavailable');setGpuCompositor(gpu);
-  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
   const doc=newDoc(32,24,16), data=new Uint16Array(32*24*4).fill(32768);
   const l=createPixelLayer('16-bit',16,TiledRaster.fromPixels(32,24,4,16,data));add(doc,l);
   const session=editor.addDocument(doc);session.setActive(l.id);doc.selection.combine({x:4,y:4,w:8,h:8},new Float32Array(64).fill(1),'replace');
   const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
   const t=new MoveTool(),version=l.raster.version;t.down(host,pt(6,6));t.move(host,pt(12,10));
   expect(session.engine.getOverride(l.id)).toBeUndefined();expect(l.raster.version).toBeGreaterThan(version);t.cancel(host);
-  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+  editor.removeSession(session.id);
 });
 
 it('reuses a fully off-canvas float in the GPU path, including cancellation and history', () => {
   if (!gpu) throw new Error('GPU unavailable'); setGpuCompositor(gpu);
-  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
   const doc = newDoc(64,48), pixels = new Uint8ClampedArray(64*48*4);
   for (let i=0;i<64*48;i++) { pixels[i*4]=i%251; pixels[i*4+1]=100; pixels[i*4+3]=255; }
   const l=createPixelLayer('outside',8,TiledRaster.fromPixels(64,48,4,8,pixels)); add(doc,l);
@@ -194,12 +187,11 @@ it('reuses a fully off-canvas float in the GPU path, including cancellation and 
   t.down(host,pt(106,6));t.move(host,pt(6,6));expect(session.engine.getOverride(l.id)?.gpu?.floating).toBeTruthy();t.up(host);expect(state()).toEqual(a);
   expect(session.history.undo()).toBe(true);expect(state()).toEqual(b);expect(session.history.undo()).toBe(true);expect(state()).toEqual(a);
   expect(session.history.redo()).toBe(true);expect(state()).toEqual(b);expect(session.history.redo()).toBe(true);expect(state()).toEqual(a);
-  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+  editor.removeSession(session.id);
 });
 
 it('preserves redo on write failure and keeps the committed move on history notification failure', () => {
   if (!gpu) throw new Error('GPU unavailable'); setGpuCompositor(gpu);
-  (globalThis as unknown as { __webPainterTask02: boolean }).__webPainterTask02 = true;
   const doc=newDoc(64,48),pixels=new Uint8ClampedArray(64*48*4);
   for(let i=0;i<64*48;i++){pixels[i*4]=i%251;pixels[i*4+1]=80;pixels[i*4+3]=255;}
   const l=createPixelLayer('history',8,TiledRaster.fromPixels(64,48,4,8,pixels));add(doc,l);
@@ -222,5 +214,5 @@ it('preserves redo on write failure and keeps the committed move on history noti
   expect(session.history.undo()).toBe(true);expect(session.history.canRedo).toBe(true);
   t.down(host,pt(6,6));t.move(host,pt(16,6));t.up(host);
   expect(session.history.canRedo).toBe(false);const count=session.history.entries.length;t.up(host);expect(session.history.entries.length).toBe(count);
-  editor.removeSession(session.id);delete (globalThis as {__webPainterTask02?:boolean}).__webPainterTask02;
+  editor.removeSession(session.id);
 });

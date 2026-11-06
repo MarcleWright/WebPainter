@@ -12,6 +12,7 @@
 | 原有结构与 fork 的边界 | [架构入口](architecture/ARCHITECTURE_OVERVIEW.md) |
 | 预览与正式数据如何分工 | [交互预览主线](architecture/INTERACTIVE_PREVIEW.md) |
 | 原型具体验证什么、怎样判定 | [原型验证任务 02](ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md) |
+| 去掉实验开关、默认接入优化 | [默认接入任务](ai/tasks/2026-11-06_01_default-gpu-selection-move.md), 已实现, 待人工验收 |
 | PhotoCraft 值得借鉴什么 | [PhotoCraft 源码对照](architecture/PHOTOCRAFT_REFERENCE.md) |
 | 4K 问题证据、测量限制与成本 | [4K 评估](engineering/4K_SELECTION_ASSESSMENT.md) |
 | 本地运行和远程配置 | [开发环境](engineering/DEV_SETUP.md) |
@@ -35,4 +36,4 @@
 - **建议 / 待验证**: 后续候选方案和指标, 不代表用户已授权实施。
 - **已实现 / 已验收**: 必须各有代码和相应验证证据。
 
-Task 02 已按受限性能优化原型判为 Go: 自动检查、独立复审与用户实际试用支持其可用性。完整人工场景和正式化验证仍有未覆盖项, 不等于默认启用或发布验收。品牌替换、ADA 接入未实施。
+Task 02 已按受限性能优化原型判为 Go: 自动检查、独立复审与用户实际试用支持其可用性。完整人工场景和正式化验证仍有未覆盖项, 默认接入现已实现, 人工与发布验收另见默认接入任务。品牌替换、ADA 接入未实施。

@@ -1,3 +1,4 @@
+import { snapshotDocument } from '../document/clone';
 /**
  * File operations: new / open / save / save as / save a copy / export / close / recent / place.
  */
@@ -21,6 +22,13 @@ import { CreateLayerCommand } from '../commands/layerCommands';
 import { decodeSmartSource, renderSmartObject } from '../layers/smartObjects';
 import { quadFromRect } from '../image-engine/matrix';
 import { builtinProfileName, BuiltinProfileId } from '../color/icc';
+
+/** Finish only this target's Move; recheck after every asynchronous dialog/yield. */
+export function prepareMoveOutput(s: DocumentSession): boolean {
+  if (editor.session(s.id) !== s) return false;
+  const result = editor.finishMove(s);
+  return result !== 'failed' && result !== 'cancelled';
+}
 
 export interface NewDocumentSpec {
   name: string;
@@ -195,6 +203,7 @@ async function confirmPsdNotes(s: DocumentSession, psb: boolean): Promise<boolea
 }
 
 async function writeDocument(s: DocumentSession, path: string, asCopy: boolean): Promise<boolean> {
+  if (!prepareMoveOutput(s)) return false;
   // Text being typed is committed first, as Photoshop does (an unfinished, empty layer is never saved).
   if (textEditState()?.sessionId === s.id) commitTextEdit();
   const exporter = exporterFor(path);
@@ -216,17 +225,21 @@ async function writeDocument(s: DocumentSession, path: string, asCopy: boolean):
   const p = ui.progress(`Saving ${basename(path)}…`);
   try {
     await new Promise((r) => setTimeout(r, 16));
-    const bytes = await exporter.export(s.doc, { maximizeCompatibility: true, psb, selectedLayerIds: s.selectedLayers().map((l) => l.id), onProgress: (f, label) => p.update(f, `Saving ${basename(path)} — ${label}`) });
+    if (!prepareMoveOutput(s)) return false;
+    const checkpoint = snapshotDocument(s.doc), entry = s.history.current.id, revision = s.doc.rev;
+    const bytes = await exporter.export(checkpoint, { maximizeCompatibility: true, psb, selectedLayerIds: s.selectedLayers().map((l) => l.id), onProgress: (f, label) => p.update(f, `Saving ${basename(path)} — ${label}`) });
     await platform().writePath(path, bytes);
-    if (!asCopy) {
+    const stamp = !asCopy ? await statMtime(path) : 0;
+    if (!asCopy && editor.session(s.id) === s && !editor.moving(s) && s.history.current.id === entry && s.doc.rev === revision) {
       s.doc.filePath = path;
       s.doc.fileFormat = exporter.id;
       s.doc.name = basename(path).replace(/\.[^.]+$/, '');
       s.markSaved();
-      fileStamps.set(s.id, await statMtime(path));
-      await clearRecovery(s);
+      fileStamps.set(s.id, stamp);
+      if (editor.session(s.id) === s && !editor.moving(s) && s.history.current.id === entry && s.doc.rev === revision) await clearRecovery(s, entry, revision);
     }
     if (platform().kind === 'electron') addRecent(path);
+    if (editor.session(s.id) !== s) return true;
     editor.syncSessions();
     ui.toast('success', `Saved ${basename(path)}`, `${(bytes.length / 1024 / 1024).toFixed(2)} MB`, 2500);
     return true;
@@ -239,7 +252,7 @@ async function writeDocument(s: DocumentSession, path: string, asCopy: boolean):
 }
 
 export async function save(s: DocumentSession | null = editor.active): Promise<boolean> {
-  if (!s) return false;
+  if (!s || !prepareMoveOutput(s)) return false;
   const path = s.doc.filePath;
   if (!path || !isLayeredFormat(path) || !platform().canWriteInPlace) {
     if (path && !isLayeredFormat(path)) ui.toast('info', 'Saving as PSD to keep layers and editability.', `"${basename(path)}" is a flat format; the original file is left unchanged.`);
@@ -257,7 +270,7 @@ export async function save(s: DocumentSession | null = editor.active): Promise<b
 }
 
 export async function saveAs(s: DocumentSession | null = editor.active, asCopy = false): Promise<boolean> {
-  if (!s) return false;
+  if (!s || !prepareMoveOutput(s)) return false;
   const base = s.doc.filePath ? basename(s.doc.filePath).replace(/\.[^.]+$/, '') : s.doc.name;
   const suggestedExt = s.doc.width > 30000 || s.doc.height > 30000 ? 'psb' : 'psd';
   const path = await platform().chooseSavePath(`${base}${asCopy ? ' copy' : ''}.${suggestedExt}`, saveFilters());
@@ -277,7 +290,7 @@ export async function saveCopy(s: DocumentSession | null = editor.active): Promi
 
 /** Export As: flattened export to a web/raster format with options. */
 export async function exportAs(s: DocumentSession | null = editor.active, formatId?: string, opts: import('../formats/registry').ExportOptions = {}): Promise<boolean> {
-  if (!s) return false;
+  if (!s || !prepareMoveOutput(s)) return false;
   const exp = exporters.find((e) => e.id === (formatId ?? 'png'));
   if (!exp || !exp.available) {
     ui.toast('warning', `${exp?.label ?? formatId} export is not available yet.`, exp?.note);
@@ -289,8 +302,10 @@ export async function exportAs(s: DocumentSession | null = editor.active, format
   try {
     await new Promise((r) => setTimeout(r, 16));
     if (s.doc.canvas.bitDepth > 8 && !exp.supports16) ui.toast('info', `${exp.label} is 8-bit only; the export is converted from ${s.doc.canvas.bitDepth}-bit. Your document keeps its bit depth.`);
-    const bytes = await exp.export(s.doc, opts);
+    if (!prepareMoveOutput(s)) return false;
+    const bytes = await exp.export(snapshotDocument(s.doc), opts);
     await platform().writePath(path, bytes);
+    if (editor.session(s.id) !== s) return true;
     ui.toast('success', `Exported ${basename(path)}`, undefined, 2500);
     return true;
   } catch (e) {
@@ -306,6 +321,7 @@ export async function exportAs(s: DocumentSession | null = editor.active, format
 // ---------------------------------------------------------------------------------------------
 export async function closeSession(s: DocumentSession | null = editor.active, force = false): Promise<boolean> {
   if (!s) return true;
+  editor.finishMove(s, false);
   if (s.modified && !force) {
     editor.activate(s.id);
     const r = await platform().confirm(`Save changes to "${s.doc.name}" before closing?`, 'Your changes will be lost if you don’t save them.', ['Save', 'Don’t Save', 'Cancel']);
@@ -339,9 +355,10 @@ export async function revert(s: DocumentSession | null = editor.active): Promise
 // Duplicate / place
 // ---------------------------------------------------------------------------------------------
 export async function duplicateDocument(s: DocumentSession | null = editor.active): Promise<void> {
-  if (!s) return;
+  if (!s || !prepareMoveOutput(s)) return;
   const { exportPsd } = await import('../psd/export');
   const { importPsd } = await import('../psd/import');
+  if (!prepareMoveOutput(s)) return;
   const r = importPsd(exportPsd(s.doc, { maximizeCompatibility: false }), `${s.doc.name} copy.psd`);
   r.doc.filePath = null;
   r.doc.profile = { ...s.doc.profile };
@@ -380,8 +397,13 @@ export async function placeFile(linked: boolean): Promise<void> {
 // ---------------------------------------------------------------------------------------------
 // Recovery (auto-save)
 // ---------------------------------------------------------------------------------------------
-export async function clearRecovery(s: DocumentSession): Promise<void> {
-  await platform().recovery.remove(s.id).catch(() => {});
+export async function clearRecovery(s: DocumentSession, entry?: string, revision?: number): Promise<void> {
+  const removal = s.recoveryWrite.catch(() => {}).then(async () => {
+    if (entry !== undefined && (editor.session(s.id) !== s || editor.moving(s) || s.history.current.id !== entry || s.doc.rev !== revision)) return;
+    await platform().recovery.remove(s.id).catch(() => {});
+  });
+  s.recoveryWrite = removal;
+  await removal;
 }
 
 export { newId };

@@ -2,7 +2,7 @@
  * Cheap structural cloning of layers and whole document states.
  * Rasters are cloned copy-on-write (tile references are shared), everything else is deep-copied.
  */
-import type { CelenneDocument } from './document';
+import { CelenneDocument } from './document';
 import type { AlphaChannel, CanvasInfo, ColorProfileRef, GroupLayer, Guide, Layer, SavedPath, SliceDef } from './types';
 import type { RasterSnapshot } from '../image-engine/tiledRaster';
 import { newId } from './ids';
@@ -87,4 +87,24 @@ function bumpRevs(g: GroupLayer) {
     c.rev++;
     if (c.kind === 'group') bumpRevs(c);
   }
+}
+
+/** Isolated output checkpoint, including document preservation data and COW raster state. */
+export function snapshotDocument(doc: CelenneDocument): CelenneDocument {
+  const out = new CelenneDocument(doc.name, structuredClone(doc.canvas));
+  restoreState(out, captureState(doc));
+  out.canvas = structuredClone(doc.canvas); out.profile = structuredClone(doc.profile);
+  out.smartSources = new Map([...doc.smartSources].map(([id, source]) => {
+    const { decoded, ...rest } = source;
+    return [id, { ...structuredClone(rest), decoded: decoded ? { ...decoded, raster: decoded.raster.clone(), space: decoded.space ? structuredClone(decoded.space) : undefined } : undefined }];
+  }));
+  out.patterns = new Map([...doc.patterns].map(([id, pattern]) => {
+    const { raster, ...rest } = pattern; return [id, { ...structuredClone(rest), raster: raster.clone() }];
+  }));
+  out.metadata = structuredClone(doc.metadata); out.psd = structuredClone(doc.psd);
+  out.compatibility = structuredClone(doc.compatibility); out.grid = structuredClone(doc.grid);
+  out.rulerOrigin = { ...doc.rulerOrigin }; out.rulerUnit = doc.rulerUnit;
+  out.globalLight = { ...doc.globalLight }; out.filePath = doc.filePath; out.fileFormat = doc.fileFormat;
+  for (const l of out.allLayers()) l.metadata = structuredClone(l.metadata);
+  return out;
 }

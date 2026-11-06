@@ -17,7 +17,7 @@ try {
   await server.listen();
   const url = server.resolvedUrls.local[0];
   console.log(`Manual test server: ${url}`);
-  console.log('F6: optimized / original; F7: medium; F8: large; F9: effects; F12: diagnostics.');
+  console.log('F7: medium; F8: large; F9: effects; F12: diagnostics.');
   const env = { ...process.env, TASK02_MANUAL_URL: url };
   delete env.ELECTRON_RUN_AS_NODE;
   child = spawn(electronPath, [path.join(root, 'scripts/task02/manual-host.cjs')], {

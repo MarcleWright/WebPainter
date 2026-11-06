@@ -34,7 +34,11 @@ export interface ToolHost {
   viewportSize(): { w: number; h: number };
 }
 
+export type MoveResult = 'none' | 'committed' | 'cancelled' | 'failed';
+
 export interface Tool {
+  finishMove?(session: DocumentSession, commit: boolean): MoveResult;
+  movingSession?(session: DocumentSession): boolean;
   id: ToolId;
   activate?(h: ToolHost): void;
   deactivate?(h: ToolHost): void;

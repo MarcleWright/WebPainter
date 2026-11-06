@@ -234,6 +234,12 @@ export class Editor {
     if (host) this.currentTool?.cancel?.(host);
   }
 
+  finishMove(s: DocumentSession, commit = true) {
+    return this.tool('move')?.finishMove?.(s, commit) ?? 'none';
+  }
+
+  moving(s: DocumentSession): boolean { return this.tool('move')?.movingSession?.(s) ?? false; }
+
   // -------------------------------------------------------------------------------------------
   // Preferences
   // -------------------------------------------------------------------------------------------

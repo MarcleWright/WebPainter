@@ -27,6 +27,8 @@ export function addHistoryHook(h: (s: DocumentSession) => void): void {
 export class DocumentSession {
   readonly id = newId('sess');
   readonly history: History;
+  /** Serialize recovery writes/removal for this document only. */
+  recoveryWrite: Promise<void> = Promise.resolve();
   readonly engine: RenderEngine;
   readonly view = new ViewTransform();
   activeLayerId: LayerId | null = null;

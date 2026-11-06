@@ -2,7 +2,13 @@
 
 状态: 2026-11-06 受限实验原型已实施、复审, 用户实际试用确认性能达到可用水平, 本轮受限 gate 为 Go; 完整场景与正式化仍有未验证项。采用 PhotoCraft 的浮动选区状态思路, 在本项目扩展稳定资源的 WebGPU 图层内实时合成; 松手写回并保留一次拖动一次撤销。决策见 [ADR-0002](../ai/decisions/ADR-0002_floating-selection-webgpu-prototype.md)。
 
-[原型验证任务](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md) 定义范围和验收。执行与证据边界以任务记录为准; 默认用户工作流未启用实验入口。用户交互由 [INTERACTION_RULES](../design/INTERACTION_RULES.md) 维护。
+[原型验证任务](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md) 定义范围和验收。执行与证据边界以任务记录为准; 支持场景现已按能力默认启用优化路径。用户交互由 [INTERACTION_RULES](../design/INTERACTION_RULES.md) 维护。
+
+## 默认接入
+
+2026-11-06 用户确认正常使用不应有“旧版/优化版”模式开关。已从应用运行链路移除开发实验标记, 支持场景默认使用已有 GPU 浮动预览, 未支持场景由实际能力自动回退; CPU 合成与视口后端兼容仍保留。正常生产、开发和 bat 的编辑语义一致, 不以启动器注入开关实现默认能力。
+
+Move 的显式输出交接、自动保存等待和关闭取消规则由 [默认接入任务](../ai/tasks/2026-11-06_01_default-gpu-selection-move.md) 冻结。默认接入及定向验证已完成, 人工验收待完成; 不扩展优化格式范围或重建渲染器。
 
 ## 区分显示与正式数据
 

@@ -2,7 +2,7 @@
  * Move tool: moves selected layers (snapping to guides, document and layer edges), auto-selects
  * layers under the cursor, Alt-drag duplicates, and moves selected pixels as a floating selection.
  */
-import type { Tool, ToolHost, ToolPointer } from './tool';
+import type { MoveResult, Tool, ToolHost, ToolPointer } from './tool';
 import { drawSnapLines, opts, snapRectDelta, snapTargets, toast } from './helpers';
 import { translateLayerDeep, TranslateLayersCommand, CompositeCommand, CreateLayerCommand } from '../commands/layerCommands';
 import type { Layer } from '../document/types';
@@ -148,6 +148,22 @@ export class MoveTool implements Tool {
   id = 'move' as const;
   private drag: LayerDrag | FloatDrag | null = null;
   private floating: Floating | null = null;
+  private moveHost: ToolHost | null = null;
+  private moveResult: MoveResult = 'none';
+
+  movingSession(s: DocumentSession): boolean { return this.moveHost?.session === s && !!this.drag; }
+
+  finishMove(s: DocumentSession, commit: boolean): MoveResult {
+    if (this.moveHost?.session !== s) return 'none';
+    if (this.drag) {
+      if (commit) {
+        try { return this.up(this.moveHost); } catch (error) { console.warn('Move completion failed:', error); return this.moveResult = 'failed'; }
+      }
+      this.cancel(this.moveHost);
+      return 'cancelled';
+    }
+    const result = this.moveResult; this.moveResult = 'none'; return result;
+  }
 
   cursor() {
     return 'move';
@@ -158,6 +174,7 @@ export class MoveTool implements Tool {
   }
 
   down(h: ToolHost, p: ToolPointer) {
+    this.moveHost = h; this.moveResult = 'none';
     const s = h.session;
     const o = opts().move;
     if (o.autoSelect || p.mod) {
@@ -281,19 +298,19 @@ export class MoveTool implements Tool {
     const f = candidate && !p.alt && candidate.layerId === layer.id && candidate.raster === layer.raster && candidate.rasterVersion === layer.raster.version && candidate.selVersion === sel.version ? candidate : null;
     const initialBounds = f ? f.rect : sel.bounds(s.doc.bounds);
     if (!initialBounds) return;
-    const enabled = import.meta.env.DEV && (globalThis as unknown as { __webPainterTask02?: boolean }).__webPainterTask02 === true;
+
     let fallback: string | null = null;
-    if (enabled) {
+    {
       if (!gpu || gpu.disposed) fallback = 'WebGPU compositor unavailable';
       else if (gpu.viewSupported(s.doc, s.engine.view)) fallback = `unsupported view: ${gpu.viewSupported(s.doc, s.engine.view)}`;
       else if (s.engine.hasOverrides()) fallback = 'another preview is active';
       else if (s.doc.canvas.colorMode !== 'rgb' || s.doc.canvas.bitDepth !== 8) fallback = 'only RGB 8-bit documents are supported';
-      else if (s.view.level(s.engine.maxLevel()) > 2) fallback = 'zoom level below 25%';
+      else if (s.view.zoom < .25 || s.view.level(s.engine.maxLevel()) > 2) fallback = 'zoom level below 25%';
       else if (Math.ceil(initialBounds.w / TILE_SIZE) * Math.ceil(initialBounds.h / TILE_SIZE) > gpu.reserveFloatingAtlas()) fallback = 'floating atlas capacity';
       else if (!s.doc.root.children.every(l => !l.clipping && !hasEnabledEffect(l.effects) && !l.vectorMask && l.advanced.knockout === 'none' && (l.kind === 'pixel' || (l.kind === 'adjustment' && l.adjustment.type === 'curves')))) fallback = 'unsupported layer composition';
       if (fallback) console.info(`[Task 02] Using the existing Move path: ${fallback}`);
     }
-    const supported = enabled && !fallback;
+    const supported = !fallback;
     const before = layer.raster.snapshot();
     const selBefore = sel.snapshot();
     // Still floating from the last drag: move the same pixels again (Alt-drag stamps a copy instead).
@@ -336,7 +353,7 @@ export class MoveTool implements Tool {
     const pixels = TiledRaster.fromPixels(d.float.w, d.float.h, 4, 32, data);
     const invalidate = () => {
       if (this.drag !== d || this.validPreview(h, d)) return;
-      this.clearFloatPreview(d); this.drag = null; h.redraw();
+      this.clearFloatPreview(d); this.drag = null; this.moveResult = 'cancelled'; h.redraw();
     };
     const stopDoc = s.doc.on(invalidate), stopGpu = onGpuLost(invalidate);
     d.preview = { session: s, docRev: s.doc.rev, raster, rasterVersion: raster.version, mask: s.doc.selection.mask, maskVersion: s.doc.selection.mask.version, selectionVersion: s.doc.selection.version, moved: s.doc.selection.moved, gpu, cut, pixels, stop: () => { stopDoc(); stopGpu(); }, override: null };
@@ -345,7 +362,7 @@ export class MoveTool implements Tool {
 
   private validPreview(h: ToolHost, d: FloatDrag): boolean {
     const p = d.preview, s = h.session, l = s.doc.getLayer(d.layerId);
-    return !!p && p.session === s && editor.active === s && s.doc.rev === p.docRev && !!l && hasRaster(l) && l.raster === p.raster && l.raster.version === p.rasterVersion && !l.locks.pixels && !l.locks.position && !l.locks.all && s.doc.selection.mask === p.mask && p.mask.version === p.maskVersion && s.doc.selection.version === p.selectionVersion && s.view.level(s.engine.maxLevel()) <= 2 && gpuCompositor() === p.gpu && !p.gpu.disposed;
+    return !!p && p.session === s && editor.active === s && s.doc.rev === p.docRev && !!l && hasRaster(l) && l.raster === p.raster && l.raster.version === p.rasterVersion && !l.locks.pixels && !l.locks.position && !l.locks.all && s.doc.selection.mask === p.mask && p.mask.version === p.maskVersion && s.doc.selection.version === p.selectionVersion && s.view.zoom >= .25 && s.view.level(s.engine.maxLevel()) <= 2 && gpuCompositor() === p.gpu && !p.gpu.disposed;
   }
 
   private clearFloatPreview(d: FloatDrag) {
@@ -403,14 +420,14 @@ export class MoveTool implements Tool {
     }
     // Floating pixels (offset from where they were lifted).
     const layer = s.doc.getLayer(d.layerId);
-    if (!layer || !hasRaster(layer)) { if (d.preview) { this.clearFloatPreview(d); this.drag = null; h.redraw(); } return; }
+    if (!layer || !hasRaster(layer)) { if (d.preview) { this.clearFloatPreview(d); this.drag = null; this.moveResult = 'cancelled'; h.redraw(); } return; }
     if (dx === d.dx && dy === d.dy) return;
     const moved0 = !d.dx && !d.dy;
     d.dx = dx;
     d.dy = dy;
     dx += d.ox;
     dy += d.oy;
-    if (d.preview && !this.validPreview(h, d)) { this.clearFloatPreview(d); this.drag = null; h.redraw(); return; }
+    if (d.preview && !this.validPreview(h, d)) { this.clearFloatPreview(d); this.drag = null; this.moveResult = 'cancelled'; h.redraw(); return; }
     if (!d.preview) layer.raster.restore(d.cutState);
     const dest = { x: d.rect.x + dx, y: d.rect.y + dy, w: d.rect.w, h: d.rect.h };
     if (!d.preview) stampFloat(layer.raster, dest.x - layer.x, dest.y - layer.y, d.float);
@@ -430,7 +447,7 @@ export class MoveTool implements Tool {
       }
       let cpu: TiledRaster | null = null;
       const override: LayerOverride = {
-        interaction: { valid: () => this.drag === d && this.validPreview(h, d), abort: () => { if (this.drag === d) { this.clearFloatPreview(d); this.drag = null; h.redraw(); } } },
+        interaction: { valid: () => this.drag === d && this.validPreview(h, d), abort: () => { if (this.drag === d) { this.clearFloatPreview(d); this.drag = null; this.moveResult = 'cancelled'; h.redraw(); } } },
         read: (r, level) => {
           if (!cpu) { cpu = new TiledRaster(4, 8); cpu.restore(d.cutState); stampFloat(cpu, dest.x - layer.x, dest.y - layer.y, d.float); }
           const scale = 1 << level;
@@ -444,10 +461,11 @@ export class MoveTool implements Tool {
     h.redraw();
   }
 
-  up(h: ToolHost) {
+  up(h: ToolHost): MoveResult {
     const d = this.drag;
     this.drag = null;
-    if (!d) return;
+    if (!d) return 'none';
+    this.moveResult = 'committed';
     const s = h.session;
     if (d.kind === 'layers') {
       // A click without movement keeps the prepared lift for the next drag.
@@ -460,17 +478,17 @@ export class MoveTool implements Tool {
       editor.endInteraction();
       if (d.applied.dx || d.applied.dy) s.push(new TranslateLayersCommand(d.ids, d.applied.dx, d.applied.dy, { action: 'layer.translate', args: { dx: d.applied.dx, dy: d.applied.dy } }), true);
       h.redraw();
-      return;
+      return this.moveResult;
     }
     const layer = s.doc.getLayer(d.layerId);
-    if (!layer || !hasRaster(layer)) { if (d.preview) this.clearFloatPreview(d); return; }
+    if (!layer || !hasRaster(layer)) { if (d.preview) this.clearFloatPreview(d); return this.moveResult = 'cancelled'; }
     const sel = s.doc.selection;
-    if (d.preview && !this.validPreview(h, d)) { this.clearFloatPreview(d); h.redraw(); return; }
+    if (d.preview && !this.validPreview(h, d)) { this.clearFloatPreview(d); h.redraw(); return this.moveResult = 'cancelled'; }
     if (!d.dx && !d.dy) {
       // No movement: nothing changed (a float stays floating).
       if (d.preview) this.clearFloatPreview(d);
       if (this.floating) { this.floating.rasterVersion = layer.raster.version; this.floating.selVersion = sel.version; }
-      return;
+      return this.moveResult;
     }
     const ox = d.ox + d.dx, oy = d.oy + d.dy;
     if (d.preview) {
@@ -501,10 +519,11 @@ export class MoveTool implements Tool {
         catch (error) { console.warn('Move committed, but a document listener failed:', error); }
       } catch (error) {
         if (d.preview) this.clearFloatPreview(d);
+        this.moveResult = 'failed';
         toast(`Move failed: ${error instanceof Error ? error.message : String(error)}`);
       }
       h.redraw();
-      return;
+      return this.moveResult;
     }
     sel.restore(this.floatSelection(d, ox, oy));
     sel.moved = { version: sel.version, baseVersion: d.baseSelVersion, dx: ox, dy: oy, mdx: ox, mdy: oy };
@@ -515,6 +534,7 @@ export class MoveTool implements Tool {
     const dirty = expand(union(union(from, to)!, d.rect)!, 1);
     s.push(new CompositeCommand('Move', [new RasterEditCommand('Move', { kind: 'layer', layerId: layer.id }, d.before, after, dirty), new RasterEditCommand('Move', { kind: 'selection' }, d.selBefore, selAfter, dirty)]), true);
     this.floating = { layerId: layer.id, raster: layer.raster, rasterVersion: layer.raster.version, selVersion: sel.version, float: d.float, floatCov: d.floatCov, cutState: d.cutState, rect: d.rect, ox, oy, baseSelVersion: d.baseSelVersion };
+    return this.moveResult;
   }
 
   cancel(h: ToolHost) {

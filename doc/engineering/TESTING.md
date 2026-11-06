@@ -39,4 +39,4 @@
 - 导出/重开和目标 Photoshop 文件检查与性能验收分别记录。
 - 完全断网运行的绘画、打开、保存、重开、PSD 导出需单独人工验证。
 
-Task 02 的 P-MOVE、GPU 定向检查、P-BUILD 和有限脚本对照见 [任务记录](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md)。P-FULL、PhotoCraft Rust 基准、人工窗口矩阵和用户试用未执行。
+Task 02 的 P-MOVE、GPU 定向检查、P-BUILD 和有限脚本对照见 [任务记录](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md), 用户已实际试用确认性能达到可用水平。P-FULL、PhotoCraft Rust 基准和完整人工矩阵仍未执行。生产默认链路及输出交接的后续验收见 [默认接入任务](../ai/tasks/2026-11-06_01_default-gpu-selection-move.md), 自动及生产脚本检查已执行, 未执行的人工与设备项目在该任务记录。

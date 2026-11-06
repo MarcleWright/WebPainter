@@ -19,7 +19,6 @@ function bootstrap() {
   if (at < 0) throw new Error('Task02 fixture builder marker is missing.');
   const setup = evaluation.slice(0, at);
   return `(async () => {
-    globalThis.__webPainterTask02 = true;
     ${setup}
     let currentSessionId = null;
     const cases = {
@@ -31,7 +30,6 @@ function bootstrap() {
       name: '',
       info() {
         return {
-          enabled: globalThis.__webPainterTask02 === true,
           name: this.name,
           renderer: window.__celenneRenderer,
           gpu: !!rendering.gpuCompositor(),
@@ -61,11 +59,7 @@ function bootstrap() {
         host?.redraw();
         return this.info();
       },
-      toggle() {
-        editor.cancelTool();
-        globalThis.__webPainterTask02 = !globalThis.__webPainterTask02;
-        return this.info();
-      },
+
     };
     await window.__task02Manual.load('medium');
     for (let i = 0; i < 200 && !window.__celenneViewport; i++) await pause(50);
@@ -74,8 +68,8 @@ function bootstrap() {
 }
 
 function showStatus(info) {
-  const mode = info.enabled ? 'OPTIMIZED ON' : 'ORIGINAL';
-  win.setTitle(`Task02 | ${mode} | ${info.name} | ${info.renderer ?? 'initializing'} | F6 toggle / F7 medium / F8 large / F9 effects`);
+  const mode = 'DEFAULT';
+  win.setTitle(`Task02 | ${mode} | ${info.name} | ${info.renderer ?? 'initializing'} | F7 medium / F8 large / F9 effects`);
   console.log('TASK02_MANUAL_STATUS ' + JSON.stringify(info));
 }
 
@@ -93,12 +87,11 @@ app.whenReady().then(async () => {
     if (input.type !== 'keyDown' || input.isAutoRepeat) return;
     const key = input.key.toUpperCase();
     if (key === 'F12') { event.preventDefault(); win.webContents.toggleDevTools(); return; }
-    if (!['F6', 'F7', 'F8', 'F9'].includes(key)) return;
+    if (!['F7', 'F8', 'F9'].includes(key)) return;
     event.preventDefault();
     if (!ready || switching) return;
     switching = true;
-    const script = key === 'F6' ? 'window.__task02Manual.toggle()'
-      : `window.__task02Manual.load(${JSON.stringify({ F7: 'medium', F8: 'large', F9: 'effects' }[key])})`;
+    const script = `window.__task02Manual.load(${JSON.stringify({ F7: 'medium', F8: 'large', F9: 'effects' }[key])})`;
     win.webContents.executeJavaScript(script).then(showStatus).catch(console.error).finally(() => { switching = false; });
   });
   await win.loadURL(process.env.TASK02_MANUAL_URL);
