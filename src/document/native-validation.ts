@@ -61,9 +61,19 @@ export function text(v: any): void {
     const s=r.style; string(s.fontFamily,256); string(s.fontStyleName,256); number(s.fontSize,.01,10000); number(s.fontWeight,1,1000);
     choice(s.kerning,['metrics','optical','none']); choice(s.textCase,['none','allCaps','smallCaps']); choice(s.baseline,['normal','superscript','subscript']);
     if (s.leading !== null) number(s.leading,0,100000); number(s.horizontalScale,.001,1000); number(s.verticalScale,.001,1000);
+    if(s.postScriptName!==undefined)string(s.postScriptName,256);
+    if(s.fontType!==undefined)integer(s.fontType,0,65535);if(s.fontScript!==undefined)integer(s.fontScript,0,65535);
+    for(const channel of Object.values(s.color))number(channel,0,1);
+    array(s.openTypeFeatures,256,tag=>{string(tag,4);check(/^[A-Za-z0-9 ]{4}$/.test(tag),'feature tag');});
+    for(const [tag,value] of Object.entries(s.variationAxes)){check(/^[A-Za-z0-9 ]{4}$/.test(tag),'variation tag');number(value);}
   }
-  for (const r of v.paragraphs) choice(r.style.align,['left','center','right','justifyLeft','justifyCenter','justifyRight','justifyAll']);
-  if (v.psBreaks !== undefined) json(v.psBreaks);
+  for (const r of v.paragraphs){const s=r.style;choice(s.align,['left','center','right','justifyLeft','justifyCenter','justifyRight','justifyAll']);
+    if(s.composer!==undefined)choice(s.composer,['single','every','celenne']);for(const key of ['opticalMargins','hanging'])if(s[key]!==undefined)choice(s[key],[true,false]);
+    for(const key of ['wordSpacing','letterSpacing','glyphScaling'])if(s[key]!==undefined){array(s[key],3,x=>number(x));check(s[key].length===3,'spacing triple');}
+    if(s.autoLeading!==undefined)number(s.autoLeading,.01,100);
+    if(s.hyphenation!==undefined){const h=s.hyphenation;object(h,['minWord','afterFirst','beforeLast','limit','zone','capitalized']);for(const key of ['minWord','afterFirst','beforeLast','limit'])integer(h[key],0,100000);number(h.zone,0,1e7);choice(h.capitalized,[true,false]);}
+  }
+  if (v.psBreaks !== undefined) array(v.psBreaks,10000,b=>{object(b,['key','starts','spans','whole','hyphens','xs'],['key','starts']);number(b.key,-1e12,1e12);array(b.starts,100000,x=>integer(x,0,100000));if(b.spans!==undefined)array(b.spans,100000,x=>{if(x!==null)number(x);});if(b.whole!==undefined)choice(b.whole,[true,false]);if(b.hyphens!==undefined)array(b.hyphens,100000,x=>integer(x,0,100000));if(b.xs!==undefined)array(b.xs,100000,x=>{if(x!==null)array(x,100000,y=>number(y));});});
 }
 export function adjustment(v: any): void {
   check(v && typeof v.type === 'string' && Object.hasOwn(ADJUSTMENT_LABELS,v.type) && v.type !== 'colorLookup', 'unsupported adjustment');
@@ -95,7 +105,7 @@ export function layerData(v: any): void {
   const paint=(p:any)=>{check(p && p.type==='solid','native v1 supports solid fills only');object(p,['type','color']);object(p.color,['r','g','b']);for(const x of Object.values(p.color))number(x,0,1);};
   if(v.kind==='fill')paint(v.fill);
   if(v.kind==='shape'){
-    path(v.path); if(v.origin!==null){object(v.origin,['kind','x','y','w','h','radii','sides','starRatio','lineWidth','rotation'],['kind','x','y','w','h']);choice(v.origin.kind,['rectangle','roundedRectangle','ellipse','polygon','star','line','custom']);json(v.origin);}
+    path(v.path); if(v.origin!==null){const o=v.origin;object(o,['kind','x','y','w','h','radii','sides','starRatio','lineWidth','rotation'],['kind','x','y','w','h']);choice(o.kind,['rectangle','roundedRectangle','ellipse','polygon','star','line','custom']);number(o.x);number(o.y);number(o.w,0,1e7);number(o.h,0,1e7);if(o.radii!==undefined){array(o.radii,4,x=>number(x,0,1e7));check(o.radii.length===4,'shape radii');}if(o.sides!==undefined)integer(o.sides,3,10000);if(o.starRatio!==undefined)number(o.starRatio,0,1);if(o.lineWidth!==undefined)number(o.lineWidth,0,1e7);if(o.rotation!==undefined)number(o.rotation);}
     paint(v.fill);object(v.stroke,['enabled','paint','width','alignment','cap','join','miterLimit','dash','dashOffset','opacity']);paint(v.stroke.paint);choice(v.stroke.enabled,[true,false]);number(v.stroke.width,0,10000);choice(v.stroke.alignment,['inside','center','outside']);choice(v.stroke.cap,['butt','round','square']);choice(v.stroke.join,['miter','round','bevel']);number(v.stroke.miterLimit,0,1e5);array(v.stroke.dash,100,x=>number(x,0,10000));number(v.stroke.dashOffset);number(v.stroke.opacity,0,1);choice(v.usingPreservedPixels,[true,false]);
   }
   if(v.kind==='group')choice(v.expanded,[true,false]);

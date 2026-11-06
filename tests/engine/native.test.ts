@@ -47,6 +47,12 @@ describe('hostile input never changes an existing document/session',()=>{
     tileLength:m=>m.blocks[0].length=1,duplicateTile:m=>m.root.children[0].children[0].mask.raster.tiles.push(m.root.children[0].children[0].mask.raster.tiles[0]),
     badOpacity:m=>m.root.opacity=2, missingField:m=>delete m.root.locks,
     textRuns:m=>m.root.children[1].text.runs[0].length=100000,
+    shapeOriginType:m=>m.root.children[2].origin={kind:'rectangle',x:'wrong',y:0,w:10,h:10},
+    optionalFontType:m=>m.root.children[1].text.runs[0].style.postScriptName={bad:true},
+    paragraphComposer:m=>m.root.children[1].text.paragraphs[0].style.composer='unknown',
+    featureType:m=>m.root.children[1].text.runs[0].style.openTypeFeatures=[12],
+    axisType:m=>m.root.children[1].text.runs[0].style.variationAxes={wght:'heavy'},
+    psBreakType:m=>m.root.children[1].text.psBreaks=[{key:0,starts:['a']}],
     unknownAdjust:m=>m.root.children[4].adjustment.type='unknown',
   };
   for(const [name,mutate]of Object.entries(mutations))it(name,()=>{
