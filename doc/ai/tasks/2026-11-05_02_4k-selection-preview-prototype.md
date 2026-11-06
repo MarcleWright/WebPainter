@@ -2,9 +2,9 @@
 
 ## Status
 
-Executed as a restricted experiment / Inconclusive。已实现与完成可执行的有限验证, 人工窗口体验及用户验收未完成。
+Go for the restricted prototype / 受限原型通过。已实现并完成有限自动验证与独立复审, 用户实际确认性能改善达到可用水平。完整人工场景、默认启用及发布验收不在本结论内。
 
-2026-11-06 独立代码审查为 Changes Requested; 两项 P2 已按下文局部修复, 待独立复审。原型体验结论仍为 Inconclusive。
+2026-11-06 独立代码审查的两项 P2 已局部修复, 修复提交 59c01de 独立复审 Approved。用户试用后按受限性能原型 Go 收口; 早期 Inconclusive 保留为阶段历史, 用户体验反馈见下文。
 
 主线已由用户确定, 见 [ADR-0002](../decisions/ADR-0002_floating-selection-webgpu-prototype.md)。下述为本任务的实现与验证范围。
 
@@ -187,9 +187,11 @@ C0/C1 在一次固定最终位移各取原位置、新位置、边缘三处 32×
 
 2026-11-06 独立审查 `dc28f4e` 相对原始 `a659900`: Changes Requested。复跑现有移动/参考/浮动选区及共享 GPU 合成/预览共 69 项测试通过, P-BUILD 通过; 额外运行时复现确认下述两项 P2。尚未进行修复复审, 有限自动证据不替代人工体验或发布验收。
 
+后续独立复审修复提交 `59c01de`: Approved, 本次范围未发现新的 P1/P2; 独立重跑 72 项相关测试和 P-BUILD 通过。此结论只覆盖局部修复代码, 不改变人工体验未验收和原型 Inconclusive。
+
 ## Repair Adjustment - 2026-11-06
 
-状态: 局部修复与定向验证已完成, 待独立复审。保留既有三个阶段提交, 未重做性能基线或更换渲染路线。
+状态: 局部修复与定向验证已完成, 修复提交 59c01de 独立复审 Approved。保留既有三个阶段提交, 未重做性能基线或更换渲染路线。
 
 ### Findings And Scope
 
@@ -215,10 +217,26 @@ C0/C1 在一次固定最终位移各取原位置、新位置、边缘三处 32×
 - 验证: P-MOVE、旧路径参考、floatingSelection、共享 GPU compositor/preview 共 5 文件 72 项通过; 新增正常分支断言后重跑受影响的 floatingSelection 8 项通过。P-BUILD 通过（含 typecheck, 有既有 Vite 警告）; 测试补充后重新 typecheck 通过。P-DOC 编码、相对链接、材料忽略和 diff 检查通过。改动限于复用判断和提交异常分支, 未修改预览渲染或拖动采样, 不重跑 4K 性能基线。
 - 人工实窗验收和用户试用本轮未执行; 保留原任务 Inconclusive, 不视修复测试通过为 Go。完整 device-lost、资源审计及保存并发等后续项仍未执行。
 
+## Manual Test Entry - 2026-11-06
+
+用户使用生产 build/start 仍感到卡顿; 源码确认实验优化受 DEV 与显式全局开关双重控制, 该观察发生在默认旧路径, 不能作为优化路径的体验结论。用户要求双击 bat 启动手测。
+
+已新增根目录 Start-Task02.bat、scripts/task02/manual.mjs 与 manual-host.cjs: 自动运行开发服务与独立 Electron 测试窗口, 复用已有合成样例构建器, 关闭自动保存并启用实验开关。保留窗口供真实指针操作, F6 切换旧/优化路径, F7/F8/F9 重建 C0 中/C0 大/C1; 不修改业务工具、合成算法或生产默认配置。操作说明归 [DEV_SETUP](../../engineering/DEV_SETUP.md#task-02-手动体验)。
+
+验证: JS 语法检查通过; 已实际执行 bat 并得到启动诊断: enabled=true, renderer=webgpu (GPU compositing), gpu=true, autosaveMinutes=0, width=3840, height=2160, sessions=1。这仅证明入口与初始配置, 尚未人工验证 F6-F9、连续拖动、分块/交接或关闭后的服务退出, 不宣称用户体验/性能通过。本轮未重新测量性能, 未提交或推送。
+
+## User Feedback - 2026-11-06
+
+用户通过手测入口反馈: 性能确实优化, 达到可用水平。这是优化路径的实际用户体验确认, 取代“用户尚未试用”的当前状态; 未提供各 C0/C1 场景、100% 缩放、完整交接/效果矩阵的分别确认, 不据此补记未执行检查或量化 FPS, 不自动视为生产默认开启/发布验收。
+
+另观察 Ctrl+J 复制整个图层而非选区。源码核对: actions.ts 将 Ctrl+J 绑定 layer.duplicate, 既有 layer.viaCopy 调用 layerVia(false) 会读取选区 coverage, 但未绑定快捷键。属于独立的快捷键/工具行为缺口, 不由本任务的 GPU 预览改动引起; 可暂用 Layer -> New -> Layer via Copy, 见 WP-EDIT-001。本轮仅记录, 未改该快捷键或复制实现。
+
+收口结论: 基于有限前后测量、72 项相关测试、构建与独立复审, 加上用户实际试用确认, 本轮判为受限原型 Go。未逐项确认的 C0/C1、100% 缩放、复杂场景及保存/导出并发继续保留为未验证, 不追认量化 FPS 或完整发布验收。Ctrl+J 行为缺口独立跟踪, 不阻断本轮性能原型。用户随后授权提交并推送到 MarcleWright/WebPainter, 包含手测入口与当前文档, 不向上游提 PR 或发布。
+
 ## Context Delta
 
 - Keep: 复用文档/分块/历史/PSD, 一次拖动一次撤销及上游文档保留边界。
 - Changed: 主线仍为 WebGPU 稳定资源预览; 原型验证缩为有限实窗前后对照和必要正确性检查。执行安排为准备/核心/验证三个串行阶段, 每阶段一次本地提交; 完整性能/兼容性设施后移。
 - Avoid: 不把 CPU 全量改写优化、顶部图片覆盖、稀释输入或忽略效果当作成功; 不把离屏数字当生产窗口 FPS。
 - Follow-up: 完整性能/精细 GPU 读回/故障注入/资源审计、16 位及复杂组合、正式基准维护、拖动与持久化读取一致性、ADA 接入和离线/PSD 验收后续定义。后续工作由 AI_CONTEXT 与产品方向索引, 不自动扩大范围。
-- Repair: R1、R2 已按 Repair Adjustment 局部修复并验证, 保留现有实现与提交; 待独立复审, 体验结论仍为 Inconclusive。
+- Repair: R1、R2 已按 Repair Adjustment 局部修复并通过独立复审; 用户试用后受限原型 Go, 正式化与未覆盖项继续后续处理。

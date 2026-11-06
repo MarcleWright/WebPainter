@@ -2,6 +2,26 @@
 
 ## Recent
 
+### 2026-11-06 受限原型收口与仓库同步
+
+Status: Task 02 受限原型 Go; 用户授权提交手测入口与记录并同步自有 origin/main。
+
+- 72 项相关测试、构建、独立复审及用户实际试用支持本轮结论; 未覆盖场景和正式化继续保留, 不开启生产默认开关。
+- 包含现有阶段提交及后续手测入口, 排除原始材料和用户 profile; 不推送 Celenne 上游、不创建 PR 或发布。
+
+### 2026-11-06 用户试用反馈
+
+Status: 用户确认优化性能达到可用水平; 完整验收仍未完成。
+
+- 实际体验反馈归 [任务 02](tasks/2026-11-05_02_4k-selection-preview-prototype.md#user-feedback---2026-11-06); Ctrl+J 的整层复制绑定另记 [WP-EDIT-001](../engineering/KNOWN_ISSUES.md), 本轮未改复制行为。
+
+### 2026-11-06 Task 02 双击手测入口
+
+Status: 修复提交 59c01de 独立复审通过; 手测入口已启动验证, 用户体验待确认。
+
+- 新增 [Start-Task02.bat](../../Start-Task02.bat), 自动打开独立 4K 实验窗口, 提供旧/优化切换及固定样例; 启动方式见 [DEV_SETUP](../engineering/DEV_SETUP.md#task-02-手动体验)。
+- 确认真实 WebGPU 后端与初始实验配置, 未将启动检查记为人工拖动验收, 未改生产默认开关或重新测量性能。
+
 ### 2026-11-06 Task 02 独立审查与局部修复安排
 
 Status: Changes Requested 的两项 P2 已局部修复并验证, 待独立复审。

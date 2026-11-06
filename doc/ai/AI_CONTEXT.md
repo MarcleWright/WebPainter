@@ -7,9 +7,11 @@
 - WebPainter 是 Celenne fork, 独立目录 `D:/00_Projects_WSY/AI/Codex_Projects/WebPainter`。业务源码基线 a6599003, 应用品牌尚未替换。
 - 已有安装、生产构建与小 PSD 启动检查; 用户实际试用认可 UI/功能, 同时观察到 4K 选区拖动问题。
 - 已建立 `doc/`, 保留 `docs/` 原作者体系; 先前测量已提升为项目评估, PhotoCraft v0.20.2 对照已归档。
-- 用户已授权并执行 [原型任务 02](tasks/2026-11-05_02_4k-selection-preview-prototype.md): 受限 GPU 预览原型已实现, 自动与脚本对照已记录, 人工窗口体验缺失, 结论 Inconclusive; 品牌/ADA/Rust 改造未开展。
-- 准备、核心和有限验证分别本地提交; 未推送或发布。
-- 2026-11-06 独立审查 dc28f4e 为 Changes Requested: 完全越界后不能继续拖回, 历史通知故障回滚丢失 redo。已按任务 02 局部修复并通过定向验证, 待独立复审; 保留原三个提交并新增修复提交, 体验结论仍 Inconclusive。
+- [原型任务 02](tasks/2026-11-05_02_4k-selection-preview-prototype.md) 已按受限原型 Go 收口: 用户实际试用确认性能达到可用水平, 完整人工场景和正式化仍待验证; 品牌/ADA/Rust 改造未开展。
+- 准备、核心、有限验证及局部修复分别提交; 用户已授权同步自有 origin/main, 不推送上游或发布。
+- 2026-11-06 独立复审修复提交 59c01de 为 Approved, 72 项相关测试和构建通过; 原型 Go 不等于生产默认启用。
+- 用户要求双击手测入口: Start-Task02.bat 已新增并启动验证, 独立 profile/4K 合成样例/自动保存关闭/实验开关开启。F6 对比旧路径, F7/F8/F9 重建样例; 用法见 DEV_SETUP。普通生产启动不启用实验路径。
+- 新反馈 Ctrl+J 复制整层: 已核对其绑定 layer.duplicate, 现有 Layer via Copy 支持读取选区但无快捷键。记录为 WP-EDIT-001, 未授权或实施该行为调整, 不混入性能任务。
 
 ## 优先议题
 
