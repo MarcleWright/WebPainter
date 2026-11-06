@@ -12,3 +12,5 @@
 - 小fixture全量合成像素、字段/ID/二进制再编码一致；实际DocumentSession命令编辑/undo/redo/重存通过；缺字体返回requiredFonts及已知missingFonts告警，未证明跨机器字体外观。
 
 主线阶段提交后单向合入embedded，端口/固定包与ADA配套另记。此阶段不是正式ADA保存、完整工具/格式、Photoshop/手绘板/人工或发布验收。本地提交不推送。
+
+03D 升级演练的通用修复：补 origin 数值、可选字体/段落、OpenType tags/axes 与 PS 断行结构校验。先新增6个非法类型回归并复现6 failed/18 passed；修复后24/24、完整独立 build 通过。此为 main 通用读取边界，不涉及宿主业务或 schema 版本变化。升级前已由 ADA 真 owner 保存的测试作品另在其材料区固定身份/hash，后续 embedded 构建及重开证据归两侧03D。
