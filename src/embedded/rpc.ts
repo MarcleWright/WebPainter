@@ -3,7 +3,7 @@ export type RpcMethod = 'captureNative' | 'saveAndCapture' | 'addResource' | 'ex
 const methods = new Set<RpcMethod>(['captureNative','saveAndCapture','addResource','exportPsd','open','save','capture','exportPng','command','state','close','destroy','readResource','hostSave','hostExport','confirm','dirty','error']);
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
 const op = (v: unknown) => record(v) && Number.isInteger(v.generation) && typeof v.operationId === 'string' && typeof v.binding === 'string';
-const output = (v: unknown) => op(v) && record(v) && ['png','psd-test','wpnative','psd'].includes(String(v.format)) && v.bytes instanceof Uint8Array && v.bytes.length<=512*1024*1024 && (v.format!=='wpnative'||(typeof v.checkpoint==='string'&&v.preview instanceof Uint8Array));
+const output = (v: unknown) => op(v) && record(v) && ['png','psd-test','wpnative','psd'].includes(String(v.format)) && v.bytes instanceof Uint8Array && v.bytes.length<=512*1024*1024 && (v.format!=='wpnative'||(typeof v.checkpoint==='string'&&(v.preview===undefined||v.preview instanceof Uint8Array)));
 export function validArgs(method: RpcMethod, a: unknown): a is unknown[] {
   if (!Array.isArray(a)) return false;
   switch(method) {

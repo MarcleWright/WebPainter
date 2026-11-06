@@ -53,3 +53,9 @@ it('unsupported native content fails without clean/save; PSD export is separate 
   expect(await api!.save()).toBe(false);expect(h.save).not.toHaveBeenCalled();expect(s.modified).toBe(true);s.doc.allLayers()[0].effects=null;
   await api!.exportPsd();expect(vi.mocked(h.export).mock.calls[0][0].format).toBe('psd');expect(s.modified).toBe(true);
 });
+it('preview failure does not undo a native save; generation capture still requires its exact PNG',async()=>{
+  const h=host();const s=await open(h);edit();const png=exporters.find(x=>x.id==='png')!,original=png.export;
+  png.export=async()=>{throw Error('preview failed');};
+  try{expect(await api!.save()).toBe(true);expect(s.modified).toBe(false);expect(vi.mocked(h.save).mock.calls[0][0].preview).toBeUndefined();edit();await expect(api!.saveAndCapture()).rejects.toThrow('preview failed');expect(s.modified).toBe(true);expect(h.save).toHaveBeenCalledTimes(1);}
+  finally{png.export=original;}
+});

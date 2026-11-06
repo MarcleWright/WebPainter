@@ -49,7 +49,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
       // Keep the core's close gate/output reservation. Native Save happens here, then the
       // core may finish closing only after a confirmed, still-current clean checkpoint.
       if(host.nativeVersion===1 && buttons.length===3 && buttons[0]==='Save' && buttons[1]==='Don’t Save') {
-        if(answer===0){try{await nativeCheckpoint(true,true);return editor.active?.modified?2:1;}catch(e){host.error({generation,message:String(e)});return 2;}}
+        if(answer===0){try{await nativeCheckpoint(true,true,false);return editor.active?.modified?2:1;}catch(e){host.error({generation,message:String(e)});return 2;}}
         return answer===1?1:2;
       }
       return Number.isInteger(answer)&&answer>=0&&answer<buttons.length?answer:buttons.length-1;
@@ -88,13 +88,14 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
     try { return await pending; }
     finally { s.outputPending = null; s.editProtected = false; s.notify(); }
   }
-  async function nativeCheckpoint(publish:boolean, closing=false):Promise<Output> {
+  async function nativeCheckpoint(publish:boolean, closing=false,requirePreview=true):Promise<Output> {
     assertLive();const s=editor.active;
     if(host.nativeVersion!==1 || opening || !s || s.outputPending || (s.closePending&&!closing) || !prepareMoveOutput(s))throw Error('Native editor busy or unavailable');
     const op=operation(),entry=s.history.current.id,protectedBefore=s.editProtected;
     s.editProtected=true;s.notify();
     const pending=Promise.resolve().then(async()=>{
-      const checkpoint=snapshotDocument(s.doc),bytes=encodeNative(checkpoint),preview=await exporters.find(x=>x.id==='png')!.export(checkpoint,{});
+      const checkpoint=snapshotDocument(s.doc),bytes=encodeNative(checkpoint);let preview:Uint8Array|undefined;
+      try{preview=await exporters.find(x=>x.id==='png')!.export(checkpoint,{});}catch(e){if(requirePreview)throw e;host.error({generation,message:'Native checkpoint captured; preview unavailable: '+String(e)});}
       const output:Output={...op,format:'wpnative',bytes,preview,checkpoint:entry};
       if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry)throw Error('Stale native checkpoint');
       if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry)throw Error('Stale native receipt');s.markSaved(entry);}
@@ -127,11 +128,11 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
     },
     async save() {
       assertLive();if(opening)return false;
-      if(host.nativeVersion===1){try{await nativeCheckpoint(true);notify();return true;}catch(e){host.error({generation,message:String(e)});return false;}}
+      if(host.nativeVersion===1){try{await nativeCheckpoint(true,false,false);notify();return true;}catch(e){host.error({generation,message:String(e)});return false;}}
       const ok=await save();notify();return ok;
     },
     captureComposite: capture,
-    captureNative:()=>nativeCheckpoint(false),saveAndCapture:()=>nativeCheckpoint(true),
+    captureNative:()=>nativeCheckpoint(false,false,false),saveAndCapture:()=>nativeCheckpoint(true),
     async exportPng() { const output = await capture(); await host.export(output); if (!valid(output)) throw new Error('Stale export receipt'); },
     async exportPsd() { const output=await capture('psd');await host.export(output);if(!valid(output))throw Error('Stale export receipt'); },
     async addResource(token) {
