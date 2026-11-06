@@ -26,6 +26,12 @@ interface EditState {
   before: Layer | null;
 }
 
+function editable(s: DocumentSession): boolean {
+  if (editor.session(s.id) === s && s.canEdit()) return true;
+  ui.toast('info', 'This document is busy saving or closing.');
+  return false;
+}
+
 let editing: EditState | null = null;
 const listeners = new Set<() => void>();
 
@@ -74,7 +80,8 @@ export function setTextKeepingStyles(t: TextData, next: string): void {
 }
 
 export function startTextEdit(s: DocumentSession, layerId: string, isNew: boolean): void {
-  if (editing) commitTextEdit();
+  if (!editable(s)) return;
+  if (editing) { commitTextEdit(); if (editing) return; }
   const l = s.doc.getLayer(layerId);
   if (!l || l.kind !== 'text') return;
   if (l.psdPathText && !l.text.path) ui.toast('info', 'This is Photoshop text on a path.', "Celenne could not read this layer's path, so an edit lays the text out as point text. Press Cancel to keep the original, or attach it to a path with the Type tool.");
@@ -89,7 +96,7 @@ export function updateEditingText(value: string): void {
   if (!e) return;
   const s = editor.session(e.sessionId);
   const l = s?.doc.getLayer(e.layerId);
-  if (!s || !l || l.kind !== 'text') return;
+  if (!s || !l || l.kind !== 'text' || !editable(s)) return;
   setTextKeepingStyles(l.text, value);
   renderTextLayer(s.doc, l);
   if (e.isNew) l.name = value.split('\n')[0].slice(0, 40) || 'Text';
@@ -98,6 +105,7 @@ export function updateEditingText(value: string): void {
 
 /** Applies a style change to the whole editing/active text layer. */
 export function applyTextStyle(s: DocumentSession, layerId: string, patch: Partial<CharacterStyle>, para?: Partial<ParagraphStyle>): void {
+  if (!editable(s)) return;
   const l = s.doc.getLayer(layerId);
   if (!l || l.kind !== 'text') return;
   const mutate = (t: TextLayer) => {
@@ -105,7 +113,7 @@ export function applyTextStyle(s: DocumentSession, layerId: string, patch: Parti
     if (para) t.text.paragraphs = t.text.paragraphs.map((p) => ({ length: p.length, style: { ...p.style, ...para } }));
     renderTextLayer(s.doc, t);
   };
-  if (editing && editing.layerId === layerId) {
+  if (editing && editing.sessionId === s.id && editing.layerId === layerId) {
     mutate(l);
     s.doc.emit({ type: 'layer', layerId });
     return;
@@ -117,9 +125,9 @@ export function applyTextStyle(s: DocumentSession, layerId: string, patch: Parti
 export function commitTextEdit(): void {
   const e = editing;
   if (!e) return;
-  editing = null;
   const s = editor.session(e.sessionId);
-  if (!s) return notify();
+  if (!s || !editable(s)) return;
+  editing = null;
   s.mode = { kind: 'none' };
   const l = s.doc.getLayer(e.layerId);
   if (!l || l.kind !== 'text') return notify();
@@ -151,8 +159,9 @@ export function commitTextEdit(): void {
 export function cancelTextEdit(): void {
   const e = editing;
   if (!e) return;
-  editing = null;
   const s = editor.session(e.sessionId);
+  if (!s || !editable(s)) return;
+  editing = null;
   if (s) {
     s.mode = { kind: 'none' };
     const l = s.doc.getLayer(e.layerId);
@@ -243,7 +252,7 @@ export function setTextWarp(layerId: string, warp: TextData['warp'] | null, labe
 export function setTextPath(layerId: string, patch: Partial<TextPath> | null, label = 'Type on Path'): void {
   const s = editor.active;
   const l = s?.doc.getLayer(layerId);
-  if (!s || !l || l.kind !== 'text' || !l.text.path) return;
+  if (!s || !l || l.kind !== 'text' || !l.text.path || !editable(s)) return;
   const apply = (t: TextLayer) => {
     if (!t.text.path) return;
     if (patch) t.text.path = { ...t.text.path, ...patch };
@@ -259,7 +268,7 @@ export function setTextPath(layerId: string, patch: Partial<TextPath> | null, la
     }
     renderTextLayer(s.doc, t);
   };
-  if (editing && editing.layerId === layerId) {
+  if (editing && editing.sessionId === s.id && editing.layerId === layerId) {
     apply(l);
     s.doc.emit({ type: 'layer', layerId });
     return;
@@ -327,6 +336,7 @@ export class TypeTool implements Tool {
   }
 
   down(h: ToolHost, p: ToolPointer) {
+    if (!editable(h.session)) return;
     const s = h.session;
     // Dragging the start / end marker of path text.
     const mk = this.vertical ? null : this.markerUnder(h, p);
@@ -340,6 +350,7 @@ export class TypeTool implements Tool {
     if (editing) {
       if (hit && hit.id === editing.layerId) return;
       commitTextEdit();
+      if (editing) return;
     }
     if (hit) {
       startTextEdit(s, hit.id, false);
@@ -351,6 +362,7 @@ export class TypeTool implements Tool {
   }
 
   move(h: ToolHost, p: ToolPointer) {
+    if (!editable(h.session)) return;
     if (this.marker) {
       const l = h.session.doc.getLayer(this.marker.layerId);
       if (!l || l.kind !== 'text' || !l.text.path) return;
@@ -370,6 +382,7 @@ export class TypeTool implements Tool {
   }
 
   up(h: ToolHost, p: ToolPointer) {
+    if (!editable(h.session)) return;
     if (this.marker) {
       const m = this.marker;
       this.marker = null;

@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented / 2026-11-06 已按授权实现并完成定向自动验证, 待独立代码复审和人工验收。未推送、未发布; 方案通过不代表实现验收通过。
+Changes Requested / 2026-11-06 实现提交 98c4c4f 已完成定向自动验证, 但独立复审确认两项阻断问题, 见下方 Repair Adjustment。用户授权在本任务内修复并补验收, 不另建任务、不回退 GPU 核心。人工验收待完成; 未推送、未发布。
 
 关联 [默认接入任务 01](2026-11-06_01_default-gpu-selection-move.md): GPU 默认路径已实现, 但实现复审为 Changes Requested。本任务同时承接原有文件生命周期缺陷与本次新增回归; 拆分任务不免除回归修复责任, 任务 01 须在关联修复复审通过后结合原有人工验收收口。
 
@@ -35,6 +35,8 @@ PhotoCraft 固定参考为 v0.20.2 / `7c12f647150f8e7b2e07718f7993b1fcaa57fefe`,
 4. 分开处理文件绑定、写入检查点和关闭资格。成功的非副本另存为更新原目标文档的路径/格式/名称; 保存点记录实际写入状态。沿用 history entry 的 clean 语义, 编辑后 undo 回保存点仍可 clean; doc.rev 用作过期结果检查, 不替代历史保存点。Save Copy/Export 不改原文件绑定或保存点。
 5. 关闭文档/关闭全部/退出应用经过同一生命周期检查。目标正在输出则等待完成后重新判断; 关闭提示与最终清理/移除之间保护目标不再被编辑, 保存成功后仍检查目标身份与 modified。失败、取消或仍 modified 时不移除文档、不删其恢复数据; 不得把文件写入成功直接当成关闭授权。
 6. 保留自动恢复顺序链。自动保存遇到目标 Move、手动输出或关闭保护时跳过并可后续重试, 不定时锁住用户绘画。手动保存与恢复删除按目标检查点串行; 旧写入/旧清理不得覆盖或删除较新的恢复内容。
+
+第 3、5 项在本轮复审后补充为 R1/R2 的明确契约, 见 Repair Adjustment; 不扩大成新的编辑器或应用调度框架。
 
 ### Must preserve / Must not do
 
@@ -72,6 +74,8 @@ PhotoCraft 固定参考为 v0.20.2 / `7c12f647150f8e7b2e07718f7993b1fcaa57fefe`,
 | S4 并发与目标 | 同文档重复保存无竞争; 两文档输出同一路径及另一会话已绑定该路径时明确拒绝冲突。保存 A 时切到 B 编辑, B 可正常使用且完成结果只作用于 A; 已失效目标无晚到回写 |
 | S5 保存点与副本 | 保存后编辑再 undo 回保存点为 clean; Save Copy/PNG Export 不改原绑定/dirty。输出前实际 Move 提交一次, 后续 pointerup 无额外历史 |
 | S6 恢复与关闭空窗 | 控制恢复写入、删除的完成顺序, 验证忙时跳过、松手/释放后恢复, 旧恢复不在关闭后复活; 延迟最终清理时尝试编辑不丢失数据。Cancel 保留文档, Don't Save 正常关闭 |
+| S7 退出期间新增文档 | 模拟实际退出回调: 关闭 A 并选择 Save, 延迟写盘期间新增/打开 B 并编辑; 即使 A 已成功关闭, 只要 B 尚未处理, 不得标记 clean exit 或发出 confirmClose。本次退出取消并保留 B, 重试后正常询问 B。并检查单纯 Close All、Close Others 的既有目标范围未被混淆 |
+| S8 文字保护与撤销 | 延迟 Save/Save As/Export 写盘期间, 走图层面板双击文字缩略图与 textarea 的真实调用链, 验证不能进入/修改目标文字; 同时覆盖文字样式及提交/取消的直接入口。像素/文字数据、编辑上下文和历史均不被偷偷修改或丢弃。释放保护后一次正常文字编辑可一次 undo/redo; 保存前已有文字编辑仍可正常提交, 路径选择期间新进入的文字编辑在快照前正确收尾 |
 
 ## Validation
 
@@ -112,10 +116,65 @@ P-MOVE、moveSelectionReference、floatingSelection、共享 GPU compositor/prev
 
 ## Review Result
 
-2026-11-06 用户确认方案审查 Approved。实现完成后另作独立代码复审; 当前已实施并有自动证据, 未经独立实现复审或人工验收。后续交付遵循 [AI_WORKFLOW](../AI_WORKFLOW.md), 不自动创建执行循环或独立 reviewer 文件。
+2026-11-06 用户确认方案审查 Approved。对 98c4c4f 的独立实现复审为 Changes Requested: 复跑原有六文件 87 项测试与 P-BUILD 均通过, 另增两项真实领域行为的受控 I/O 复现均失败。人工验收未执行。后续交付遵循 [AI_WORKFLOW](../AI_WORKFLOW.md), 不自动创建执行循环或独立 reviewer 文件。
+
+## Repair Adjustment - 2026-11-06
+
+本节补清原有第 3、5 项要求的具体触发场景和通过条件, 不替换既有 S1-S6。基于 98c4c4f 继续修复, 不重新实施 GPU 优化或扩大任务。上方 Execution Report 保留为首轮执行记录, 其“保护覆盖”描述不代表下列遗漏已经通过。
+
+### R1: 应用退出必须核对实时会话集合 (P1)
+
+- 证据: `fileOps.closeAll` 只遍历开始时 `[...editor.sessions]`; A 保存等待中创建并修改 B, A 关闭后返回 true, 此时仍有一份 modified 会话。`src/main.tsx` 的退出回调随后直接 `markCleanExit`/`confirmClose`。独立复现输出为 `result=true, remaining=1, remainingDirty=true`。
+- 责任: 原有整体退出链路疏漏, 当前任务要求应用退出可靠性, 属于尚未完成的范围, 不是新增需求。
+- 明确行为: 在全量关闭收尾及实际批准应用退出前核对实时会话集合。等待期间有新增或尚未处理的会话时, 取消本次退出并保留它, 由用户重试; 已完成关闭的 A 无需复活。不得在仍有未处理文档时记 clean exit 或发送 confirmClose, 不自动放弃新增文档。普通 Close All 也不得在漏掉新增会话时返回“全部关闭成功”; Close Others 仍保留原 except 目标语义。
+- 边界: 修复 `fileOps.closeAll` 与 `src/main.tsx` 的实际交接, 只在确有必要时最小调整现有平台关闭入口。保留正常单文档后台保存期间其他文档可操作; 不以全局冻结所有交互或无限循环关闭新文档代替最终判定。
+- 证据要求: S7 至少经过实际生产退出回调所用的控制逻辑, 可控制保存等待与平台 confirmClose, 断言 clean-exit 标记/confirmClose 未执行及 B 被保留。不能只证明 closeSession 正确或复制一段“理想退出逻辑”到测试中。
+
+### R2: 文字修改必须先检查保护, 不能只拦历史 (P2)
+
+- 证据: `LayersPanel.editLayerContent` 双击文字缩略图直接进入 `startTextEdit`, textarea 直接调用 `updateEditingText`, 均未检查目标保护。保存写盘期间调用这条真实链路再 commit, 文字已改变, 但新增 `History.push.canMutate` 拦截丢弃 alreadyApplied 的命令。独立复现为 `canEdit=false, text='after', sameHistory=true`。
+- 责任: 原有直接写入口未接入新保护, 与新增历史拦截形成撤销回归, 属于本次实现遗漏。
+- 明确行为: 在文字编辑开始、内容/样式变更及提交/取消恢复等真正修改前检查原目标会话的存活与保护; 被拒绝时不得先修改文档或清空编辑上下文。图层面板/Canvas 双击、textarea、选项栏等旁路共用领域保护, 不只禁用单个 UI 控件。文件流程应在取得保护前完成已有文字交互, 包括异步文件选择/确认后新增的文字编辑; 不开放全局绕过保护开关。
+- 历史约束: 保留保护期间拒绝普通修改的语义, 不通过放开所有 History 写入补救。不能把“已经改变内容, 再让 push 静默返回”当作成功阻止编辑; 正常编辑在解除保护后仍完整记录撤销。只修本次可达文字链路, 不重构全部命令框架。
+- 证据要求: S8 调用生产所用文字函数/事件入口, 控制平台写盘等待即可; 不 mock canEdit、文字修改或 History 来制造通过。至少验证一个直接文字样式入口和一次解除保护后的 undo/redo。
+
+### 修复验证与交付
+
+- 复用原定 P-MOVE、P-BUILD、P-DOC 与相关输出测试, 加 S7/S8 定向回归; 不重跑无关格式/设备全矩阵, 不重建性能基准。
+- 原人工验收要求保留, 另加一次保存中双击文字缩略图/尝试输入及一次退出等待时新增文档的有限检查。不能执行则明确未验收, 不以受控 I/O 推断原生窗口已经通过。
+- 修复后在本任务追加 Repair Execution Report, 分别记录 R1/R2、自动/人工证据和剩余边界, 再交独立 reviewer 复审。当前工作区已有另一项 ADA 集成文档改动, 不覆盖、暂存或提交那些改动; 本次本地提交只包含本任务及其修复所需文件, 不推送、不发布。
 
 ## Context Delta
 
 - Keep: GPU 默认优化成果及原型受限 Go 有效, 无需回退渲染核心。
 - Changed: 保存/关闭可靠性独立为本任务, 同时承接旧缺陷和默认接入回归; 采用目标文档保存期间限制编辑的主线, 不默认引入边写边编辑的输出队列。
+- Repair: 98c4c4f 复审要求在本任务内补 R1 实时会话退出判定与 R2 文字直接修改保护/撤销回归, 通过 S7/S8 验证; 不以已存在的历史/关闭底层检查替代完整链路。
 - Follow-up: 本任务修复并复审后, 回到任务 01 完成剩余人工验收; Ctrl+J 等独立议题维持原边界。
+
+
+## Repair Execution Report - 2026-11-06
+
+基于 98c4c4f 继续修复 R1/R2, 未回退 GPU 默认选路或修改像素管线。修复实现及自动回归完成, 状态为待独立 reviewer 复审; 不据此改判原型 Go 或人工验收状态。新增本地提交的精确 hash 见交付报告/Git 日志。
+
+### R1 实时会话与退出交接
+
+- `closeAll` 遍历既定集合后检查实时会话, 存在非 except 会话即返回 false。等待期间新增的文档保留, 不循环追关; Close Others 仍只允许 except 会话留下。
+- `main.tsx` 的原生退出回调使用 `requestApplicationClose`。该控制器等待 closeAll 后再次检查实时集合; 最终检查与 clean-exit 标记、confirmClose 之间没有异步等待点。
+- S7 经生产控制器及真实 Move/Session/History/fileOps 验证: A 的关闭 Save 等待期间创建并编辑 B, A 可关闭但本次退出返回 false, B 保持 dirty, running 标记仍为 1, confirmClose 未调用; 重试正常保存 B 后才标记 clean 并调用 confirmClose 一次。另分别覆盖普通 Close All 与 Close Others 遇新增会话返回 false、重试及 except 保留。
+
+### R2 文字修改与输出快照
+
+- 文字领域入口在修改前核对目标 session 实例仍存活且 canEdit: start/update/style/path、TypeTool 指针创建/拖动与 commit/cancel。拒绝 commit/cancel 时不先清空 editing, 也不先恢复或删除图层。共享 History 保护保留。
+- 图层面板双击入口在 setActive/setTool 之前检查保护, 异步载入后的 startTextEdit 再次检查。测试调用该生产回调、textarea 所用 updateEditingText 及直接样式/提交/取消函数, 不 mock canEdit、文字修改或 History。
+- 既有输出准备点复用文字提交: 文件选择、PSD 兼容确认及 yield 后, 加保护/取快照之前再次提交原目标文字。文本不能完成提交则输出失败, 不将未入历史的文字带入受保护阶段。
+- S8 分别延迟 Save、Save As、PNG Export 写盘, 验证拒绝文字开始/输入/样式/提交/取消后文字、raster、mode、editing 和 history 不变; 解锁后正常文字+样式编辑一次 undo/redo。另验证保存前、选路径期间和兼容确认期间的文字均进入真实历史, PSD 重开内容为最终文字, 连续 undo 返回各阶段。A 受保护时拒绝进入 A 不会提交/丢弃 B 正在进行的文字编辑, B 仍可编辑和撤销。
+
+### 验证与边界
+
+- 反向回归: 临时恢复 HEAD 的 fileOps/typeTool 后, Close All/Close Others 两用例均复现 true 而预期 false; Save 文字用例复现 blocked/96 样式而预期 before/48。文件随后完整恢复修复版本。首轮合并反向运行等待超时, 不计通过; 分离后上述三项均明确失败, 证明新增断言能捕获原缺陷。
+- P-DOC: 40 份 doc/docs/AGENTS Markdown 的 UTF-8 解码、fork 相对链接、任务无 BOM、本地材料忽略及 git diff --check 通过。
+- P-MOVE 及相关六文件: 95/95 通过, 包括新增 S7/S8 八项回归。P-BUILD 通过（内含 typecheck、renderer 与 Electron 构建）; 既有 Vite URL/浏览器模块外置警告仍存在。
+- 测试为真实领域对象与 GPU Move, 平台 I/O/等待和 PSD 兼容对话框应答受控。文字入口未挂载可见 React textarea, jsdom 缺少真实字体/Canvas 排版; 断言覆盖领域文本、raster 不变与历史, 不作为真实字体渲染或原生窗口验收。
+- 本轮未重测性能、未执行全格式/硬件矩阵、完整测试集、断电或跨进程文件竞争。GPU 性能收益沿用原有任务证据, 本修复不宣称新增性能收益。
+- 人工未验收: 原规定正常生产窗口 4K 保存/另存为/重开, 保存期间拖动/undo/属性及关闭、进度可见、失败后继续编辑、GPU 体验; 新增保存中双击文字缩略图/输入与退出等待期间新增文档; 用户正常入口复验。均继续未验收, 不以自动结果替代。
+- ADA 集成文档及其 README/AI_CONTEXT/DEV_LOG 改动完整保留, 不暂存、不纳入本次提交。不推送、不发布; 自查不作为独立 reviewer 结论。

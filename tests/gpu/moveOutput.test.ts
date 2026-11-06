@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { beforeAll, afterEach, afterAll, expect, it, vi } from 'vitest';
-const io = vi.hoisted(() => ({ chooseSavePath: vi.fn(), writePath: vi.fn(), confirm: vi.fn(), recovery: { save: vi.fn(), remove: vi.fn() }, setTitle() {}, setEdited() {}, kind: 'electron', canWriteInPlace: true, bridge: null }));
+const io = vi.hoisted(() => ({ confirmClose: vi.fn(), chooseSavePath: vi.fn(), writePath: vi.fn(), confirm: vi.fn(), recovery: { save: vi.fn(), remove: vi.fn() }, setTitle() {}, setEdited() {}, kind: 'electron', canWriteInPlace: true, bridge: null }));
 vi.mock('../../src/app/platform/platform', () => ({ platform: () => io }));
 import { editor } from '../../src/app/editor';
+import { ui } from '../../src/app/store';
 import { MoveTool } from '../../src/tools/moveTool';
 import { save, saveAs, saveCopy, exportAs, closeSession, closeAll } from '../../src/app/fileOps';
 import { autosaveNow } from '../../src/app/autosave';
@@ -10,7 +11,7 @@ import { testDevice } from '../helpers/gpu';
 import { GpuCompositor } from '../../src/gpu/compositor';
 import { setGpuCompositor } from '../../src/rendering/renderEngine';
 import { newDoc, add } from '../helpers/build';
-import { createPixelLayer, createGroupLayer } from '../../src/document/layerFactory';
+import { createTextLayer, createPixelLayer, createGroupLayer } from '../../src/document/layerFactory';
 import { TiledRaster } from '../../src/image-engine/tiledRaster';
 import { importPsd } from '../../src/psd/import';
 import { decode } from 'fast-png';
@@ -140,4 +141,75 @@ it('protects the close confirmation and merges repeated close requests',async()=
 it('keeps the session when recovery cleanup fails and permits retry',async()=>{
  const {s,t,h,start}=fixture();start();t.up(h);io.confirm.mockResolvedValue(1);io.recovery.remove.mockRejectedValueOnce(new Error('recovery cleanup refused'));
  expect(await closeSession(s)).toBe(false);expect(editor.session(s.id)).toBe(s);expect(s.canEdit()).toBe(true);io.recovery.remove.mockResolvedValue(undefined);expect(await closeSession(s)).toBe(true);
+});
+
+// Exercise the controller registered by main.tsx, including its final native authorization.
+import { requestApplicationClose } from '../../src/app/closeApplication';
+import { editLayerContent } from '../../src/ui/panels/LayersPanel';
+import { startTextEdit, updateEditingText, applyTextStyle, commitTextEdit, cancelTextEdit, textEditState, setTextKeepingStyles } from '../../src/tools/typeTool';
+
+it('S7 cancels actual application exit when a new edited session appears during save, then permits retry',async()=>{
+ const a=fixture();a.start();a.t.up(a.h);io.confirm.mockResolvedValue(0);io.chooseSavePath.mockResolvedValue('exit.psd');
+ let release!:()=>void,began!:()=>void;const ready=new Promise<void>(r=>began=r);
+ io.writePath.mockImplementation(()=>{began();return new Promise<void>(r=>release=r);});
+ localStorage.setItem('celenne.running.v1','1');const closing=requestApplicationClose(io);await ready;
+ const b=fixture();b.start();b.t.up(b.h);expect(b.s.modified).toBe(true);
+ release();expect(await closing).toBe(false);expect(editor.session(a.s.id)).toBeUndefined();expect(editor.session(b.s.id)).toBe(b.s);
+ expect(b.s.modified).toBe(true);expect(localStorage.getItem('celenne.running.v1')).toBe('1');expect(io.confirmClose).not.toHaveBeenCalled();
+ io.writePath.mockResolvedValue(undefined);expect(await requestApplicationClose(io)).toBe(true);
+ expect(editor.sessions).toHaveLength(0);expect(localStorage.getItem('celenne.running.v1')).toBe('0');expect(io.confirmClose).toHaveBeenCalledTimes(1);
+});
+it.each([false,true])('S7 Close All / Close Others reports unprocessed sessions (except=%s)',async(except)=>{
+ const keep=except?fixture():null;const a=fixture();a.start();a.t.up(a.h);io.confirm.mockResolvedValue(0);io.chooseSavePath.mockResolvedValue('all.psd');
+ let release!:()=>void,began!:()=>void;const ready=new Promise<void>(r=>began=r);
+ io.writePath.mockImplementation(()=>{began();return new Promise<void>(r=>release=r);});
+ const closing=closeAll(keep?.s.id);await ready;const b=fixture();release();expect(await closing).toBe(false);
+ expect(editor.session(b.s.id)).toBe(b.s);if(keep)expect(editor.session(keep.s.id)).toBe(keep.s);
+ expect(await closeAll(keep?.s.id)).toBe(true);expect(editor.sessions.map(s=>s.id)).toEqual(keep?[keep.s.id]:[]);
+});
+function textFixture(){
+ const f=fixture();const l=createTextLayer('text',8,0,0);setTextKeepingStyles(l.text,'before');add(f.doc,l);f.s.setActive(l.id);
+ return {...f,text:l};
+}
+it.each(['save','saveAs','export'] as const)('S8 protects the real thumbnail/textarea and direct style during %s, then records undo/redo',async(operation)=>{
+ const {s,text}=textFixture();s.doc.filePath='text.psd';io.chooseSavePath.mockResolvedValue(operation==='export'?'text.png':'text.psd');
+ let release!:()=>void,began!:()=>void;const ready=new Promise<void>(r=>began=r);
+ io.writePath.mockImplementation(()=>{began();return new Promise<void>(r=>release=r);});
+ const pending=operation==='save'?save(s):operation==='saveAs'?saveAs(s):exportAs(s,'png');await ready;
+ const before=JSON.stringify(text.text),mode=JSON.stringify(s.mode),entry=s.history.current.id,raster=text.raster.snapshot();
+ await editLayerContent(s,text);startTextEdit(s,text.id,false);updateEditingText('blocked');applyTextStyle(s,text.id,{fontSize:96});commitTextEdit();cancelTextEdit();
+ expect(JSON.stringify(text.text)).toBe(before);expect(text.raster.snapshot()).toEqual(raster);expect(JSON.stringify(s.mode)).toBe(mode);
+ expect(textEditState()).toBeNull();expect(s.history.current.id).toBe(entry);
+ release();expect(await pending).toBe(true);
+ await editLayerContent(s,text);updateEditingText('after');applyTextStyle(s,text.id,{fontSize:96});commitTextEdit();
+ expect(s.doc.getLayer(text.id)?.kind).toBe('text');expect(s.history.current.id).not.toBe(entry);
+ expect(s.history.undo()).toBe(true);expect(JSON.stringify((s.doc.getLayer(text.id) as typeof text).text)).toBe(before);
+ expect(s.history.redo()).toBe(true);expect((s.doc.getLayer(text.id) as typeof text).text.text).toBe('after');
+ expect((s.doc.getLayer(text.id) as typeof text).text.runs[0].style.fontSize).toBe(96);
+});
+it('S8 commits existing and dialog-time text before protecting and serializing the real PSD',async()=>{
+ const {s,text}=textFixture();startTextEdit(s,text.id,false);updateEditingText('existing');
+ let choose!:(path:string)=>void;io.chooseSavePath.mockImplementation(()=>new Promise<string>(r=>choose=r));io.writePath.mockResolvedValue(undefined);
+ const saving=saveAs(s);await vi.waitFor(()=>expect(textEditState()).toBeNull());
+ const first=s.history.current.id;await editLayerContent(s,text);updateEditingText('during dialog');choose('dialog-text.psd');
+ await vi.waitFor(()=>expect(ui.get().dialogs.some(d=>d.type==='saveCompat')).toBe(true));
+ await editLayerContent(s,text);updateEditingText('during confirm');
+ const compat=ui.get().dialogs.find(d=>d.type==='saveCompat')!;(compat.props!.resolve as (ok:boolean)=>void)(true);ui.closeDialog(compat.id);
+ expect(await saving).toBe(true);expect(textEditState()).toBeNull();expect(s.history.current.id).not.toBe(first);
+ const reopened=importPsd(io.writePath.mock.calls.at(-1)![1],'dialog-text.psd').doc;
+ expect((reopened.allLayers().find(l=>l.kind==='text') as typeof text).text.text).toBe('during confirm');
+ expect(s.history.undo()).toBe(true);expect((s.doc.getLayer(text.id) as typeof text).text.text).toBe('during dialog');
+ expect(s.history.undo()).toBe(true);expect((s.doc.getLayer(text.id) as typeof text).text.text).toBe('existing');
+ expect(s.history.undo()).toBe(true);expect((s.doc.getLayer(text.id) as typeof text).text.text).toBe('before');
+});
+
+it('S8 refusing a protected target preserves another document text context and its undo',async()=>{
+ const a=textFixture();io.chooseSavePath.mockResolvedValue('protected-text.psd');
+ let release!:()=>void,began!:()=>void;const ready=new Promise<void>(r=>began=r);
+ io.writePath.mockImplementation(()=>{began();return new Promise<void>(r=>release=r);});
+ const saving=saveAs(a.s);await ready;const b=textFixture();startTextEdit(b.s,b.text.id,false);updateEditingText('other editing');
+ const context=textEditState();await editLayerContent(a.s,a.text);startTextEdit(a.s,a.text.id,false);applyTextStyle(a.s,a.text.id,{fontSize:96});
+ expect(textEditState()).toBe(context);expect(a.text.text.text).toBe('before');expect(b.s.mode.kind).toBe('text');
+ updateEditingText('other final');commitTextEdit();expect(b.s.history.undo()).toBe(true);expect((b.doc.getLayer(b.text.id) as typeof b.text).text.text).toBe('before');
+ release();expect(await saving).toBe(true);
 });

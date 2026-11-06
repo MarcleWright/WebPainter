@@ -1,4 +1,5 @@
 /** Renderer entry point. */
+import { requestApplicationClose } from './app/closeApplication';
 import { createRoot } from 'react-dom/client';
 import './ui/styles.css';
 import './app/actions';
@@ -9,12 +10,12 @@ import { applyScratchPrefs, editor } from './app/editor';
 import { installScratch } from './history/scratch';
 import { ui } from './app/store';
 import { platform } from './app/platform/platform';
-import { closeAll, openPath } from './app/fileOps';
+import { openPath } from './app/fileOps';
 import { fonts } from './typography/fonts';
 import { installTextEngine } from './app/textEngine';
 import { colorEngine } from './color/cms';
 import { plugins } from './plugins/pluginHost';
-import { markCleanExit, startAutosave } from './app/autosave';
+import { startAutosave } from './app/autosave';
 import { installUpdateAndReportServices, reportEditorError } from './app/updates';
 
 function applyUiScale() {
@@ -50,12 +51,7 @@ async function boot() {
 
   const p = platform();
   (window as unknown as { __celenneHasUnsaved?: () => boolean }).__celenneHasUnsaved = () => editor.sessions.some((s) => s.modified);
-  p.onCloseRequested(async () => {
-    if (await closeAll()) {
-      markCleanExit();
-      p.confirmClose();
-    }
-  });
+  p.onCloseRequested(() => { void requestApplicationClose(p); });
   p.onOpenFile((path) => void openPath(path));
   for (const f of await p.launchFiles().catch(() => [] as string[])) await openPath(f);
 

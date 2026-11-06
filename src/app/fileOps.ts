@@ -23,13 +23,18 @@ import { decodeSmartSource, renderSmartObject } from '../layers/smartObjects';
 import { quadFromRect } from '../image-engine/matrix';
 import { builtinProfileName, BuiltinProfileId } from '../color/icc';
 
-/** Finish only this target's Move; recheck after every asynchronous dialog/yield. */
+/** Finish only this target's Move/text; recheck after every asynchronous dialog/yield. */
 export function prepareMoveOutput(s: DocumentSession): boolean {
   if (editor.session(s.id) !== s) return false;
   const tool = editor.currentTool;
   if (editor.active === s && tool?.id !== 'move' && tool?.id !== 'type' && tool?.busy?.()) { ui.toast('info', 'Finish the current tool before saving.'); return false; }
   const result = editor.finishMove(s);
-  return result !== 'failed' && result !== 'cancelled';
+  if (result === 'failed' || result === 'cancelled') return false;
+  if (textEditState()?.sessionId === s.id) {
+    commitTextEdit();
+    if (textEditState()?.sessionId === s.id) return false;
+  }
+  return true;
 }
 
 // Only manual file operations use these per-document/per-path reservations; requests are rejected, not queued.
@@ -232,8 +237,6 @@ async function confirmPsdNotes(s: DocumentSession, psb: boolean): Promise<boolea
 
 async function writeDocument(s: DocumentSession, path: string, asCopy: boolean): Promise<boolean> {
   if (!prepareMoveOutput(s)) return false;
-  // Text being typed is committed first, as Photoshop does (an unfinished, empty layer is never saved).
-  if (textEditState()?.sessionId === s.id) commitTextEdit();
   const exporter = exporterFor(path);
   if (!exporter) {
     ui.toast('error', 'Unknown file format', path);
@@ -387,7 +390,7 @@ export async function closeAll(except?: string): Promise<boolean> {
     if (s.id === except) continue;
     if (!(await closeSession(s))) return false;
   }
-  return true;
+  return !editor.sessions.some(s => s.id !== except);
 }
 
 export async function revert(s: DocumentSession | null = editor.active): Promise<void> {

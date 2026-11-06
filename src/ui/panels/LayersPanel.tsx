@@ -26,7 +26,8 @@ import { editor } from '../../app/editor';
 import type { RGB } from '../../color/types';
 
 /** Double-click on a layer: edit its content like professional editors do. */
-function editLayerContent(s: DocumentSession, l: Layer) {
+export function editLayerContent(s: DocumentSession, l: Layer) {
+  if (editor.session(s.id) !== s || !s.canEdit()) return;
   s.setActive(l.id);
   const pickColor = (initial: RGB, apply: (layer: Layer, c: RGB) => void, label: string) =>
     ui.openDialog('colorPicker', {
@@ -43,7 +44,7 @@ function editLayerContent(s: DocumentSession, l: Layer) {
   else if (l.kind === 'shape' && l.fill.type === 'solid') pickColor(l.fill.color, (x, c) => { if (x.kind === 'shape') x.fill = { type: 'solid', color: c }; }, 'Shape Fill');
   else if (l.kind === 'text') {
     editor.setTool('type');
-    void import('../../tools/typeTool').then((m) => m.startTextEdit(s, l.id, false));
+    return import('../../tools/typeTool').then((m) => m.startTextEdit(s, l.id, false));
   } else ui.openDialog('layerStyle', { layerId: l.id });
 }
 
