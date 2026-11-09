@@ -1,4 +1,5 @@
 /** Application menu structure. Items reference action ids; submenus may be generated. */
+import {access} from './access';
 import { ADJUSTMENT_LABELS, AdjustmentType } from '../adjustments/types';
 import { allFilters } from '../filters/builtin';
 import { useApp } from './store';
@@ -9,7 +10,7 @@ export type MenuItem =
   | { type: 'action'; id: string; label?: string; args?: Record<string, unknown> }
   | { type: 'separator' }
   | { type: 'submenu'; label: string; items: MenuItem[] | (() => MenuItem[]) }
-  | { type: 'custom'; label: string; run: () => void; checked?: () => boolean; enabled?: () => boolean };
+  | { type: 'custom'; entry?:string; label: string; run: () => void; checked?: () => boolean; enabled?: () => boolean };
 
 export interface Menu {
   id: string;
@@ -171,7 +172,7 @@ export const MENUS: Menu[] = [
     id: 'window',
     label: 'Window',
     items: () => [
-      ...PANELS.map((p): MenuItem => ({ type: 'custom', label: p.title, run: () => window.dispatchEvent(new CustomEvent('celenne:togglePanel', { detail: p.id })), checked: () => (window as unknown as { __celennePanelOpen?: (id: string) => boolean }).__celennePanelOpen?.(p.id) ?? false })),
+      ...PANELS.map((p): MenuItem => ({ type: 'custom', entry:'panel:'+p.id, label: p.title, run: () => {if(access('panel:'+p.id).enabled)window.dispatchEvent(new CustomEvent('celenne:togglePanel', { detail: p.id }));}, checked: () => (window as unknown as { __celennePanelOpen?: (id: string) => boolean }).__celennePanelOpen?.(p.id) ?? false })),
       sep,
       sub('Workspace', [a('window.resetWorkspace')]),
       sep,

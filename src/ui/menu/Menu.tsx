@@ -17,7 +17,7 @@ function resolve(items: MenuItem[] | (() => MenuItem[])): PopupItem[] {
   return list.filter(m=>m.type!=='action'||action(m.id)?.visible?.()!==false).map((m): PopupItem => {
     if (m.type === 'separator') return { type: 'separator' };
     if (m.type === 'submenu') return { type: 'submenu', label: m.label, items: resolve(m.items) };
-    if (m.type === 'custom') return { type: 'item', label: m.label, run: m.run, checked: m.checked?.(), disabled: m.enabled ? !m.enabled() : false };
+    if (m.type === 'custom') return { type: 'item', entry:m.entry, label: m.label, run: m.run, checked: m.checked?.(), disabled: m.enabled ? !m.enabled() : false };
     const a = action(m.id);
     if (!a) return { type: 'item', label: `${m.label ?? m.id} (missing)`, run: () => {}, disabled: true };
     const binding = keymap.bindingsFor(a.id)[0];
