@@ -1,3 +1,4 @@
+import {checkpointOutput} from './checkpoint-output';
 import {installAccessPolicy} from '../app/access';
 import {nativePolicy} from './capabilities';
 import { editor } from '../app/editor';
@@ -94,27 +95,36 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
     try { return await pending; }
     finally { s.outputPending = null; s.editProtected = false; s.notify(); }
   }
+  let published:{document:ReturnType<typeof snapshotDocument>;checkpoint:string;op:Operation}|null=null;
   async function nativeCheckpoint(publish:boolean, closing=false,requirePreview=true):Promise<Output> {
     assertLive();const s=editor.active;
     if(host.nativeVersion!==1 || opening || !s || s.outputPending || (s.closePending&&!closing) || !prepareMoveOutput(s))throw Error('Native editor busy or unavailable');
     const op=operation(),entry=s.history.current.id,revision=s.doc.rev,protectedBefore=s.editProtected;
-    s.editProtected=true;s.notify();
+    const captureStart=performance.now();s.editProtected=true;
+    let checkpoint:ReturnType<typeof snapshotDocument>;
+    try{checkpoint=snapshotDocument(s.doc);}finally{s.editProtected=protectedBefore;s.notify();performance.measure('wp:checkpoint:snapshot-lock',{start:captureStart,duration:performance.now()-captureStart});}
     const pending=Promise.resolve().then(async()=>{
-      const checkpoint=snapshotDocument(s.doc),bytes=encodeNative(checkpoint);let preview:Uint8Array|undefined;
-      try{const captured=await exporters.find(x=>x.id==='png')!.export(checkpoint,{});if(captured.byteLength>32*1024*1024)throw Error('Composite preview exceeds 32 MiB portable limit');preview=captured;}catch(e){if(requirePreview)throw e;host.error({generation,message:'Native checkpoint captured; preview unavailable: '+String(e)});}
-      const output:Output={...op,format:'wpnative',bytes,preview,checkpoint:entry};
-      if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry||s.doc.rev!==revision)throw Error('Stale native checkpoint');
-      if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s||s.history.current.id!==entry||s.doc.rev!==revision)throw Error('Stale native receipt');s.markSaved(entry);}
+      const encoded=await checkpointOutput(checkpoint,requirePreview?'generation':'native');
+      if(encoded.preview&&encoded.preview.byteLength>32*1024*1024)throw Error('Composite preview exceeds 32 MiB portable limit');
+      const output:Output={...op,format:'wpnative',...encoded,checkpoint:entry};
+      if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale native checkpoint');
+      if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale native receipt');
+        published={document:checkpoint,checkpoint:entry,op};
+        // markSaved accepts a history identity. A newer command stays dirty; an untracked
+        // mutation cannot be represented by history and must never be marked clean.
+        if(s.history.current.id===entry&&s.doc.rev!==revision)throw Error('Untracked mutation during native save');
+        s.markSaved(entry);
+      }
       return output;
     });
     s.outputPending=pending.then(()=>true,()=>false);
-    try{return await pending;}finally{s.outputPending=null;s.editProtected=protectedBefore;s.notify();}
+    try{return await pending;}finally{s.outputPending=null;s.notify();}
   }
   const api: EmbeddedEditor = {
     async open(nextBinding, token) {
       assertLive();
       if (opening || editor.active) throw new Error('Close the current work before opening another');
-      opening = true; binding = nextBinding; generation = ++nextGeneration;
+      opening = true; published=null; binding = nextBinding; generation = ++nextGeneration;
       const op = operation();
       try {
         const resource = await host.readResource(op, token);
@@ -138,6 +148,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
       const ok=await save();notify();return ok;
     },
     captureComposite: capture,
+    async capturePreview(){assertLive();const saved=published;if(!saved)throw Error('No published checkpoint');const {bytes}=await checkpointOutput(saved.document,'preview');if(!valid(saved.op)||published!==saved)throw Error('Stale preview');return{...saved.op,operationId:operation().operationId,format:'png',bytes,checkpoint:saved.checkpoint};},
     captureNative:()=>nativeCheckpoint(false,false,false),saveAndCapture:()=>nativeCheckpoint(true),
     async exportPng() { const output = await capture(); await host.export(output); if (!valid(output)) throw new Error('Stale export receipt'); },
     async exportPsd() { const output=await capture('psd');await host.export(output);if(!valid(output))throw Error('Stale export receipt'); },

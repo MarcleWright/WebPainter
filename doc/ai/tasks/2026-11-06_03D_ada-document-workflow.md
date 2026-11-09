@@ -1,5 +1,9 @@
 # Task 03D: ADA 文档身份、保存与二维作品闭环
 
+## Autosave Performance Follow-up 2026-11-09
+
+Owner 已确认本轮仅 ADA＋WP embedded 优化，**WP main不修改，仅作独立版对照**。自动保存正式Artifact；恢复备份约10分钟/有变化才更新；顶部仅保留返回和非按钮保存状态，正常返回自动保存不询问；集成File菜单收敛。native自动保存/恢复不得无条件生成PNG，Canvas预览返回时按最新保存版本按需更新，生成模型仍使用准确检查点合成图。保持CAS、旧回执、恢复文件有界及保存中继续编辑正确性。完整范围、阶段提交与性能/正确性验收归 [ADA本轮任务](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#autosave-performance-follow-up-2026-11-09)。如需main通用改造，先报证据另行授权；不得在embedded复制或变相修改通用内核。完成发ADA集成-REV统一review后暂停，无本轮推送/发布授权。下方手动保存/关闭确认和review状态保留历史时点。
+
 ## Review Repairs 2026-11-09
 
 当前独立实现 review 为 Changes Requested（4 项 P2）。Owner 确认一次修完：WP 通用嵌入能力限制与 ADA 产品配置分离；ADA 修复旧恢复候选阻断重开、慢写期间漏补捕获、被替换载荷未回收。详细执行合同与定向验收归 [ADA 统一修复任务](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#review-repairs-2026-11-09)。只保留一个有效恢复候选，替换期间允许旧候选加新暂存文件；正式 Primary 独立保留。下方 Implemented 为修复前交付，不表示四项已关闭。
@@ -97,3 +101,13 @@ F1/F2 main b07187d+331f0ba（39→41项/types/build），单向同步后实际�
 ADA F3属于Artifact owner，未进WP；最终实际构建78db2197/drawing-c2937cd7，ASAR7a9b8ca4…；93项API（含原R2/R3、真实DB/磁盘首次分配失败/事务拒绝/并发锁/子进程中断）通过。新包两条真实app://正式链路通过，含40→10逆向line恢复捕获/保存重开、实际ΔX=-35编辑、生成前S及受控Results、退出/崩溃恢复；Provider分别1/0次。另同正式页受控host逐UI入口检查通过，policy fixture只测权限UI，不执行业务保存/生成；业务接线证据来自前述真实owner完整链路。当前main代码331f0ba独立六层4K实窗通过。
 
 本轮独立复审/Owner验收、人工IME/手绘板/真实Provider/人工Photoshop等仍Pending/Inconclusive，原R2/R3复审关闭结论保留，不表示本轮Approved。详见 [ADA F1–F3最终记录](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#follow-up-final-verification-2026-11-09)。原始证据ignored，不推送/发布/反向合并；交ADA集成-REV后暂停。
+
+## Autosave embedded execution 2026-11-09
+
+本轮只修改 integration/embedded；main HEAD 59f81b5只读，未合入或修改。开工 embedded 3f81dcbd，ADA c4f3544e；两边 reviewer 新增任务文档保留。
+
+先补两条回归实际失败（native捕获调用PNG、保存IO锁住编辑）。修复后8文件65/65和typecheck通过。native save/capture不合成PNG；短COW快照后释放编辑锁，worker通过有限数据适配调用同一encodeNative/flatten实现，不复制内核。旧回执只markSaved捕获的history ID，新命令保持dirty；未跟随history的非法修改仍拒绝clean。输出仍单个在途。新增capturePreview只使用最近正式发布的不可变检查点、worker中合成并缩至最长边512；generation保留同检查点完整PNG。
+
+旧固定包89feb63a的正式Electron隔离4K多层样例3次最长事件循环间隔6284.6/5158.9/5304.2ms（中位5304.2，最差6284.6）；消息postMessage最差116.1ms，recovery API往返1847.8–2090.2ms。基线报告归ADA .packaging/autosave-baseline-drawing-c2937cd7/performance.json，不追认为新包证据。独立main对照、新包实窗/ADA自动保存与预览owner接线仍在进行，不能宣称性能验收。
+
+端口2/native1/policy1不变，新增有限capturePreview能力；新包消费者必须成对升级，不给旧包伪报该能力。固定包从本阶段clean commit构建，后续ADA记录准确来源。未推送/发布。

@@ -12,7 +12,7 @@ const handshake = (event: MessageEvent) => {
     open: (binding, token) => api.open(binding, token), save: () => api.save(), capture: () => api.captureComposite(),
     exportPng: () => api.exportPng(), command: command => api.command(command), state: () => api.state(),
     close: () => api.requestClose(), destroy: async () => { await api.destroy(); setTimeout(() => rpc.dispose(), 0); },
-    captureNative:()=>api.captureNative(),saveAndCapture:()=>api.saveAndCapture(),addResource:token=>api.addResource(token),exportPsd:()=>api.exportPsd(),
+    capturePreview:()=>api.capturePreview(),captureNative:()=>api.captureNative(),saveAndCapture:()=>api.saveAndCapture(),addResource:token=>api.addResource(token),exportPsd:()=>api.exportPsd(),
   });
   const host: HostPort = {
     nativeVersion:event.data.nativeVersion===1?1:undefined,

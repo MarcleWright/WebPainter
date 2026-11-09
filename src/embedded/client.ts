@@ -39,7 +39,7 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
   return {
     open: (binding, token) => rpc.call('open', binding, token), save: () => rpc.call('save'), captureComposite: () => rpc.call('capture'),
     exportPng: () => rpc.call('exportPng'), command: command => rpc.call('command', command), state: () => cached,
-    captureNative:()=>rpc.call('captureNative'),saveAndCapture:()=>rpc.call('saveAndCapture'),addResource:token=>rpc.call('addResource',token),exportPsd:()=>rpc.call('exportPsd'),
+    capturePreview:()=>rpc.call('capturePreview'),captureNative:()=>rpc.call('captureNative'),saveAndCapture:()=>rpc.call('saveAndCapture'),addResource:token=>rpc.call('addResource',token),exportPsd:()=>rpc.call('exportPsd'),
     requestClose: () => rpc.call('close'),
     async destroy() {
       if (destroyed || cached.open) throw new Error('Close before destroy');

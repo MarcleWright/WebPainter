@@ -20,6 +20,7 @@ export interface EmbeddedEditor {
   open(binding: string, resourceToken: string): Promise<void>;
   save(): Promise<boolean>;
   captureComposite(): Promise<Output>;
+  capturePreview(): Promise<Output>;
   captureNative(): Promise<Output>;
   saveAndCapture(): Promise<Output>;
   addResource(resourceToken:string):Promise<void>;

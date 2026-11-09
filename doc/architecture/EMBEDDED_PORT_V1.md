@@ -83,3 +83,7 @@ The fixed final repair bundle is built clean from embedded6a2d2dedd3472417d495ad
 直接LayerOps、LayersPanel按钮/上下文、Lock all及mask生产入口使用相同action/feature admission。当前新调整层自动带mask，因此创建action依赖masks feature；Props移除背景、Select-and-Mask的mask输出/带mask新层均受相应许可，普通Selection输出保留。visible/enabled独立，隐藏本身不改变执行许可；配置不参加codec读取/保留/保存，不删除合法存量。独立WP默认完整，无ADA业务或插件框架。
 
 实际固定包源a7fa15a53236a8c11ce17c4cc0a082c67574b009（clean），mainBase331f0ba80a070103a0aff0bebabfc253d0472977；sourceHash a31014b7141d7ca1fffbe3c8e22b1eedb5877dc821a4c3de68af287a99f00112，bundleHash89feb63a285967af89d785f1c264406985e8f19909b9d874149c08e58279048a，port2/native1/policy1。main41项/embedded62项及types/build通过；后续59f81b5/1a3ea82及交接只改文档，不重标此包来源。ADA实际构建78db2197/drawing-c2937cd7的正式业务链路与同正式页受控host UI验证分开记录，详见关联03D最终交接。
+
+### Background native output (2026-11-09 embedded follow-up)
+
+Port v2 adds capturePreview(): an at-most-512px PNG from the last successfully published immutable native checkpoint, with its checkpoint identity. A paired consumer must feature-check this additive method. save/captureNative emit native only; saveAndCapture explicitly requests full checkpoint PNG for generation. Native output reserves one output slot, but edit protection covers only COW snapshot capture. Serialization/composition run in an embedded worker importing the existing codec, with bounded class transport adaptation (no live buffer transfer). A receipt marks only its captured history entry; newer edits remain dirty. requestClose still joins pending output; host owns product save/leave policy. Independent main is unchanged.

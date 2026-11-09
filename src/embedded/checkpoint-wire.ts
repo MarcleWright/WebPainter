@@ -1,0 +1,10 @@
+/** Embedded-only transport adapter. Algorithms remain in the shared document/codec modules. */
+import {CelenneDocument} from '../document/document';
+import {TiledRaster,Tile,nextGen} from '../image-engine/tiledRaster';
+import type {Layer} from '../document/types';
+function raster(r:TiledRaster):any{return{channels:r.channels,depth:r.depth,fill:r.fill,tiles:[...r.tiles].map(([k,t])=>[k,t.data]),companion:r.companion?raster(r.companion):null};}
+function layer(l:Layer):any{const {parent, ...out}=l as any;return{...out,...('raster'in l?{raster:raster(l.raster)}:{}),mask:l.mask?{...l.mask,raster:raster(l.mask.raster)}:null,...(l.kind==='group'?{children:l.children.map(layer)}:{})};}
+export function checkpointWire(d:CelenneDocument){return{name:d.name,id:d.id,canvas:d.canvas,profile:d.profile,root:layer(d.root),channels:d.channels.map(c=>({...c,raster:raster(c.raster)})),smartSources:d.smartSources,patterns:d.patterns,slices:d.slices,psd:d.psd,metadata:d.metadata,paths:d.paths,guides:d.guides,rulerOrigin:d.rulerOrigin,rulerUnit:d.rulerUnit,grid:d.grid,globalLight:d.globalLight,compatibility:d.compatibility};}
+function reviveRaster(w:any):TiledRaster{const r=new TiledRaster(w.channels,w.depth,w.fill);r.tiles=new Map(w.tiles.map(([k,data]:any)=>[k,new Tile(w.depth===8?new Uint8ClampedArray(data.buffer,data.byteOffset,data.length):w.depth===16?new Uint16Array(data.buffer,data.byteOffset,data.length):new Float32Array(data.buffer,data.byteOffset,data.length),nextGen())]));r.companion=w.companion?reviveRaster(w.companion):null;return r;}
+function reviveLayer(w:any,parent:any=null):any{const l={...w,parent};if(w.raster)l.raster=reviveRaster(w.raster);if(w.mask)l.mask={...w.mask,raster:reviveRaster(w.mask.raster)};if(w.children)l.children=w.children.map((c:any)=>reviveLayer(c,l));return l;}
+export function reviveCheckpoint(w:ReturnType<typeof checkpointWire>):CelenneDocument{const d=new CelenneDocument(w.name,w.canvas,w.id);Object.assign(d,w,{root:reviveLayer(w.root),channels:w.channels.map(c=>({...c,raster:reviveRaster(c.raster)}))});return d;}
