@@ -48,7 +48,7 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean)
   const keyUp=(e:KeyboardEvent)=>{if(keys.delete(e.code))wake();};
   const composition=(e:Event)=>{if(owns(e)){composing=e.type==='compositionstart';wake();}};
   const focus=()=>wake();
-  const blur=(event:Event)=>{if(event.target!==window)return;keys.clear();pointers.clear();wake();};
+  const blur=(event:Event)=>{if(event.target!==window)return;keys.clear();wake();};
   const events:[string,EventListener][]=[['pointerdown',pointerDown as EventListener],['pointerup',pointerUp as EventListener],['pointercancel',pointerUp as EventListener],['keydown',keyDown as EventListener],['keyup',keyUp as EventListener],['compositionstart',composition],['compositionend',composition],['focusin',focus],['focusout',focus],['blur',blur]];
   for(const [type,fn]of events)window.addEventListener(type,fn,true);
   const api=initializeEditor(host,{busy(){const el=(surface instanceof ShadowRoot?surface.activeElement:document.activeElement) as HTMLElement|null;return pointers.size>0||keys.size>0||composing||!!(el&&(rootNode.contains(el)||portals.contains(el))&&el.matches('textarea,[contenteditable=true],input:not([type=range]):not([type=checkbox]):not([type=button])'));},subscribe(fn){listeners.add(fn);return()=>{listeners.delete(fn);};}});

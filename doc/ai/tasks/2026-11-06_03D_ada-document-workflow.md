@@ -155,3 +155,5 @@ worker 输入改为元数据与有界像素批次：每批最多 1MiB / 3ms 复�
 ### Local rework final transport contract
 
 补齐后台恢复捕获的明确 deferred 错误，ADA 保留一份到期需求、操作结束后补捕获；不强制结束活动工具。worker 的超时/批次应答间失败记录为终态并释放，不能在下批等待悬挂。新增复制元数据、worker 创建与传输计时；返回预览的 native SHA 在预览 worker 计算并回报，父端仍校验准确 Primary hash/CAS。生产同步 fallback 与无消费者 preview API 均已删除。最终 WP typecheck 和 native/access/line/direct-UI/native/lifecycle/RPC/autosave/transfer 九组 74/74 通过。最终包和两个实窗入口仍需从本次 clean 提交验证，30c0a75 的诊断结果不能追认。
+
+补充：失焦仅清除可能丢失 keyup 的键跟踪；活动指针继续等待真实 up/cancel，不能因窗口 blur 提前认定属性手势结束。该小改动 typecheck 与 autosave/worker 12/12 通过；后续 clean 包应以本次源为准。
