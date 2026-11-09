@@ -118,3 +118,6 @@ ADA F3属于Artifact owner，未进WP；最终实际构建78db2197/drawing-c2937
 
 
 实际File菜单检查发现空Export等父菜单残留。新增挂载真实MenuBar回归先红；仅当宿主将file.save/close/closeAll三项均隐藏且禁用时，embedded在自身生命周期内暂移除File菜单，destroy恢复同一原菜单；可见/禁用语义仍独立，未修改main通用菜单或建立配置框架。实际快捷键仍由既有policy禁止。最终包必须按此新commit重建并重验。
+
+
+PNG参数合同补回归先红：worker合成图未像原RGB8 PNG exporter转发ICC及resolution。现只转发现有profile.icc/builtinProfileICC与doc.canvas.resolution，缩略图也保留同一颜色解释；继续使用原encodePNG，不复制或修改通用codec，不新增色彩转换。native-only保存/恢复不调用PNG。Display P3/144dpi定向Worker handler回归覆盖元数据；广色域人工显示验收另列Pending。
