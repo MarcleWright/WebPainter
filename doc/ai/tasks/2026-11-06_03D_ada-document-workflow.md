@@ -161,3 +161,17 @@ worker 输入改为元数据与有界像素批次：每批最多 1MiB / 3ms 复�
 ### Checkpoint receipt composition regression
 
 补真实组合红灯：保存中修改后 Undo 回不可变原检查点，旧 doc.rev 防御误拒正确回执。修正为区分已完成 history 通知后的文档 revision 与未跟踪 mutation；主身份仍为稳定操作边界 seal 后不可变 history checkpoint，不以 rev 替代身份。Undo 回原点可确认、Redo 保持 dirty；原未跟踪 mutation 拒绝/失败保留仍通过。最终 native/access/line/真实UI/native/lifecycle/RPC/autosave/transfer **75/75** 与 typecheck 通过。本次需新 clean 配包，59c7580/914faf6e 的测试包不追认。
+
+## Autosave Local Rework Final Handoff 2026-11-09
+
+本轮仅embedded通用捕获/端口，main只读；实现与有限验证完成，交ADA集成-REV独立复审，人工/Owner/发布均未验收。最初reviewer task/context修改保留提交。未新分支、main同步或反向merge、推送发布；历史包按原版本保留。
+
+- main base `59f81b51fa2db6f6ea0e7d31094d8015549c6ec8`未变；实际clean固定源 `060b6a4008c165f3eba220564977826c524e1810`，sourceHash `8160bebed4133a0c63f6e5ad5008a70bde82310c4688c173188374790cf3fbcd`，bundleHash `df16465d36d9cd7315407612206f033f4d6b0d84a95a09ef45727afb9f7c6556`，port3/native1/policy1。后续文档commit不重标包源。
+- WP阶段依次 `5c04288`、`8ef14cf`、`30c0a75`、`f81644c`、`2725248`、`59c7580`、`060b6a4`。完整稳定操作seal；busy/change后台延期；historyRevision仅作额外未跟踪mutation防御，允许真实Undo回原点接旧回执。COW原tile不detach，复制副本1MiB/约3ms批次transfer并yield；原codec worker编码，保存/备份无PNG。明确独占native输出，生成保留多消费者；移除无消费者capturePreview/published及生产sync fallback。独立预览worker含sourceSHA。
+- 最终WP types和native/access/line/真实layer-UI/native/lifecycle/RPC/autosave/transfer **75/75**。真实ChangeOpacity/Translate合并、在途编辑/Undo/Redo/失败、未跟踪mutation、worker超时/失败/释放、ICC/DPI/字节等价/原tile完整回归保留。
+- ADA实际生产构建 `ee4b91cfda67b6545db24b36f060e26c20a3b3fd` / `drawing-84d363ad`，ASAR SHA `f5917314af8bace8cb70d6d1cffc2689466e55bedd5105c149de92b325b9a0dc`；开发入口实际 `27921989950b0ff8f9408574ed4c91c825756555` 经bat、独立runtime、14282端口。两入口实际资源均只加载df16465d包；不是旧包追认。API95/P229/恢复11/相关types通过，真实owner/受控Provider/临时Profile，无真实作品/付费模型。
+- 正式app://三轮loop250.6/210/158.8ms，dev141.5/210.6/112.3ms；保存窗口均无≥50ms longtask，唯一绘制长任务均在capture前约1.5s。UI COW锁≤1.5ms、复制batch≤2.0ms、iframe消息≤0.2ms，锁采样0；worker native/摘要/封包/fetch有独立段，不混作UI阻塞。独立main只读三轮loop260.9/163.8/255.5ms，216份sourcemap与当前源码匹配，main工作区未动。只能支持有限4K/5层/WebGPU场景目标，不宣称消除main绘制长帧。
+- 实窗补齐Move/Opacity/文字与合成IME/变换超5秒不提交、完整操作一步Undo、原点Undo旧回执/Redo、后台下一笔/提示词Ctrl+Z隔离、原操作查询/续期、Return上下文/重开、10分钟备份/消费、准确4KS/Results/显式加层。真正app.quit排空/重启在生产验证；dev不冒充该项。真实policy页含独占capture重复拒绝。真实worker4000×300→512×38/hash/真实owner CAS通过。
+- 两隔离Profile DB/磁盘均仅主D与显式narrow夹具各一份native Primary、无sidecar/额外native文件，hash匹配登记。共享`.packaging/runtime`受检文件hash/mtime未变，原12199 PID2480仍在。原始材料保存在ADA `.packaging/autosave-after-drawing-84d363ad-move/`、`-smoke/`、policy与`autosave-dev-drawing-84d363ad-move/`，不入Git；完整版本、测量、复现命令和Pending归ADA 03BDEF任务最终交接。
+
+人工中文IME、手绘板压力/倾斜、Photoshop/完整PSD、真实模型、更多硬件和超出本配方压力场景 **Pending/Inconclusive**。未发现必须扩围main的证据，不自行扩围通用内核。完成发送评审请求后暂停。

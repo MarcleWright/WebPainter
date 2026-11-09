@@ -1,5 +1,7 @@
 # 工作进展索引
 
+2026-11-09 Local Rework：仅embedded完成稳定检查点/操作边界、分批worker传输/生命周期和port3；最终75项/types、配套ADA95/P229/恢复11、新包production/dev三轮实窗通过，人工与review仍Pending。main未动，不追认旧包；见[最终交接](tasks/2026-11-06_03D_ada-document-workflow.md#autosave-local-rework-final-handoff-2026-11-09)。
+
 2026-11-09 Autosave有限跟进完成，待独立review/Owner：main59f81b5只读；实际clean固定源745d3a4/bundlecd6cdf9d…/port2-native1-policy1，native-only/短COW锁/原codec worker/独立预览worker与ICC-DPI参数保持，File/tab由宿主关闭。WP68/types通过；ADA59c99157/drawing-266297da实际新ASAR实窗、API94/P2 29/磁盘单Native通过。loop中位5455→579ms、最差5669→588ms，仍有亚秒长帧；人工IME/手绘板等Pending/Inconclusive，未推送发布/改main。[最终交接](tasks/2026-11-06_03D_ada-document-workflow.md#autosave-final-handoff-2026-11-09)。
 
 

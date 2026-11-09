@@ -1,6 +1,17 @@
 # Embedded Port v1 — 03A 实施边界
 
-## Current Port v2 / Native v1
+## Current Port v3 / Native v1
+
+2026-11-09 自动保存局部重做：正式宿主必须成对消费 port **3**，native **1** / policy **1** 不变。独立 main 不变，编码仍调用原 codec；不导入 ADA 业务。
+
+- `saveBackground()` 返回 saved/deferred/failed；后台不调用 prepareMoveOutput，不结束活动指针、键盘、文字/IME或变换。state 含 busy/change，完整操作结束唤醒待存。`captureNative()` 在同一后台边界忙时明确 deferred；返回/生成通过前台入口显式稳定操作。
+- 完整稳定操作捕获前使用原 history.seal，保存点不能被后续 merge 改写；旧回执仅确认原 immutable checkpoint。保留未跟踪 mutation 防御，允许已跟踪 Undo 回原点接收正确回执。
+- 短 COW 后按每批最多1MiB/约3ms复制预算让出事件循环，将复制出的独占 tile 缓冲 transfer 给 worker；画布/历史原缓冲不转移。原 codec 在 worker 计算 native；保存/备份无 PNG，输出明确 transfer 所有权。保存中仍可编辑。
+- 生成保留 native+全分辨率合成图的多消费者输出；独立返回预览 worker 输出最长边512、round/max(1)整数尺寸及 native sourceHash，宿主核对 hash/CAS。移除无消费者 published/capturePreview 路径和生产同步 fallback。worker 错误/超时为终态并释放。
+
+源码/固定包及实测见[当前03D任务](../ai/tasks/2026-11-06_03D_ada-document-workflow.md)。v2/v1 以下均为原时点历史，不追认旧包测试，不代表独立review或Owner验收通过。
+
+## Historical Port v2 / Native v1
 
 2026-11-06 03B后端口升级为 **2**，nativeVersion=**1**，下方v1为历史合同。`nativeVersion:1`宿主以native为事实保存，open解析同一通用codec；`captureNative`只捕获native+PNG+history checkpoint、不标clean；`saveAndCapture`从同一受保护快照输出两份内容，经host.save确认后核对代次/会话/entry才markSaved。`save`和核心关闭Save门复用该路径；失败保留dirty、关闭Cancel不移除会话。Resource可带recovered标记（打开后dirty）和通用source id/hash（内嵌像素/来源，不解释平台身份）。`addResource`经原CreateLayerCommand加图层/撤销，`exportPsd`经既有exporter独立输出，不移动保存点。
 
