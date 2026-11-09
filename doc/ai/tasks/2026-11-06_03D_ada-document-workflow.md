@@ -147,3 +147,7 @@ ADA实际clean构建59c99157d0575ad96721c29d98649446fa570aa4，drawing-266297da�
 ### Local rework stage 2 execution
 
 worker 输入改为元数据与有界像素批次：每批最多 1MiB / 3ms 复制预算，逐批应答并 setTimeout(0) 让出事件循环；复制缓冲独占 transfer，原 COW/history tile 不 detach。codec 仍为原 encodeNative。native 保存/备份输出显式 transfer；生成输出为多消费者保留，不把 live 数据转移。移除无消费者 published snapshot / capturePreview API 及生产同步 codec fallback，测试使用显式 codec fixture，另有真实 transfer 的分批/内容等价/原 tile 完整检查。port 成对升级 v3，native v1/policy v1 不变，不接旧端口。typecheck、五组定向测试 30/30 通过。实窗性能仍待新固定包，未宣称性能达标。
+
+### Local rework window follow-up
+
+旧新包 `30c0a75` 的隔离实窗已确认超过5秒文字编辑和 Move 不被后台提交，Move 完整操作一条 undo。第一轮诊断遇到脚本快捷键 down/up 的 code 不对称，修正脚本后再测；不将该失败记为性能通过。补窗口失焦时释放输入跟踪，只响应 window 自身 blur，不因普通输入失焦清除活动手势。新增真实 ChangeOpacity / TranslateLayers 在途合并、原 native 内容与 Undo/Redo 回归。typecheck、autosave/native/lifecycle/transfer 定向 29/29 通过。需从下次 clean 提交重新配包，不追认旧包到本次边界修正。
