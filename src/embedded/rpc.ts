@@ -1,6 +1,6 @@
 /** Small request/reply channel. Unknown DTOs never dispatch to arbitrary object properties. */
-export type RpcMethod = 'saveBackground' | 'capturePreview' | 'captureNative' | 'saveAndCapture' | 'addResource' | 'exportPsd' | 'open' | 'save' | 'capture' | 'exportPng' | 'command' | 'state' | 'close' | 'destroy' | 'readResource' | 'hostSave' | 'hostExport' | 'confirm' | 'dirty' | 'error';
-const methods = new Set<RpcMethod>(['saveBackground','capturePreview','captureNative','saveAndCapture','addResource','exportPsd','open','save','capture','exportPng','command','state','close','destroy','readResource','hostSave','hostExport','confirm','dirty','error']);
+export type RpcMethod = 'saveBackground' | 'captureNative' | 'saveAndCapture' | 'addResource' | 'exportPsd' | 'open' | 'save' | 'capture' | 'exportPng' | 'command' | 'state' | 'close' | 'destroy' | 'readResource' | 'hostSave' | 'hostExport' | 'confirm' | 'dirty' | 'error';
+const methods = new Set<RpcMethod>(['saveBackground','captureNative','saveAndCapture','addResource','exportPsd','open','save','capture','exportPng','command','state','close','destroy','readResource','hostSave','hostExport','confirm','dirty','error']);
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
 const op = (v: unknown) => record(v) && Number.isInteger(v.generation) && typeof v.operationId === 'string' && typeof v.binding === 'string';
 const output = (v: unknown) => op(v) && record(v) && ['png','psd-test','wpnative','psd'].includes(String(v.format)) && v.bytes instanceof Uint8Array && v.bytes.length<=512*1024*1024 && (v.format!=='wpnative'||(typeof v.checkpoint==='string'&&(v.preview===undefined||v.preview instanceof Uint8Array)));
@@ -21,10 +21,10 @@ export function validArgs(method: RpcMethod, a: unknown): a is unknown[] {
 export function connectRpc(port: MessagePort, nonce: string, handlers: Partial<Record<RpcMethod, (...args: any[]) => unknown>>) {
   let serial = 0, disposed = false;
   const pending = new Map<number, { resolve(value: any): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
-  const send = (message: object) => { if (!disposed) port.postMessage({ version: 2, nonce, ...message }); };
+  const send = (message: object) => { if (!disposed) port.postMessage({ version: 3, nonce, ...message }, transfers(message)); };
   port.onmessage = async event => {
     const m = event.data;
-    if (!record(m) || m.version !== 2 || m.nonce !== nonce || !Number.isSafeInteger(m.id)) return;
+    if (!record(m) || m.version !== 3 || m.nonce !== nonce || !Number.isSafeInteger(m.id)) return;
     if (m.type === 'reply') {
       const p = pending.get(m.id as number); if (!p || typeof m.ok !== 'boolean') return;
       pending.delete(m.id as number); clearTimeout(p.timer);
@@ -49,3 +49,5 @@ export function connectRpc(port: MessagePort, nonce: string, handlers: Partial<R
     dispose() { disposed = true; port.onmessage = null; port.close(); for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error('RPC disposed')); } pending.clear(); },
   };
 }
+
+function transfers(m:any):Transferable[]{const o=m.type==='request'&&m.method==='hostSave'?m.args[0]:m.type==='reply'?m.value:null;return o?.transfer===true&&o.bytes instanceof Uint8Array?[o.bytes.buffer]:[];}

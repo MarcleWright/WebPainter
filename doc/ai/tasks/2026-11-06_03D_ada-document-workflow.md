@@ -143,3 +143,7 @@ ADA实际clean构建59c99157d0575ad96721c29d98649446fa570aa4，drawing-266297da�
 ### Local rework stage 1 execution
 
 真实 ChangeOpacity 保存后同 ID 合并、后台入口缺失两项定向红灯已复现；embedded 在完整稳定捕获前使用原 history.seal，保留额外未跟踪 mutation 防御。后台入口返回 saved/deferred/failed，与主动保存分离；挂载边界跟踪指针、按键、输入焦点、composition，工具 busy / text edit / transform 阻止后台捕获。期限不结束操作，结束通知唤醒 ADA。新增 change 通知处理同 ID 合并，视图事件不产生持久化需求。WP typecheck 和 autosave/native/lifecycle/RPC 29/29 通过；实窗与传输改造仍未执行，不代表问题全部关闭。既有 reviewer 文档修改纳入本阶段。
+
+### Local rework stage 2 execution
+
+worker 输入改为元数据与有界像素批次：每批最多 1MiB / 3ms 复制预算，逐批应答并 setTimeout(0) 让出事件循环；复制缓冲独占 transfer，原 COW/history tile 不 detach。codec 仍为原 encodeNative。native 保存/备份输出显式 transfer；生成输出为多消费者保留，不把 live 数据转移。移除无消费者 published snapshot / capturePreview API 及生产同步 codec fallback，测试使用显式 codec fixture，另有真实 transfer 的分批/内容等价/原 tile 完整检查。port 成对升级 v3，native v1/policy v1 不变，不接旧端口。typecheck、五组定向测试 30/30 通过。实窗性能仍待新固定包，未宣称性能达标。

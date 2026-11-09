@@ -14,6 +14,6 @@ const sourceHash = hash(input.sort().map(p => `${p.replaceAll('\\','/')} ${hash(
 const entries = files('dist-embedded').filter(p => !p.endsWith('manifest.json')).map(p => ({path:relative('dist-embedded',p).replaceAll('\\','/'), bytes:readFileSync(p).length, sha256:hash(readFileSync(p))}));
 // Report the actual build worktree. A later commit must never relabel an old bundle.
 const uncommitted = !!execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim();
-const manifest = {portVersion:2,nativeVersion:1,mainBase:execFileSync('git',['merge-base','main','HEAD'],{encoding:'utf8'}).trim(),embeddedCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),sourceHash,uncommitted,bundleHash:hash(JSON.stringify(entries)),files:entries};
+const manifest = {portVersion:3,nativeVersion:1,mainBase:execFileSync('git',['merge-base','main','HEAD'],{encoding:'utf8'}).trim(),embeddedCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),sourceHash,uncommitted,bundleHash:hash(JSON.stringify(entries)),files:entries};
 writeFileSync('dist-embedded/manifest.json',JSON.stringify(manifest,null,2)+'\n');
 console.log(JSON.stringify({bundleHash:manifest.bundleHash, sourceHash,bytes:entries.reduce((n,e)=>n+e.bytes,0)}));
