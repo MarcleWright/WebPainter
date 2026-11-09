@@ -118,7 +118,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
       return output;
     });
     s.outputPending=pending.then(()=>true,()=>false);
-    try{return await pending;}finally{s.outputPending=null;s.notify();}
+    try{return await pending;}catch(e){if(publish&&valid(op)&&editor.session(s.id)===s)s.markUnsaved();throw e;}finally{s.outputPending=null;s.notify();}
   }
   const api: EmbeddedEditor = {
     async open(nextBinding, token) {

@@ -111,3 +111,7 @@ ADA F3属于Artifact owner，未进WP；最终实际构建78db2197/drawing-c2937
 旧固定包89feb63a的正式Electron隔离4K多层样例3次最长事件循环间隔6284.6/5158.9/5304.2ms（中位5304.2，最差6284.6）；消息postMessage最差116.1ms，recovery API往返1847.8–2090.2ms。基线报告归ADA .packaging/autosave-baseline-drawing-c2937cd7/performance.json，不追认为新包证据。独立main对照、新包实窗/ADA自动保存与预览owner接线仍在进行，不能宣称性能验收。
 
 端口2/native1/policy1不变，新增有限capturePreview能力；新包消费者必须成对升级，不给旧包伪报该能力。固定包从本阶段clean commit构建，后续ADA记录准确来源。未推送/发布。
+
+### Autosave in-flight undo failure regression
+
+追加组合回归先红：B保存期间Undo回旧clean A，B回执丢失/CAS拒绝后仍显示clean，下一次退出可能漏存A。embedded发布失败现在对原有效session标记unsaved，直到准确重试/查询完成，不改main历史实现；普通恢复read-only失败不改变clean。该回归保留，最终固定包需再次更新，不能沿用中间包证据。
