@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-09 F1–F3补修完成，待本轮独立review/Owner。WP main代码331f0ba（59f81b5仅文档）、实际clean包源a7fa15a/bundle89feb63a…/port2-native1-policy1，main41/embedded62及build/types通过；ADA构建78db2197/drawing-c2937cd7两条正式iframe与逐入口policy专项、当前main独立实窗通过，API93/原P2 29项保留。原R2/R3已在上次复审关闭；人工IME/手绘板等Pending，未推送/发布/反向合并，交审后暂停。[本轮交接](tasks/2026-11-06_03D_ada-document-workflow.md#f1-f3-follow-up-final-handoff-2026-11-09)。
+
 2026-11-09最终：R1–R4有限修复验证完成，待独立复审/Owner。WP实际包源6a2d2de/mainBaseb369c45/bundleab12cc5d…；ADA构建0355e68b/drawing-25ce4ef6两条正式iframe实窗、main b369c45独立实窗通过，人工IME/手绘板等Pending。后续仅文档提交不重标旧包。见[03D最终交接](tasks/2026-11-06_03D_ada-document-workflow.md#repair-handoff-2026-11-09)。
 
 2026-11-09：Review Repairs R1 已实施并定向检查：main5eca625/4154c01/b369c45 通用入口 seam 单向同步 embedded；df937cd native上限，6a2d2de clean重建 bundleab12cc5d…/mainBaseb369c45/port2/native1/policy1，47项及types/build通过。ADA持有产品配置与R2–R4；正式新包实窗和复审以ADA任务最新记录为准。历史证据不追认；未推送/发布。见[03D修复交接](tasks/2026-11-06_03D_ada-document-workflow.md#repair-handoff-2026-11-09)。

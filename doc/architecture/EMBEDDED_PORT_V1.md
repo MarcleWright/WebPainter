@@ -74,3 +74,12 @@ Port2/native1 additive host field `capabilityPolicy?: {version:1,entries:Record<
 The finite local entries cover action/tool/panel/dialog/feature/paint/fill/adjustment/properties. Menus (including Window custom panel entries), palette, keymap, tool selection, popup controls, direct panels/dialogs and restored workspace tabs share admission. Raster gradient remains supported; stored gradient/pattern fills, channels/slices, effects/advanced blending and smart objects cannot be newly produced through excluded surfaces. UI configuration does not participate in native decoding/encoding, remove legal stored layers, or flatten content. Main defaults to full independent admission; no ADA/embedded dependency or plugin framework.
 
 The fixed final repair bundle is built clean from embedded6a2d2dedd3472417d495ad4bb4ccbffad908fc89/mainBaseb369c453969e28fd1f28f1da544b921dfe73caac; bundleab12cc5dc08de98a0d818e88d838768f2002c9e32524af91ee1a3498700aa20d, source5971cd21a8a4923e57ec53fd72c71b50da2d4e8f478f9eccde62a3277278483e. Main access/native27 checks, embedded access/native/lifecycle/RPC47 checks and types/build passed. Later documentation commits do not relabel this build source. ADA owns recovery/candidate persistence and the final packaged-window record.
+
+
+## F1–F2 Follow-up Contract (2026-11-09)
+
+通用main的line origin.x/y为起点、w/h为signed endpoint delta；native只对line接受有界负/零增量，仍拒绝其它shape负尺寸与非有限值，路径/appearance/可编辑性保留，native版本仍1。规范见 [Native v1](../engineering/NATIVE_FORMAT.md#signed-line-origin-clarification-2026-11-09)。
+
+直接LayerOps、LayersPanel按钮/上下文、Lock all及mask生产入口使用相同action/feature admission。当前新调整层自动带mask，因此创建action依赖masks feature；Props移除背景、Select-and-Mask的mask输出/带mask新层均受相应许可，普通Selection输出保留。visible/enabled独立，隐藏本身不改变执行许可；配置不参加codec读取/保留/保存，不删除合法存量。独立WP默认完整，无ADA业务或插件框架。
+
+实际固定包源a7fa15a53236a8c11ce17c4cc0a082c67574b009（clean），mainBase331f0ba80a070103a0aff0bebabfc253d0472977；sourceHash a31014b7141d7ca1fffbe3c8e22b1eedb5877dc821a4c3de68af287a99f00112，bundleHash89feb63a285967af89d785f1c264406985e8f19909b9d874149c08e58279048a，port2/native1/policy1。main41项/embedded62项及types/build通过；后续59f81b5/1a3ea82及交接只改文档，不重标此包来源。ADA实际构建78db2197/drawing-c2937cd7的正式业务链路与同正式页受控host UI验证分开记录，详见关联03D最终交接。

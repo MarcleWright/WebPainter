@@ -121,3 +121,12 @@ R1 native policy df937cd；Window 自定义面板/恢复布局/直接 showPanel 
 
 
 2026-11-09 最终配套复验：ADA 实际生产测试构建0355e68b/drawing-25ce4ef6，消费上述 clean source6a2d2de/bundleab12cc5d…；两条真实 app:// iframe场景（受控Provider1次、空凭据outer launcher0次）通过，无运行错误。旧基线候选保留/Primary打开/导出hash/准确放弃/恢复自动捕获、正式保存、崩溃重启恢复及退出上下文均通过。main b369c45 独立Electron文件保存/重开/dirty取消/崩溃恢复通过。ADA62项组合及追加续期专项、原P2 29项保留。人工IME/手绘板/真实Provider/本轮Photoshop仍未验收；旧证据不追认。见 [ADA最终修复配套及Pending](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#repair-final-verification-2026-11-09)。本轮独立复审/Owner验收 Pending，交 ADA集成-REV 后暂停。
+
+
+## F1-F3 Follow-up Final Handoff 2026-11-09
+
+F1/F2 main b07187d+331f0ba（39→41项/types/build），单向同步后实际包源a7fa15a/mainBase331f0ba/sourcea31014b7…/bundle89feb63a…/port2-native1-policy1，62项通过。line只允许其原本的signed endpoint语义，保留路径/合成/重开编辑；直接组/层/删除/mask/Lock all及mask生产入口与action/feature一致，visible/enabled独立，独立main默认完整。59f81b5 native规范和1a3ea82同步仅文档，不追认包来源。
+
+ADA F3属于Artifact owner，未进WP；最终实际构建78db2197/drawing-c2937cd7，ASAR7a9b8ca4…；93项API（含原R2/R3、真实DB/磁盘首次分配失败/事务拒绝/并发锁/子进程中断）通过。新包两条真实app://正式链路通过，含40→10逆向line恢复捕获/保存重开、实际ΔX=-35编辑、生成前S及受控Results、退出/崩溃恢复；Provider分别1/0次。另同正式页受控host逐UI入口检查通过，policy fixture只测权限UI，不执行业务保存/生成；业务接线证据来自前述真实owner完整链路。当前main代码331f0ba独立六层4K实窗通过。
+
+本轮独立复审/Owner验收、人工IME/手绘板/真实Provider/人工Photoshop等仍Pending/Inconclusive，原R2/R3复审关闭结论保留，不表示本轮Approved。详见 [ADA F1–F3最终记录](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#follow-up-final-verification-2026-11-09)。原始证据ignored，不推送/发布/反向合并；交ADA集成-REV后暂停。
