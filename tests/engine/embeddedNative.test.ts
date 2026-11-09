@@ -31,7 +31,7 @@ it('saves native and PNG from one protected history checkpoint; read-only recove
 });
 it('delayed native receipt permits edits, retains newer dirty and rejects overlapping output',async()=>{
  const h=host(),s=await open(h);edit();let release!:()=>void;h.save=vi.fn(()=>new Promise<void>(r=>release=r));const pending=api!.save();await vi.waitFor(()=>expect(h.save).toHaveBeenCalled());const entry=s.history.current.id;
- s.push(new SetLayerPropsCommand('newer',s.activeLayerId!,{opacity:.4},{opacity:.7}));expect(s.history.current.id).not.toBe(entry);expect(s.canEdit()).toBe(true);await expect(api!.captureNative()).rejects.toThrow('busy');release();expect(await pending).toBe(true);expect(s.modified).toBe(true);s.history.undo();expect(s.modified).toBe(false);
+ s.push(new SetLayerPropsCommand('newer',s.activeLayerId!,{opacity:.4},{opacity:.7}));expect(s.history.current.id).not.toBe(entry);expect(s.canEdit()).toBe(true);await expect(api!.captureNative()).rejects.toThrow('Checkpoint deferred');release();expect(await pending).toBe(true);expect(s.modified).toBe(true);s.history.undo();expect(s.modified).toBe(false);
 });
 it('close Save uses native owner, failed save preserves dirty, invalid choices always Cancel',async()=>{
   const h=host();const s=await open(h);edit();h.save=vi.fn(async()=>{throw Error('disk failure');});vi.mocked(h.confirm).mockResolvedValue(0);

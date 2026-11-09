@@ -151,3 +151,7 @@ worker 输入改为元数据与有界像素批次：每批最多 1MiB / 3ms 复�
 ### Local rework window follow-up
 
 旧新包 `30c0a75` 的隔离实窗已确认超过5秒文字编辑和 Move 不被后台提交，Move 完整操作一条 undo。第一轮诊断遇到脚本快捷键 down/up 的 code 不对称，修正脚本后再测；不将该失败记为性能通过。补窗口失焦时释放输入跟踪，只响应 window 自身 blur，不因普通输入失焦清除活动手势。新增真实 ChangeOpacity / TranslateLayers 在途合并、原 native 内容与 Undo/Redo 回归。typecheck、autosave/native/lifecycle/transfer 定向 29/29 通过。需从下次 clean 提交重新配包，不追认旧包到本次边界修正。
+
+### Local rework final transport contract
+
+补齐后台恢复捕获的明确 deferred 错误，ADA 保留一份到期需求、操作结束后补捕获；不强制结束活动工具。worker 的超时/批次应答间失败记录为终态并释放，不能在下批等待悬挂。新增复制元数据、worker 创建与传输计时；返回预览的 native SHA 在预览 worker 计算并回报，父端仍校验准确 Primary hash/CAS。生产同步 fallback 与无消费者 preview API 均已删除。最终 WP typecheck 和 native/access/line/direct-UI/native/lifecycle/RPC/autosave/transfer 九组 74/74 通过。最终包和两个实窗入口仍需从本次 clean 提交验证，30c0a75 的诊断结果不能追认。

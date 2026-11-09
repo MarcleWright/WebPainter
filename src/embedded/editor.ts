@@ -105,6 +105,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
   }
   async function nativeCheckpoint(publish:boolean, closing=false,requirePreview=true,background=false):Promise<Output> {
     assertLive();const s=editor.active;
+    if(background&&s&&busy())throw Error('Checkpoint deferred: operation in progress');
     if(host.nativeVersion!==1 || opening || !s || s.outputPending || (s.closePending&&!closing) || (background?busy():!prepareMoveOutput(s)))throw Error('Native editor busy or unavailable');
     s.history.seal();
     const op=operation(),entry=s.history.current.id,revision=s.doc.rev,protectedBefore=s.editProtected;
