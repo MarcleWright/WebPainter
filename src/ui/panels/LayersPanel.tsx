@@ -361,7 +361,7 @@ export function LayersPanel() {
           {lockBtn('transparency', 'lockTransparency', 'Lock transparent pixels')}
           {lockBtn('pixels', 'lockPixels', 'Lock image pixels')}
           {lockBtn('position', 'lockPosition', 'Lock position')}
-          {lockBtn('all', 'lock', 'Lock all')}
+          <AccessBoundary entry="action:layer.lockAll">{lockBtn('all', 'lock', 'Lock all')}</AccessBoundary>
           <div style={{ flex: 1 }} />
           <AccessBoundary entry="action:layer.setFillOpacity"><NumberField label="Fill" value={Math.round((active?.fillOpacity ?? 1) * 100)} onChange={(v) => active && L.setOpacity(active.id, v / 100, true)} onCommit={() => s.history.seal()} min={0} max={100} unit="%" width={46} disabled={!active || active.kind === 'group'} /></AccessBoundary>
         </div>

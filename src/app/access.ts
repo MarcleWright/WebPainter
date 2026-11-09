@@ -5,7 +5,8 @@ const full: AccessPolicy = () => ({visible:true,enabled:true});
 let policy = full;
 export function access(entry:string):Access{
  const own=policy(entry);let feature:string|undefined;
- if(/^action:layer\.(addMask|mask\.|deleteMask|applyMask|toggleMask|linkMask|invertMask|editMaskToggle|addVectorMask|deleteVectorMask)/.test(entry))feature='masks';
+ if(/^action:layer\.newAdjustment(?:\.|$)/.test(entry))feature='masks';
+ else if(/^action:layer\.(addMask|mask\.|deleteMask|applyMask|toggleMask|linkMask|invertMask|editMaskToggle|addVectorMask|deleteVectorMask)/.test(entry))feature='masks';
  else if(/^action:layer\.(style|setStyle|copyStyle|pasteStyle|clearStyle|rasterizeStyle)/.test(entry))feature='effects';
  else if(/^action:layer\.(convertToSmartObject|editContents|replaceContents|relink)$/.test(entry))feature='smartObject';
  const dependencies=feature?['feature:'+feature]:[];
