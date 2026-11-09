@@ -85,3 +85,6 @@ Owner 本轮已授权03B→D→E→F连续实施。03D ADA owner 已实现独立
 ## Repair handoff 2026-11-09
 
 R1 native policy df937cd；Window 自定义面板/恢复布局/直接 showPanel 补修 main b369c45→embedded6a2d2de。main 通用默认完整，embedded 声明并统一执行持久化上限，ADA 自有产品配置。最终固定包 clean source6a2d2de、mainBaseb369c45、bundleab12cc5d…、port2/native1/policy1；类型/构建及47项回归通过。旧深位深失败与 Window 入口红灯已复现，修复后通过。codec不依赖产品配置，合法存量读取保存边界不变。完整版本见 [端口](../../architecture/EMBEDDED_PORT_V1.md#native-editing-admission-2026-11-09)。ADA R2–R4、最终生产测试包/实窗/人工 Pending 与独立 review 以 ADA 正式任务本轮记录为准；未推送/发布或反向合并。
+
+
+2026-11-09 最终配套复验：ADA 实际生产测试构建0355e68b/drawing-25ce4ef6，消费上述 clean source6a2d2de/bundleab12cc5d…；两条真实 app:// iframe场景（受控Provider1次、空凭据outer launcher0次）通过，无运行错误。旧基线候选保留/Primary打开/导出hash/准确放弃/恢复自动捕获、正式保存、崩溃重启恢复及退出上下文均通过。main b369c45 独立Electron文件保存/重开/dirty取消/崩溃恢复通过。ADA62项组合及追加续期专项、原P2 29项保留。人工IME/手绘板/真实Provider/本轮Photoshop仍未验收；旧证据不追认。见 [ADA最终修复配套及Pending](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#repair-final-verification-2026-11-09)。本轮独立复审/Owner验收 Pending，交 ADA集成-REV 后暂停。

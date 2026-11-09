@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-09最终：R1–R4有限修复验证完成，待独立复审/Owner。WP实际包源6a2d2de/mainBaseb369c45/bundleab12cc5d…；ADA构建0355e68b/drawing-25ce4ef6两条正式iframe实窗、main b369c45独立实窗通过，人工IME/手绘板等Pending。后续仅文档提交不重标旧包。见[03D最终交接](tasks/2026-11-06_03D_ada-document-workflow.md#repair-handoff-2026-11-09)。
+
 2026-11-09：Review Repairs R1 已实施并定向检查：main5eca625/4154c01/b369c45 通用入口 seam 单向同步 embedded；df937cd native上限，6a2d2de clean重建 bundleab12cc5d…/mainBaseb369c45/port2/native1/policy1，47项及types/build通过。ADA持有产品配置与R2–R4；正式新包实窗和复审以ADA任务最新记录为准。历史证据不追认；未推送/发布。见[03D修复交接](tasks/2026-11-06_03D_ada-document-workflow.md#repair-handoff-2026-11-09)。
 
 2026-11-07：Owner选定iframe后的03B→D→E→F代码与有限技术检查已实施，待统一review/Owner验收。main1b00ef79（通用native）；embedded包源efcfd66 clean、bundle1c75b3f…、port2/native1；ADA实际生产构建0b4e1db1/drawing-4cda1527。真实包六层4K/平台保存恢复/受控生成Results、实际PS27有限检查及两WP独立入口通过；人工IME/手绘板/真实Provider等Pending，不声称全面验收。[最终证据及复现](tasks/2026-11-06_03F_offline-psd-acceptance.md)。未推送/发布或反向合并。下方为先前阶段历史，旧包不追认。
