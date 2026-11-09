@@ -1,3 +1,5 @@
+import {AccessBoundary} from '../AccessBoundary';
+import {access} from '../../app/access';
 /** Properties panel (context-sensitive). */
 import { useSession } from '../hooks';
 import type { AdjustmentLayer, FillLayer, Layer, Paint, ShapeLayer, SmartObjectLayer, TextLayer } from '../../document/types';
@@ -75,10 +77,11 @@ function PaintEditor({ label, paint, onChange, allowNone = true }: { label: stri
     <div className="row wrap">
       <span className="muted" style={{ minWidth: 40 }}>{label}</span>
       <Select value={paint.type} onChange={(t) => {
+        if(!access('paint:'+t).enabled)return;
         if (t === 'none') onChange({ type: 'none' });
         else if (t === 'solid') onChange({ type: 'solid', color: paint.type === 'solid' ? paint.color : { r: 0.3, g: 0.45, b: 0.9 } });
         else if (t === 'gradient') onChange({ type: 'gradient', gradient: simpleGradient(ui.get().fg, ui.get().bg), style: 'linear', angle: 90, scale: 100, reverse: false, dither: true });
-      }} options={[...(allowNone ? [{ value: 'none' as const, label: 'None' }] : []), { value: 'solid' as const, label: 'Solid color' }, { value: 'gradient' as const, label: 'Gradient' }]} />
+      }} options={[...(allowNone ? [{ value: 'none' as const, label: 'None' }] : []), { value: 'solid' as const, label: 'Solid color' }, { value: 'gradient' as const, label: 'Gradient' }].filter(p=>access('paint:'+p.value).visible).map(p=>({...p,disabled:!access('paint:'+p.value).enabled}))} />
       {paint.type === 'solid' && <ColorSwatch color={paint.color} onClick={() => ui.openDialog('colorPicker', { purpose: 'callback', initial: paint.color, onPick: (c: RGB) => onChange({ type: 'solid', color: c }) })} />}
       {paint.type === 'gradient' && (
         <div style={{ width: '100%' }}>
@@ -305,12 +308,12 @@ export function PropertiesPanel() {
       break;
     default:
       body = (
-        <Section title="Quick Actions">
+        <AccessBoundary entry="feature:externalServices"><Section title="Quick Actions">
           <div className="row wrap">
             <button className="btn small" onClick={async () => { const { aiProvider } = await import('../../ai/provider'); const p = ui.progress('Removing background…'); try { const m = await aiProvider().removeBackground(s, l.id); const { CreateMaskCommand } = await import('../../commands/layerCommands'); s.push(new CreateMaskCommand('Remove Background', l.id, l.mask, { raster: m, x: 0, y: 0, enabled: true, linked: true, density: 1, feather: 0 })); } finally { p.done(); } }}>Remove Background</button>
             <button className="btn small" onClick={() => run('select.subject')}>Select Subject</button>
           </div>
-        </Section>
+        </Section></AccessBoundary>
       );
   }
   return (
@@ -322,7 +325,7 @@ export function PropertiesPanel() {
           <span className="faint" style={{ marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
         </div>
         {l.metadata.unsupported.length > 0 && <div className="tag warn" style={{ display: 'block' }} title={l.metadata.unsupported.join('\n')}>Preserved Photoshop data: {l.metadata.unsupported.join('; ')}</div>}
-        {body}
+        <AccessBoundary entry={l.kind==='adjustment'?'adjustment:'+l.adjustment.type:'properties:'+l.kind}>{body}</AccessBoundary>
         {(l.kind === 'pixel' || l.kind === 'smartObject' || l.kind === 'text' || l.kind === 'shape') && <TransformInfo s={s} l={l} />}
         <MaskProps s={s} l={l} />
       </div>

@@ -1,3 +1,4 @@
+import {access} from './access';
 /**
  * Editor — the application core (framework-agnostic). Owns document sessions, the active tool,
  * clipboard and services; UI components call into it and subscribe to store revisions.
@@ -184,6 +185,7 @@ export class Editor {
   }
 
   tool(id: ToolId): Tool | null {
+    if(!access('tool:'+id).enabled)return null;
     let t = this.toolInstances.get(id);
     if (!t) {
       const f = this.toolFactories.get(id);
@@ -213,6 +215,7 @@ export class Editor {
   }
 
   setTool(id: ToolId): void {
+    if(!access('tool:'+id).enabled)return;
     const info = toolInfo(id);
     if (info.comingSoon) {
       ui.toast('info', `${info.label} is coming soon.`, 'The tool slot is reserved; functionality is not implemented yet.');

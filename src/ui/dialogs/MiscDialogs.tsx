@@ -783,7 +783,7 @@ export function CommandPaletteDialog({ close }: { close: () => void }) {
   const items = useMemo(() => {
     const qq = q.trim().toLowerCase();
     return allActions()
-      .filter((a) => !a.comingSoon && a.category !== 'replay')
+      .filter((a) => a.visible?.()!==false && !a.comingSoon && a.category !== 'replay')
       .map((a) => ({ a, s: score(`${CATEGORY_LABELS[a.id.split('.')[0]] ?? ''} ${a.label}`, qq) + score(a.label, qq) }))
       .filter((x) => x.s > 0)
       .sort((x, y) => y.s - x.s)

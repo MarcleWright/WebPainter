@@ -1,3 +1,4 @@
+import {AccessBoundary} from './AccessBoundary';
 /** Dockable workspace: canvas area plus panel tabsets (flexlayout), persisted per user. */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { Actions, DockLocation, IJsonModel, Layout, Model, TabNode, TabSetNode } from 'flexlayout-react';
@@ -115,7 +116,7 @@ export function Workspace() {
       const C = panelComponent(comp ?? '');
       return (
         <Suspense fallback={<div className="empty">Loading…</div>}>
-          <C />
+          <AccessBoundary entry={'panel:'+comp}><C /></AccessBoundary>
         </Suspense>
       );
     },

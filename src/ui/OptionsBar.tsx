@@ -1,3 +1,4 @@
+import {AccessBoundary} from './AccessBoundary';
 /** Context-sensitive tool options bar. */
 import { useApp, ui } from '../app/store';
 import { editor } from '../app/editor';
@@ -110,7 +111,7 @@ export function OptionsBar() {
         )}
         {n?.free && <span className="muted">Distort / perspective active — drag the corners.</span>}
         <span className="faint">Shift: constrain · Alt: from center · Ctrl: distort · Ctrl+Shift: skew · Ctrl+Alt+Shift: perspective</span>
-        <button className="btn" title="Switch to Warp mode" onClick={() => setWarpMode()}>Warp</button>
+        <AccessBoundary entry="feature:warp"><button className="btn" title="Switch to Warp mode" onClick={() => setWarpMode()}>Warp</button></AccessBoundary>
         <div style={{ flex: 1 }} />
         <IconButton icon="cancel" title="Cancel transform (Esc)" onClick={() => cancelTransform()} />
         <IconButton icon="commit" title="Commit transform (Enter)" onClick={() => commitTransform()} />

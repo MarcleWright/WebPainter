@@ -1,3 +1,4 @@
+import {AccessBoundary} from '../AccessBoundary';
 /**
  * Renders the dialog stack from the store. Dialogs are requested by type string
  * (`ui.openDialog('imageSize')`) so application code never imports UI components.
@@ -88,7 +89,7 @@ export function DialogHost() {
         }
         return (
           <Suspense key={d.id} fallback={null}>
-            <C {...(d.props ?? {})} close={close} />
+            <AccessBoundary entry={'dialog:'+d.type}><C {...(d.props ?? {})} close={close} /></AccessBoundary>
           </Suspense>
         );
       })}

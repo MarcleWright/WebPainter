@@ -1,3 +1,4 @@
+import {access} from '../../app/access';
 /** Popup menus: application menu bar, context menus and submenus (keyboard navigable). */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -7,13 +8,13 @@ import { keymap } from '../../app/shortcuts';
 import { useApp } from '../../app/store';
 
 export type PopupItem =
-  | { type: 'item'; label: string; run: () => void; shortcut?: string; checked?: boolean; disabled?: boolean; soon?: boolean }
+  | { type: 'item'; entry?: string; label: string; run: () => void; shortcut?: string; checked?: boolean; disabled?: boolean; soon?: boolean }
   | { type: 'separator' }
   | { type: 'submenu'; label: string; items: PopupItem[]; disabled?: boolean };
 
 function resolve(items: MenuItem[] | (() => MenuItem[])): PopupItem[] {
   const list = typeof items === 'function' ? items() : items;
-  return list.map((m): PopupItem => {
+  return list.filter(m=>m.type!=='action'||action(m.id)?.visible?.()!==false).map((m): PopupItem => {
     if (m.type === 'separator') return { type: 'separator' };
     if (m.type === 'submenu') return { type: 'submenu', label: m.label, items: resolve(m.items) };
     if (m.type === 'custom') return { type: 'item', label: m.label, run: m.run, checked: m.checked?.(), disabled: m.enabled ? !m.enabled() : false };
@@ -33,6 +34,7 @@ function resolve(items: MenuItem[] | (() => MenuItem[])): PopupItem[] {
 }
 
 export function PopupMenu({ items, x, y, onClose, parentWidth = 0 }: { items: PopupItem[]; x: number; y: number; onClose: () => void; parentWidth?: number }) {
+  items=items.filter(i=>i.type!=='item'||!i.entry||access(i.entry).visible).map(i=>i.type==='item'&&i.entry?{...i,disabled:i.disabled||!access(i.entry).enabled}:i);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
   const [active, setActive] = useState(-1);
