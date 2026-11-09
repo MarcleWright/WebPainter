@@ -77,3 +77,7 @@ Owner 本轮已授权03B→D→E→F连续实施。03D ADA owner 已实现独立
 
 
 2026-11-07补验：实际生产包的保存/恢复/生成闭环、跨会话候选清理与有限输出协调、固定配套版本见[03F最终报告](2026-11-06_03F_offline-psd-acceptance.md#final-pair-and-finite-acceptance-2026-11-07)。真实owner定向最终API组合57/57，原两项P2 29/29保留。PS/native备份是显式下载，不改Primary native保存边界。独立review和人工验收尚未完成。
+
+## R1 implementation 2026-11-09
+
+通用 seam main 5eca625、4154c01 单向合入；embedded 新增 native v1 能力上限与有限 visible/enabled 配置，作用于动作/菜单/工具/快捷键/直接面板及弹窗。codec 不依赖产品配置，已有合法内容保留。先复现 16-bit 后无法保存（1 failed/9 passed），修复后 typecheck 与 native/access/lifecycle/RPC 46/46 通过。固定包及 ADA 产品配置、正式 iframe 复验仍待执行；本记录不代表四项修复验收。

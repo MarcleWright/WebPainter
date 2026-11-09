@@ -1,3 +1,4 @@
+export {NATIVE_CAPABILITIES} from './capabilities';
 /** Lazy core import: the iframe host must not instantiate a second inactive WP kernel. */
 export async function mountDirect(container: HTMLElement, host: HostPort): Promise<EmbeddedEditor> {
   return (await import('./mount')).mountDirect(container, host);
@@ -28,7 +29,7 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
     const timer = setTimeout(() => { cleanup(); rpc.dispose(); frame.remove(); reject(new Error('Iframe handshake timeout')); }, 15000);
     const ready = (e: MessageEvent) => {
       if (e.source !== frame.contentWindow || e.origin !== url.origin || e.data?.type !== 'wp-ready' || e.data?.version !== 2 || e.data?.nonce !== nonce) return;
-      cleanup(); frame.contentWindow!.postMessage({ type: 'wp-connect', version: 2, nonce, nativeVersion:host.nativeVersion }, url.origin, [channel.port2]); resolve();
+      cleanup(); frame.contentWindow!.postMessage({ type: 'wp-connect', version: 2, nonce, nativeVersion:host.nativeVersion,capabilityPolicy:host.capabilityPolicy }, url.origin, [channel.port2]); resolve();
     };
     window.addEventListener('message', ready); frame.src = url.href; container.append(frame);
   });

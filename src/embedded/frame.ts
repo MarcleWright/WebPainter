@@ -16,6 +16,7 @@ const handshake = (event: MessageEvent) => {
   });
   const host: HostPort = {
     nativeVersion:event.data.nativeVersion===1?1:undefined,
+    capabilityPolicy:event.data.capabilityPolicy,
     readResource: (...a) => rpc.call('readResource', ...a), save: o => rpc.call('hostSave', o), export: o => rpc.call('hostExport', o),
     confirm: (...a) => rpc.call('confirm', ...a),
     dirty: s => { void rpc.call('dirty', s).catch(() => {}); }, error: e => { void rpc.call('error', e).catch(() => {}); },

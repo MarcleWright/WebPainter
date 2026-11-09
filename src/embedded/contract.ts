@@ -1,3 +1,4 @@
+import type {CapabilityPolicy} from './capabilities';
 /** Portable port v2. No React, Window, Electron or ADA business identities. */
 export const PORT_VERSION = 2 as const;
 export type Operation = { generation: number; operationId: string; binding: string };
@@ -6,6 +7,7 @@ export type Output = Operation & { format: 'psd-test' | 'png' | 'psd' | 'wpnativ
 export type EditorState = { generation: number; open: boolean; dirty: boolean; checkpoint?: string | null };
 export interface HostPort {
   nativeVersion?: 1;
+  capabilityPolicy?: CapabilityPolicy;
   readResource(op: Operation, token: string): Promise<Resource>;
   save(output: Output): Promise<void>;
   export(output: Output): Promise<void>;

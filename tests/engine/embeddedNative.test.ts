@@ -7,12 +7,20 @@ import { SetLayerPropsCommand } from '../../src/commands/layerCommands';
 import { exporters } from '../../src/formats/registry';
 import { decodePNG } from '../../src/formats/codecs';
 import { flattenToPixels } from '../../src/rendering/flatten';
+import {nativePolicy} from '../../src/embedded/capabilities';
+import {access} from '../../src/app/access';
+import {run,action} from '../../src/app/actions';
+import {newAdjustmentLayer} from '../../src/app/ops/layerOps';
 import type { EmbeddedEditor,HostPort,Output } from '../../src/embedded/contract';
 let api:EmbeddedEditor|undefined;
 afterEach(()=>{if(api){for(const s of [...editor.sessions])editor.removeSession(s.id);api.destroy();api=undefined;}});
 function host():HostPort{return{nativeVersion:1,readResource:vi.fn(async()=>({name:'work.wpnative',bytes:createNative(24,16)})),save:vi.fn(async()=>{}),export:vi.fn(async()=>{}),confirm:vi.fn(async()=>2),dirty:vi.fn(),error:vi.fn()};}
 async function open(h:HostPort){api=initializeEditor(h);await api.open('opaque-work-session','work');return editor.active!;}
 function edit(){const s=editor.active!,l=s.doc.allLayers()[0];s.push(new SetLayerPropsCommand('opacity',l.id,{opacity:l.opacity},{opacity:.4}));return s;}
+it('native capability ceiling prevents depth and direct LUT panel mutations before save',async()=>{
+ const h=host(),s=await open(h);await run('image.depth.16');expect(s.doc.canvas.bitDepth).toBe(8);expect(action('image.depth.16')!.enabled!()).toBe(false);
+ const n=s.doc.layerCount();newAdjustmentLayer('colorLookup');expect(s.doc.layerCount()).toBe(n);expect(await api!.save()).toBe(true);
+});
 it('saves native and PNG from one protected history checkpoint; read-only recovery capture stays dirty',async()=>{
   const h=host();const s=await open(h);edit();const entry=s.history.current.id;
   const candidate=await api!.captureNative();expect(candidate.format).toBe('wpnative');expect(candidate.checkpoint).toBe(entry);expect(s.modified).toBe(true);expect(h.save).not.toHaveBeenCalled();
@@ -66,4 +74,13 @@ it('a late native receipt cannot mark an untracked newer document mutation clean
 it('oversized PNG is a preview failure, not a failed manual native save',async()=>{
   const h=host();const s=await open(h);edit();const png=exporters.find(x=>x.id==='png')!,original=png.export;png.export=async()=>new Uint8Array(32*1024*1024+1);
   try{expect(await api!.save()).toBe(true);expect(vi.mocked(h.save).mock.calls[0][0].preview===undefined).toBe(true);edit();await expect(api!.saveAndCapture()).rejects.toThrow('preview');expect(h.save).toHaveBeenCalledTimes(1);expect(s.modified).toBe(true);}finally{png.export=original;}
+});
+
+it('policy separates hidden from disabled, cannot exceed codec ceiling, and preserves legal data under tighter configuration',async()=>{
+ const h=host();h.capabilityPolicy={version:1,entries:{'action:image.depth.16':{visible:true,enabled:true},'action:layer.new':{visible:false,enabled:true},'action:layer.newGroup':{visible:true,enabled:false},'tool:gradient':{visible:false,enabled:true},'panel:properties':{visible:true,enabled:false}}};
+ const s=await open(h);expect(access('action:image.depth.16')).toEqual({visible:true,enabled:false});expect(action('layer.new')!.visible!()).toBe(false);
+ const count=s.doc.layerCount();await run('layer.new');expect(s.doc.layerCount()).toBe(count+1);await action('layer.newGroup')!.run();expect(s.doc.layerCount()).toBe(count+1);expect(access('tool:gradient').enabled).toBe(true);expect(access('fill:gradient').enabled).toBe(false);
+ for(const id of ['image.mode.cmyk','layer.style','layer.convertToSmartObject','select.save','layer.newFill.gradient','layer.newFill.pattern'])expect(action(id)!.enabled!(),id).toBe(false);
+ edit();expect(await api!.save()).toBe(true);const o=vi.mocked(h.save).mock.calls[0][0];expect(decodeNative(o.bytes).doc.layerCount()).toBe(count+1);
+ expect(()=>nativePolicy({version:1,entries:{bad:{visible:true,enabled:true}}},new Set())).toThrow();
 });

@@ -1,5 +1,7 @@
+import {installAccessPolicy} from '../app/access';
+import {nativePolicy} from './capabilities';
 import { editor } from '../app/editor';
-import { allActions, register, run } from '../app/actions';
+import { actionDefinitions, register, run } from '../app/actions';
 import { closeSession, prepareMoveOutput, save } from '../app/fileOps';
 import { installPlatform, type Platform } from '../app/platform/platform';
 import { snapshotDocument, cloneLayer } from '../document/clone';
@@ -18,7 +20,10 @@ let nextGeneration = 0;
 /** One active editor per JS realm; no desktop boot, recovery, updater or plugin activation. */
 export function initializeEditor(host: HostPort): EmbeddedEditor {
   if (active || editor.sessions.length) throw new Error('An editor is already active');
+  const original=actionDefinitions();
+  const policy=host.nativeVersion===1?nativePolicy(host.capabilityPolicy,new Set(original.filter(a=>!a.comingSoon).map(a=>a.id))):null;
   active = true;
+  const stopAccess=policy?installAccessPolicy(policy):()=>{};
   let generation = ++nextGeneration, sequence = 0, binding = '', disposed = false, opening = false;
   let offSession = () => {};
   const assertLive = () => { if (disposed) throw new Error('Editor disposed'); };
@@ -61,9 +66,10 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
   };
   const restorePlatform = installPlatform(services);
   registerTools();
+  if(policy&&!policy('tool:'+editor.currentToolId).enabled)editor.setTool('brush');
   const stopText = installTextEngine();
   // A bounded capability list applies to menu, shortcut and command-palette calls alike.
-  const original = allActions();
+
   for (const a of original) {
     if (/^(file\.|app\.)/.test(a.id) || ['edit.preferences', 'window.actions'].includes(a.id)) {
       const allowed = ['file.save', 'file.close', 'file.closeAll'].includes(a.id);
@@ -174,7 +180,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
       editor.hostFactory = null; editor.clipboard = null;
       editor.releaseToolInstances();
       for (const a of original) register(a);
-      keymap.rebuild(); restorePlatform(); active = false;
+      keymap.rebuild(); restorePlatform(); stopAccess(); active = false;
       ui.set({ dialogs: [], toasts: [], progress: [] });
     },
   };
