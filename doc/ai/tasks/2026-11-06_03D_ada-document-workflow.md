@@ -121,3 +121,13 @@ ADA F3属于Artifact owner，未进WP；最终实际构建78db2197/drawing-c2937
 
 
 PNG参数合同补回归先红：worker合成图未像原RGB8 PNG exporter转发ICC及resolution。现只转发现有profile.icc/builtinProfileICC与doc.canvas.resolution，缩略图也保留同一颜色解释；继续使用原encodePNG，不复制或修改通用codec，不新增色彩转换。native-only保存/恢复不调用PNG。Display P3/144dpi定向Worker handler回归覆盖元数据；广色域人工显示验收另列Pending。
+
+## Autosave final handoff 2026-11-09
+
+本轮仅embedded，main59f81b51fa2db6f6ea0e7d31094d8015549c6ec8全程只读（独立构建代码331f0ba；未合入新main）。源码变更全部src/embedded，未复制/修改通用codec或vendor。阶段2a10cea→ee4b0c6/af42053→f979b88/6574deb/4de0613→9f4cec8→f49c0bf→745d3a4。最终clean固定源745d3a461f5bb834335e99098e368edfaa46cf36，sourceHash 1e8be237f89163715b02cfe953aa34f4da4fc0d0d733ce2ae385885d302efabb，bundleHash cd6cdf9dde7d170cdff7c23fae8bf59a85fbce62d1a338433730a2ffb1280edb，port2/native1/policy1；之后文档提交不重标此构建。
+
+native-only捕获/保存无PNG，COW短锁后worker调用原codec，原history ID收据、新编辑保持dirty，失败+Undo不误clean；File/tab唯一宿主退出，destroy恢复；生成/512px预览转发原RGB8 ICC/DPI参数。既有工具忙/Move/text稳定门保留。独立preview worker由ADA父页面持有可跨iframe退出，业务/CAS/备份时钟仍ADA owner，不建插件框架。typecheck与native/access/line/UI/lifecycle/RPC/自动保存组合68/68通过（包括先红后绿）。
+
+ADA实际clean构建59c99157d0575ad96721c29d98649446fa570aa4，drawing-266297da，ASAR1072f97a1c14f9d520bdef61130ebeae892306be44fcec812ba580681754d15b。新包正式iframe实窗/真实owners/控时钟/受控生成1次/实际app.quit重启、准确Primary和磁盘单native通过；API94/P2 29及类型通过。最终3次event-loop中位/最差578.8 / 587.6ms，旧包5454.7 / 5668.6ms；1440×900独立main参考226.4 / 238.8ms。锁0.9/1ms，worker native659.7/672.1ms，消息复制36.8/54.2ms，Return含clean备份消费336ms（N=1）。仍有约0.59s长帧，未宣称16ms或所有硬件达标。
+
+准确配套、全部场景、旧/新证据及Pending归[ADA最终记录](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#autosave-final-verification-2026-11-09)。人工IME/手绘板/广色域/更多GPU、真实Provider/完整PSD未在本轮验收，Pending/Inconclusive。待ADA集成-REV独立review和Owner；未新分支/推送/发布/改main/反向合并。
