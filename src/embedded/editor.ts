@@ -1,3 +1,4 @@
+import {MENUS} from '../app/menus';
 import {checkpointOutput} from './checkpoint-output';
 import {installAccessPolicy} from '../app/access';
 import {nativePolicy} from './capabilities';
@@ -23,6 +24,9 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
   if (active || editor.sessions.length) throw new Error('An editor is already active');
   const original=actionDefinitions();
   const policy=host.nativeVersion===1?nativePolicy(host.capabilityPolicy,new Set(original.filter(a=>!a.comingSoon).map(a=>a.id))):null;
+  const fileIndex=MENUS.findIndex(m=>m.id==='file'),fileMenu=MENUS[fileIndex];
+  const hostFiles=!!policy&&['file.save','file.close','file.closeAll'].every(id=>{const a=policy('action:'+id);return !a.visible&&!a.enabled;});
+  if(hostFiles&&fileIndex>=0)MENUS.splice(fileIndex,1);
   active = true;
   const stopAccess=policy?installAccessPolicy(policy):()=>{};
   let generation = ++nextGeneration, sequence = 0, binding = '', disposed = false, opening = false;
@@ -192,6 +196,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
       editor.hostFactory = null; editor.clipboard = null;
       editor.releaseToolInstances();
       for (const a of original) register(a);
+      if(hostFiles&&fileMenu&&!MENUS.includes(fileMenu))MENUS.splice(fileIndex,0,fileMenu);
       keymap.rebuild(); restorePlatform(); stopAccess(); active = false;
       ui.set({ dialogs: [], toasts: [], progress: [] });
     },

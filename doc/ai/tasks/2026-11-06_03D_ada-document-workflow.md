@@ -115,3 +115,6 @@ ADA F3属于Artifact owner，未进WP；最终实际构建78db2197/drawing-c2937
 ### Autosave in-flight undo failure regression
 
 追加组合回归先红：B保存期间Undo回旧clean A，B回执丢失/CAS拒绝后仍显示clean，下一次退出可能漏存A。embedded发布失败现在对原有效session标记unsaved，直到准确重试/查询完成，不改main历史实现；普通恢复read-only失败不改变clean。该回归保留，最终固定包需再次更新，不能沿用中间包证据。
+
+
+实际File菜单检查发现空Export等父菜单残留。新增挂载真实MenuBar回归先红；仅当宿主将file.save/close/closeAll三项均隐藏且禁用时，embedded在自身生命周期内暂移除File菜单，destroy恢复同一原菜单；可见/禁用语义仍独立，未修改main通用菜单或建立配置框架。实际快捷键仍由既有policy禁止。最终包必须按此新commit重建并重验。
