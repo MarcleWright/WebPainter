@@ -42,6 +42,7 @@ export interface Action {
 }
 
 const registry = new Map<string, Action>();
+const admitted = new WeakMap<Action,Action>();
 
 export function register(a: Action): void {
   registry.set(a.id, a);
@@ -49,7 +50,8 @@ export function register(a: Action): void {
 
 export function action(id: string): Action | undefined {
   const a=registry.get(id);if(!a)return undefined;
-  return {...a,visible:()=>access('action:'+id).visible&&(a.visible?.()??true),enabled:()=>access('action:'+id).enabled&&(a.enabled?.()??true),run:args=>{if(access('action:'+id).enabled&&(a.enabled?.()??true))return a.run(args);}};
+  const cached=admitted.get(a);if(cached)return cached;
+  const wrapped:Action={...a,visible:()=>access('action:'+id).visible&&(a.visible?.()??true),enabled:()=>access('action:'+id).enabled&&(a.enabled?.()??true),run:args=>{if(access('action:'+id).enabled&&(a.enabled?.()??true))return a.run(args);}};admitted.set(a,wrapped);return wrapped;
 }
 
 export function allActions(): Action[] {

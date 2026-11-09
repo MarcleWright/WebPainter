@@ -2,6 +2,7 @@
  * Keyboard shortcuts: default bindings come from the action registry and tool list; users can
  * override any binding (persisted). Tool keys cycle through a flyout group with Shift.
  */
+import {access} from './access';
 import { allActions } from './actions';
 import { TOOLS, ToolId } from '../tools/toolTypes';
 import { loadJSON, saveJSON } from './settings';
@@ -125,7 +126,7 @@ export const keymap = new Keymap();
 
 /** Next tool in the flyout group (Shift+tool key cycles). */
 export function cycleTool(current: ToolId, key: string): ToolId | null {
-  const group = TOOLS.filter((t) => t.shortcut?.toUpperCase() === key.toUpperCase() && !t.comingSoon);
+  const group = TOOLS.filter((t) => t.shortcut?.toUpperCase() === key.toUpperCase() && !t.comingSoon && access('tool:'+t.id).enabled);
   if (!group.length) return null;
   const i = group.findIndex((t) => t.id === current);
   return group[(i + 1) % group.length].id;
