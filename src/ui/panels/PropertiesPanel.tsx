@@ -104,8 +104,8 @@ function ShapeProps({ s, l }: { s: DocumentSession; l: ShapeLayer }) {
       {o && o.kind !== 'custom' && (
         <Section title={`Live Shape: ${o.kind.replace(/([A-Z])/g, ' $1')}`}>
           <div className="row wrap">
-            <NumberField label="W" value={o.w} onChange={(v) => edit('Shape Size', (x) => { x.origin = { ...x.origin!, w: Math.max(1, v) }; x.path = pathFromOrigin(x.origin); })} unit="px" />
-            <NumberField label="H" value={o.h} onChange={(v) => edit('Shape Size', (x) => { x.origin = { ...x.origin!, h: Math.max(1, v) }; x.path = pathFromOrigin(x.origin); })} unit="px" />
+            <NumberField label={o.kind==='line'?'ΔX':'W'} value={o.w} onChange={(v) => edit('Shape Size', (x) => { x.origin = { ...x.origin!, w: o.kind==='line'?v:Math.max(1, v) }; x.path = pathFromOrigin(x.origin); })} unit="px" />
+            <NumberField label={o.kind==='line'?'ΔY':'H'} value={o.h} onChange={(v) => edit('Shape Size', (x) => { x.origin = { ...x.origin!, h: o.kind==='line'?v:Math.max(1, v) }; x.path = pathFromOrigin(x.origin); })} unit="px" />
             <NumberField label="X" value={o.x} onChange={(v) => edit('Shape Position', (x) => { x.origin = { ...x.origin!, x: v }; x.path = pathFromOrigin(x.origin); })} unit="px" />
             <NumberField label="Y" value={o.y} onChange={(v) => edit('Shape Position', (x) => { x.origin = { ...x.origin!, y: v }; x.path = pathFromOrigin(x.origin); })} unit="px" />
           </div>
@@ -327,7 +327,7 @@ export function PropertiesPanel() {
         {l.metadata.unsupported.length > 0 && <div className="tag warn" style={{ display: 'block' }} title={l.metadata.unsupported.join('\n')}>Preserved Photoshop data: {l.metadata.unsupported.join('; ')}</div>}
         <AccessBoundary entry={l.kind==='adjustment'?'adjustment:'+l.adjustment.type:'properties:'+l.kind}>{body}</AccessBoundary>
         {(l.kind === 'pixel' || l.kind === 'smartObject' || l.kind === 'text' || l.kind === 'shape') && <TransformInfo s={s} l={l} />}
-        <MaskProps s={s} l={l} />
+        <AccessBoundary entry="feature:masks"><MaskProps s={s} l={l} /></AccessBoundary>
       </div>
     </div>
   );

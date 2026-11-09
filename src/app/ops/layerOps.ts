@@ -53,6 +53,7 @@ import { emptyEffects, normalizeEffects } from '../../effects/types';
 // Create / duplicate / delete
 // ---------------------------------------------------------------------------------------------
 export function newLayer(name?: string): void {
+  if(!(access('action:layer.new').enabled))return;
   const s = need();
   if (!s) return;
   const l = createPixelLayer(name ?? nextLayerName(s), s.doc.canvas.bitDepth);
@@ -62,6 +63,7 @@ export function newLayer(name?: string): void {
 }
 
 export function newGroup(fromSelection = false): void {
+  if(!(access('action:layer.'+(fromSelection?'groupLayers':'newGroup')).enabled))return;
   const s = need();
   if (!s) return;
   const g = createGroupLayer(nextLayerName(s, 'Group'));
@@ -93,6 +95,7 @@ export function topLevelSelection(s: DocumentSession): Layer[] {
 }
 
 export function duplicateLayers(): void {
+  if(!(access('action:layer.duplicate').enabled))return;
   const s = need();
   if (!s) return;
   const layers = topLevelSelection(s);
@@ -112,6 +115,7 @@ export function duplicateLayers(): void {
 }
 
 export function deleteLayers(): void {
+  if(!(access('action:layer.delete').enabled))return;
   const s = need();
   if (!s) return;
   const layers = topLevelSelection(s);
@@ -128,6 +132,7 @@ export function deleteLayers(): void {
 }
 
 export function renameLayer(id: LayerId, name: string): void {
+  if(!(access('action:layer.rename').enabled))return;
   const s = need();
   const l = s?.doc.getLayer(id);
   if (!s || !l || !name.trim() || name === l.name) return;
@@ -138,6 +143,7 @@ export function renameLayer(id: LayerId, name: string): void {
 // Properties
 // ---------------------------------------------------------------------------------------------
 export function setOpacity(id: LayerId, value: number, fill = false): void {
+  if(!(access('action:layer.'+(fill?'setFillOpacity':'setOpacity')).enabled))return;
   const s = need();
   const l = s?.doc.getLayer(id);
   if (!s || !l) return;
@@ -148,6 +154,7 @@ export function setOpacity(id: LayerId, value: number, fill = false): void {
 }
 
 export function setBlendMode(id: LayerId, mode: BlendMode): void {
+  if(!(access('action:layer.setBlendMode').enabled))return;
   const s = need();
   const l = s?.doc.getLayer(id);
   if (!s || !l || l.blendMode === mode) return;
@@ -156,6 +163,7 @@ export function setBlendMode(id: LayerId, mode: BlendMode): void {
 }
 
 export function toggleVisibility(id: LayerId, solo = false): void {
+  if(!(access('action:layer.toggleVisibility').enabled))return;
   const s = need();
   const l = s?.doc.getLayer(id);
   if (!s || !l) return;
@@ -181,6 +189,7 @@ export function setLock(id: LayerId, lock: keyof Layer['locks'], value?: boolean
 }
 
 export function toggleClipping(id?: LayerId): void {
+  if(!(access('action:layer.toggleClipping').enabled))return;
   const r = needLayer();
   if (!r) return;
   const l = id ? r.s.doc.getLayer(id) : r.l;
@@ -203,6 +212,7 @@ export function setColorTag(id: LayerId, tag: Layer['colorTag']): void {
 // Arrange
 // ---------------------------------------------------------------------------------------------
 export function moveLayer(id: LayerId, toParentId: LayerId, toIndex: number): void {
+  if(!(access('action:layer.move').enabled))return;
   const s = need();
   const l = s?.doc.getLayer(id);
   const target = s?.doc.getLayer(toParentId);
@@ -225,6 +235,7 @@ export function arrange(dir: 'front' | 'forward' | 'backward' | 'back'): void {
 }
 
 export function ungroup(): void {
+  if(!(access('action:layer.ungroup').enabled))return;
   const r = needLayer();
   if (!r || r.l.kind !== 'group') return;
   const { s } = r;
@@ -277,6 +288,7 @@ function renderLayers(s: DocumentSession, layers: Layer[], region?: Rect): { ras
 }
 
 export function mergeDown(): void {
+  if(!(access('action:layer.mergeDown').enabled))return;
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
@@ -314,6 +326,7 @@ export function mergeLayers(layers: Layer[], name?: string): void {
 }
 
 export function mergeVisible(): void {
+  if(!(access('action:layer.mergeVisible').enabled))return;
   const s = need();
   if (!s) return;
   const visible = s.doc.root.children.filter((l) => l.visible);
@@ -322,6 +335,7 @@ export function mergeVisible(): void {
 }
 
 export function flattenImage(): void {
+  if(!(access('action:image.flatten').enabled))return;
   const s = need();
   if (!s) return;
   const hidden = s.doc.allLayers().filter((l) => !l.visible).length;
@@ -349,6 +363,7 @@ export function flattenImage(): void {
 // Masks
 // ---------------------------------------------------------------------------------------------
 export function addMask(mode: 'revealAll' | 'hideAll' | 'revealSelection' | 'hideSelection' = 'revealAll'): void {
+  if(!(access('action:layer.addMask').enabled&&access('action:layer.mask.'+mode).enabled))return;
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
@@ -389,6 +404,7 @@ export function addMask(mode: 'revealAll' | 'hideAll' | 'revealSelection' | 'hid
 }
 
 export function deleteMask(apply = false): void {
+  if(!(access('action:layer.'+(apply?'applyMask':'deleteMask')).enabled))return;
   const r = needLayer();
   if (!r || !r.l.mask) return;
   const { s, l } = r;
@@ -420,6 +436,7 @@ export function deleteMask(apply = false): void {
 }
 
 export function setMaskProps(patch: Partial<{ enabled: boolean; linked: boolean; density: number; feather: number }>, label = 'Mask Properties'): void {
+  if(!(access('feature:masks').enabled&&(!('linked'in patch)||access('action:layer.linkMask').enabled)&&(!('enabled'in patch)||access('action:layer.toggleMask').enabled)))return;
   const r = needLayer();
   if (!r || !r.l.mask) return;
   const { s, l } = r;
@@ -428,6 +445,7 @@ export function setMaskProps(patch: Partial<{ enabled: boolean; linked: boolean;
 }
 
 export function invertMask(): void {
+  if(!(access('action:layer.invertMask').enabled))return;
   const r = needLayer();
   if (!r || !r.l.mask) return;
   const { s, l } = r;
@@ -445,6 +463,7 @@ export function invertMask(): void {
 }
 
 export function addVectorMask(fromPath = true): void {
+  if(!(access('action:layer.addVectorMask').enabled))return;
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
@@ -460,6 +479,7 @@ export function addVectorMask(fromPath = true): void {
 }
 
 export function deleteVectorMask(): void {
+  if(!(access('action:layer.deleteVectorMask').enabled))return;
   const r = needLayer();
   if (!r || !r.l.vectorMask) return;
   r.s.push(new SetVectorMaskCommand('Delete Vector Mask', r.l.id, r.l.vectorMask, null));
@@ -469,6 +489,7 @@ export function deleteVectorMask(): void {
 // Adjustment & fill layers
 // ---------------------------------------------------------------------------------------------
 export function newAdjustmentLayer(type: AdjustmentType, clip = false): void {
+  if(!(access('action:layer.newAdjustment').enabled&&access('action:layer.newAdjustment.'+type).enabled))return;
   if(!access('adjustment:'+type).enabled)return;
   const s = need();
   if (!s) return;
@@ -484,6 +505,7 @@ export function newAdjustmentLayer(type: AdjustmentType, clip = false): void {
 }
 
 export function newFillLayer(fill: FillContent): void {
+  if(!(access('action:layer.newFill').enabled&&access('action:layer.newFill.'+fill.type).enabled))return;
   if(!access('fill:'+fill.type).enabled)return;
   const s = need();
   if (!s) return;
@@ -500,6 +522,7 @@ export function newFillLayer(fill: FillContent): void {
 // Rasterize / convert
 // ---------------------------------------------------------------------------------------------
 export function rasterize(what: 'layer' | 'style' = 'layer'): void {
+  if(!(access('action:layer.'+(what==='style'?'rasterizeStyle':'rasterize')).enabled))return;
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
@@ -562,7 +585,7 @@ export function rasterize(what: 'layer' | 'style' = 'layer'): void {
 }
 
 export function convertToSmartObject(): void {
-  if(!access('feature:smartObject').enabled)return;
+  if(!access('action:layer.convertToSmartObject').enabled||!access('feature:smartObject').enabled)return;
   const s = need();
   if (!s) return;
   const layers = topLevelSelection(s);
@@ -813,7 +836,7 @@ export function distribute(axis: 'horizontal' | 'vertical'): void {
 // Styles
 // ---------------------------------------------------------------------------------------------
 export function setEffects(id: LayerId, fx: LayerEffects | null, label = 'Layer Style'): void {
-  if(fx&&!access('feature:effects').enabled)return;
+  if(!access('action:layer.setStyle').enabled||!access('feature:effects').enabled)return;
   const s = need();
   const l = s?.doc.getLayer(id);
   if (!s || !l) return;
@@ -821,6 +844,7 @@ export function setEffects(id: LayerId, fx: LayerEffects | null, label = 'Layer 
 }
 
 export function copyStyle(): void {
+  if(!(access('action:layer.copyStyle').enabled))return;
   const r = needLayer();
   if (!r) return;
   editor.clipboard = { kind: 'style', effects: r.l.effects ? structuredClone(r.l.effects) : null, blend: { opacity: r.l.opacity, fillOpacity: r.l.fillOpacity, blendMode: r.l.blendMode } };
@@ -828,6 +852,7 @@ export function copyStyle(): void {
 }
 
 export function pasteStyle(): void {
+  if(!(access('action:layer.pasteStyle').enabled))return;
   const s = need();
   const c = editor.clipboard;
   if (!s || c?.kind !== 'style') return;
@@ -836,6 +861,7 @@ export function pasteStyle(): void {
 }
 
 export function clearStyle(): void {
+  if(!(access('action:layer.clearStyle').enabled))return;
   const s = need();
   if (!s) return;
   s.push(new CompositeCommand('Clear Layer Style', s.selectedLayers().filter((l) => l.effects).map((l) => new SetEffectsCommand(l.id, l.effects, null))));
