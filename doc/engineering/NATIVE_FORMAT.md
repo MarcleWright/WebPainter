@@ -18,3 +18,10 @@
 ## Verification
 
 `npm exec -- vitest run tests/engine/native.test.ts`：精确半透明小图合成/字段/像素往返、继续编辑/undo/redo/重存、非法输入拒绝、原session保留及独立PSD保存导入。`node scripts/run-ts.mjs scripts/native-codec-probe.ts`：一次确定性6层4K大小/CPU编解码/像素tile/RSS诊断，RSS是进程生命周期最大值而非codec独占或GPU内存。实际结果归本轮任务/context/log；无Photoshop/手绘板验收含义。
+
+
+## Signed Line Origin Clarification (2026-11-09)
+
+`shape.origin.kind=line` 的 `x/y` 是起点，`w/h` 是指向终点的有符号增量（终点为 x+w、y+h），不是非负外接矩形尺寸。两者均须为有限数且在 [-1e7,1e7]；水平/垂直线允许一个增量为0。其它 origin kind 的 w/h 仍须非负且受原上限约束。原始path和appearance raster继续独立保留，重新编辑沿用 pathFromOrigin，不取绝对值、不扁平化；schema/native版本仍1。
+
+F1 实际工具八方向/横纵线 encode/decode、origin/path/合成一致、重开端点编辑与undo/redo，以及非法非line尺寸/非有限数回归见 `tests/engine/lineNative.test.ts`。main331f0ba 的 types/build/41项及独立实窗通过；embedded 实际包源a7fa15a/mainBase331f0ba，补保存/恢复捕获/生成前快照回归后62项通过。后续文档提交不追认包构建源。人工设备/完整PSD验收另列。

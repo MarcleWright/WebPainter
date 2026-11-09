@@ -11,3 +11,5 @@ F2 同一 action policy 约束 LayersPanel 按钮/上下文菜单与对应 Layer
 ADA首次创建原反例也先红灯；F3属ADA，不在main引入业务或存储逻辑。完整运行配套、包hash与Pending以 ADA正式任务本轮最终记录为准。独立复审/Owner验收尚未完成。
 
 F2 同类入口补查：Props移除背景直接生成mask、Select-and-Mask输出mask/带mask新层、自动带mask的调整层创建也纳入mask admission；选择输出仍保留。直接AdjustmentsPanel结合实际创建action；Lock all按钮与对应操作遵守action。新增两个真实挂载UI反例先红灯（隐藏mask生产入口仍出现、可见禁用mask输出仍可选），修复后检查。无 Provider调用，独立默认完整。
+
+最终WP代码main331f0ba：types/build及41项通过，embedded clean源a7fa15a、bundle89feb63a…/sourcea31014b7…、port2/native1/policy1，62项通过。main331f0ba独立Electron六层4K PSD打开保存重开/dirty取消/真实recovery/崩溃恢复通过。ADA最终实际构建78db2197/drawing-c2937cd7、新包正式iframe逆向line恢复捕获/保存/重开/ΔX=-35编辑/生成前快照与Results、实际受控policy按钮/上下文通过；人工和独立复审仍Pending。详证据以ADA最新F1–F3最终交付记录为准，不追认中间包。
