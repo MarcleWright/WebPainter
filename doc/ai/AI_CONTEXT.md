@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-09 当前：Autosave独立复核 **Changes Requested**，Owner授权局部回退/删除/重做，当前仅任务已调整，未实施。修复检查点合并漏存P1、后台强制结束操作P2、UI大载荷复制/摘要/封包/上传P2及窄长预览取整P2；仅ADA＋embedded，main只读。按操作边界建立稳定检查点，完整保存链路后台处理，删除旧路径，分阶段本地提交、最终配套实窗后交ADA集成-REV；无推送/发布。[当前重做任务](tasks/2026-11-06_03D_ada-document-workflow.md#autosave-local-rework-2026-11-09)。下方交接为历史证据，不代表本轮问题已关闭。
+
 2026-11-09 Autosave有限跟进完成，待独立review/Owner：main59f81b5只读；实际clean固定源745d3a4/bundlecd6cdf9d…/port2-native1-policy1，native-only/短COW锁/原codec worker/独立预览worker与ICC-DPI参数保持，File/tab由宿主关闭。WP68/types通过；ADA59c99157/drawing-266297da实际新ASAR实窗、API94/P2 29/磁盘单Native通过。loop中位5455→579ms、最差5669→588ms，仍有亚秒长帧；人工IME/手绘板等Pending/Inconclusive，未推送发布/改main。[最终交接](tasks/2026-11-06_03D_ada-document-workflow.md#autosave-final-handoff-2026-11-09)。
 
 

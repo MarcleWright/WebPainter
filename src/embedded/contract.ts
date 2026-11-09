@@ -4,7 +4,7 @@ export const PORT_VERSION = 2 as const;
 export type Operation = { generation: number; operationId: string; binding: string };
 export type Resource = { name: string; bytes: Uint8Array; source?: {id:string;hash:string}; recovered?:boolean };
 export type Output = Operation & { format: 'psd-test' | 'png' | 'psd' | 'wpnative'; bytes: Uint8Array; checkpoint?: string; preview?: Uint8Array };
-export type EditorState = { generation: number; open: boolean; dirty: boolean; checkpoint?: string | null };
+export type EditorState = { busy?:boolean;change?:number;generation: number; open: boolean; dirty: boolean; checkpoint?: string | null };
 export interface HostPort {
   nativeVersion?: 1;
   capabilityPolicy?: CapabilityPolicy;
@@ -19,6 +19,7 @@ export type EditorCommand = 'undo' | 'redo' | 'layerViaCopy' | 'transform';
 export interface EmbeddedEditor {
   open(binding: string, resourceToken: string): Promise<void>;
   save(): Promise<boolean>;
+  saveBackground():Promise<'saved'|'deferred'|'failed'>;
   captureComposite(): Promise<Output>;
   capturePreview(): Promise<Output>;
   captureNative(): Promise<Output>;

@@ -1,3 +1,4 @@
+import {textEditState,onTextEdit} from '../tools/typeTool';
 import {MENUS} from '../app/menus';
 import {checkpointOutput} from './checkpoint-output';
 import {installAccessPolicy} from '../app/access';
@@ -20,7 +21,7 @@ import type { EmbeddedEditor, HostPort, Operation, Output } from './contract';
 let active = false;
 let nextGeneration = 0;
 /** One active editor per JS realm; no desktop boot, recovery, updater or plugin activation. */
-export function initializeEditor(host: HostPort): EmbeddedEditor {
+export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscribe(fn:()=>void):()=>void}={busy:()=>false,subscribe:()=>()=>{}}): EmbeddedEditor {
   if (active || editor.sessions.length) throw new Error('An editor is already active');
   const original=actionDefinitions();
   const policy=host.nativeVersion===1?nativePolicy(host.capabilityPolicy,new Set(original.filter(a=>!a.comingSoon).map(a=>a.id))):null;
@@ -31,19 +32,22 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
   const stopAccess=policy?installAccessPolicy(policy):()=>{};
   let generation = ++nextGeneration, sequence = 0, binding = '', disposed = false, opening = false;
   let offSession = () => {};
+  let change=0;
+  const busy=()=>boundary.busy()||!!editor.currentTool?.busy?.()||!!textEditState()||editor.active?.mode.kind!=='none';
   const assertLive = () => { if (disposed) throw new Error('Editor disposed'); };
   const operation = (): Operation => ({ generation, operationId: `${generation}:${++sequence}`, binding });
   const valid = (op: Operation) => !disposed && op.generation === generation && op.binding === binding;
-  const state = () => ({ generation, open: !!editor.active, dirty: !!editor.active?.modified, checkpoint: editor.active?.history.current.id ?? null });
+  const state = () => ({ busy:!!editor.active&&busy(), change, generation, open: !!editor.active, dirty: !!editor.active?.modified, checkpoint: editor.active?.history.current.id ?? null });
   let lastState: ReturnType<typeof state> | null = null;
   const notify = () => {
     if (disposed) return;
     const current = state();
-    if (lastState && current.generation === lastState.generation && current.open === lastState.open && current.dirty === lastState.dirty && current.checkpoint === lastState.checkpoint) return;
+    if (lastState && current.generation === lastState.generation && current.open === lastState.open && current.dirty === lastState.dirty && current.checkpoint === lastState.checkpoint && current.change===lastState.change && current.busy===lastState.busy) return;
     lastState = current;
     try { host.dirty(current); }
     catch (e) { try { host.error({ generation, message: String(e) }); } catch { /* Observers do not own edits. */ } }
   };
+  const stopBoundary=boundary.subscribe(notify),stopTextState=onTextEdit(notify);
   const unsupported = async (): Promise<never> => { throw new Error('Capability unavailable in embedded mode'); };
   const services: Platform = {
     kind: 'browser', canWriteInPlace: true, bridge: null,
@@ -100,9 +104,10 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
     finally { s.outputPending = null; s.editProtected = false; s.notify(); }
   }
   let published:{document:ReturnType<typeof snapshotDocument>;checkpoint:string;op:Operation}|null=null;
-  async function nativeCheckpoint(publish:boolean, closing=false,requirePreview=true):Promise<Output> {
+  async function nativeCheckpoint(publish:boolean, closing=false,requirePreview=true,background=false):Promise<Output> {
     assertLive();const s=editor.active;
-    if(host.nativeVersion!==1 || opening || !s || s.outputPending || (s.closePending&&!closing) || !prepareMoveOutput(s))throw Error('Native editor busy or unavailable');
+    if(host.nativeVersion!==1 || opening || !s || s.outputPending || (s.closePending&&!closing) || (background?busy():!prepareMoveOutput(s)))throw Error('Native editor busy or unavailable');
+    s.history.seal();
     const op=operation(),entry=s.history.current.id,revision=s.doc.rev,protectedBefore=s.editProtected;
     const captureStart=performance.now();s.editProtected=true;
     let checkpoint:ReturnType<typeof snapshotDocument>;
@@ -114,8 +119,6 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
       if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale native checkpoint');
       if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale native receipt');
         published={document:checkpoint,checkpoint:entry,op};
-        // markSaved accepts a history identity. A newer command stays dirty; an untracked
-        // mutation cannot be represented by history and must never be marked clean.
         if(s.history.current.id===entry&&s.doc.rev!==revision)throw Error('Untracked mutation during native save');
         s.markSaved(entry);
       }
@@ -143,7 +146,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
         const s = editor.addDocument(result.doc);
         if(resource.recovered)s.markUnsaved();
         if(native&&!resource.recovered)published={document:snapshotDocument(s.doc),checkpoint:s.history.current.id,op};
-        offSession = s.on(notify); notify();
+        const offState=s.on(notify),offHistory=s.history.on(()=>{change++;notify();});offSession=()=>{offState();offHistory();}; notify();
       } catch (e) { if (valid(op)) host.error({ generation, message: String(e) }); throw e; }
       finally { opening = false; }
     },
@@ -152,9 +155,10 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
       if(host.nativeVersion===1){try{await nativeCheckpoint(true,false,false);notify();return true;}catch(e){host.error({generation,message:String(e)});return false;}}
       const ok=await save();notify();return ok;
     },
+    async saveBackground(){if(busy()||editor.active?.outputPending)return 'deferred';try{await nativeCheckpoint(true,false,false,true);return 'saved';}catch(e){host.error({generation,message:String(e)});return 'failed';}},
     captureComposite: capture,
     async capturePreview(){assertLive();const saved=published;if(!saved)throw Error('No published checkpoint');const {bytes}=await checkpointOutput(saved.document,'preview');if(!valid(saved.op)||published!==saved)throw Error('Stale preview');return{...saved.op,operationId:operation().operationId,format:'png',bytes,checkpoint:saved.checkpoint};},
-    captureNative:()=>nativeCheckpoint(false,false,false),saveAndCapture:()=>nativeCheckpoint(true),
+    captureNative:()=>nativeCheckpoint(false,false,false,true),saveAndCapture:()=>nativeCheckpoint(true),
     async exportPng() { const output = await capture(); await host.export(output); if (!valid(output)) throw new Error('Stale export receipt'); },
     async exportPsd() { const output=await capture('psd');await host.export(output);if(!valid(output))throw Error('Stale export receipt'); },
     async addResource(token) {
@@ -192,7 +196,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
     destroy() {
       assertLive();
       if (editor.sessions.length) throw new Error('Request close before destroy');
-      disposed = true; generation = ++nextGeneration; offSession(); stopText();
+      disposed = true; generation = ++nextGeneration; offSession(); stopText(); stopBoundary(); stopTextState();
       editor.hostFactory = null; editor.clipboard = null;
       editor.releaseToolInstances();
       for (const a of original) register(a);

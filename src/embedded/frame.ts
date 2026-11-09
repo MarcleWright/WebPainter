@@ -9,7 +9,7 @@ const handshake = (event: MessageEvent) => {
   if (event.source !== parent || event.origin !== location.origin || event.data?.type !== 'wp-connect' || event.data?.version !== 2 || event.data?.nonce !== nonce || event.ports.length !== 1) return;
   window.removeEventListener('message', handshake);
   const rpc = connectRpc(event.ports[0], nonce, {
-    open: (binding, token) => api.open(binding, token), save: () => api.save(), capture: () => api.captureComposite(),
+    open: (binding, token) => api.open(binding, token), save: () => api.save(),saveBackground:()=>api.saveBackground(), capture: () => api.captureComposite(),
     exportPng: () => api.exportPng(), command: command => api.command(command), state: () => api.state(),
     close: () => api.requestClose(), destroy: async () => { await api.destroy(); setTimeout(() => rpc.dispose(), 0); },
     capturePreview:()=>api.capturePreview(),captureNative:()=>api.captureNative(),saveAndCapture:()=>api.saveAndCapture(),addResource:token=>api.addResource(token),exportPsd:()=>api.exportPsd(),

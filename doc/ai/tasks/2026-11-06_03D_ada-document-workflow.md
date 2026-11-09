@@ -1,5 +1,13 @@
 # Task 03D: ADA 文档身份、保存与二维作品闭环
 
+## Autosave Local Rework 2026-11-09
+
+**Changes Requested；Owner允许局部回退、删除与重做。当前仅任务修订，未实施或验收。** 本节优先于下方历史交接，完整状态关系、四项修复、证据和coder执行范围归[ADA统一重做任务](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#autosave-local-rework-2026-11-09)。用户本轮明确授权修改两侧任务，main仍只读。
+
+embedded负责：后台捕获不再复用强制结束Move/text的手动入口；完整操作结束后封闭检查点合并边界，旧回执只确认原快照，不能仅凭可变history ID或doc.rev标clean。优先用现有history.seal等能力，但不得定时切碎一次用户操作。短COW捕获后分批、有时间预算地将快照送worker，不能detach现场/历史tile；原codec复用，输出transfer明确消费者归属及失败/销毁清理。ADA负责调度、后台摘要/封包/上传和业务身份，及窄长画布预览取整P2；不得放入WP业务层。
+
+允许撤换本轮错误模块/调用路径并删除旧实现，不要求整轮git revert或保留兼容开关；最终单一正式保存路径。保留native-only、10min恢复、返回预览、准确生成及CAS/原回执保护。先记录状态表与替换边界，再定向红绿、分阶段本地提交、clean固定包、最终ADA两入口/实窗与统一回归；main零修改/零同步，不在embedded夹带通用内核更改。超出边界须提供证据另行授权。完成交ADA集成-REV独立复审后暂停；无推送/发布授权。
+
 ## Autosave Performance Follow-up 2026-11-09
 
 Owner 已确认本轮仅 ADA＋WP embedded 优化，**WP main不修改，仅作独立版对照**。自动保存正式Artifact；恢复备份约10分钟/有变化才更新；顶部仅保留返回和非按钮保存状态，正常返回自动保存不询问；集成File菜单收敛。native自动保存/恢复不得无条件生成PNG，Canvas预览返回时按最新保存版本按需更新，生成模型仍使用准确检查点合成图。保持CAS、旧回执、恢复文件有界及保存中继续编辑正确性。完整范围、阶段提交与性能/正确性验收归 [ADA本轮任务](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#autosave-performance-follow-up-2026-11-09)。如需main通用改造，先报证据另行授权；不得在embedded复制或变相修改通用内核。完成发ADA集成-REV统一review后暂停，无本轮推送/发布授权。下方手动保存/关闭确认和review状态保留历史时点。
@@ -131,3 +139,7 @@ native-only捕获/保存无PNG，COW短锁后worker调用原codec，原history I
 ADA实际clean构建59c99157d0575ad96721c29d98649446fa570aa4，drawing-266297da，ASAR1072f97a1c14f9d520bdef61130ebeae892306be44fcec812ba580681754d15b。新包正式iframe实窗/真实owners/控时钟/受控生成1次/实际app.quit重启、准确Primary和磁盘单native通过；API94/P2 29及类型通过。最终3次event-loop中位/最差578.8 / 587.6ms，旧包5454.7 / 5668.6ms；1440×900独立main参考226.4 / 238.8ms。锁0.9/1ms，worker native659.7/672.1ms，消息复制36.8/54.2ms，Return含clean备份消费336ms（N=1）。仍有约0.59s长帧，未宣称16ms或所有硬件达标。
 
 准确配套、全部场景、旧/新证据及Pending归[ADA最终记录](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#autosave-final-verification-2026-11-09)。人工IME/手绘板/广色域/更多GPU、真实Provider/完整PSD未在本轮验收，Pending/Inconclusive。待ADA集成-REV独立review和Owner；未新分支/推送/发布/改main/反向合并。
+
+### Local rework stage 1 execution
+
+真实 ChangeOpacity 保存后同 ID 合并、后台入口缺失两项定向红灯已复现；embedded 在完整稳定捕获前使用原 history.seal，保留额外未跟踪 mutation 防御。后台入口返回 saved/deferred/failed，与主动保存分离；挂载边界跟踪指针、按键、输入焦点、composition，工具 busy / text edit / transform 阻止后台捕获。期限不结束操作，结束通知唤醒 ADA。新增 change 通知处理同 ID 合并，视图事件不产生持久化需求。WP typecheck 和 autosave/native/lifecycle/RPC 29/29 通过；实窗与传输改造仍未执行，不代表问题全部关闭。既有 reviewer 文档修改纳入本阶段。

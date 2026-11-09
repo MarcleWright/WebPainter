@@ -37,7 +37,7 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
   catch(e) { rpc.dispose(); frame.remove(); throw e; }
   let destroyed = false;
   return {
-    open: (binding, token) => rpc.call('open', binding, token), save: () => rpc.call('save'), captureComposite: () => rpc.call('capture'),
+    open: (binding, token) => rpc.call('open', binding, token), save: () => rpc.call('save'),saveBackground:()=>rpc.call('saveBackground'), captureComposite: () => rpc.call('capture'),
     exportPng: () => rpc.call('exportPng'), command: command => rpc.call('command', command), state: () => cached,
     capturePreview:()=>rpc.call('capturePreview'),captureNative:()=>rpc.call('captureNative'),saveAndCapture:()=>rpc.call('saveAndCapture'),addResource:token=>rpc.call('addResource',token),exportPsd:()=>rpc.call('exportPsd'),
     requestClose: () => rpc.call('close'),
