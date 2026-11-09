@@ -1,5 +1,7 @@
 # 工作进展索引
 
+2026-11-09：Review Repairs R1 已实施并定向检查：main5eca625/4154c01/b369c45 通用入口 seam 单向同步 embedded；df937cd native上限，6a2d2de clean重建 bundleab12cc5d…/mainBaseb369c45/port2/native1/policy1，47项及types/build通过。ADA持有产品配置与R2–R4；正式新包实窗和复审以ADA任务最新记录为准。历史证据不追认；未推送/发布。见[03D修复交接](tasks/2026-11-06_03D_ada-document-workflow.md#repair-handoff-2026-11-09)。
+
 2026-11-07 — 03B→D→E→F授权实施与有限收口：main native、正式iframe真实owners、受控生成/Results、生产包离线/恢复与PS27有限核对、两独立入口回归。版本/实际通过/人工Pending见[03F](tasks/2026-11-06_03F_offline-psd-acceptance.md)，待统一独立review及Owner验收，不推送发布。
 
 2026-11-06 — 03B main通用native v1：显式有界manifest/binary tile、稳定ID和支持数据恢复、继续编辑/撤销、非法输入拒绝；独立PSD管线保留。[格式与边界](../engineering/NATIVE_FORMAT.md)。通过阶段门槛后本地提交并由main单向合入embedded，不推送/发布。

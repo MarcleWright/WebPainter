@@ -114,3 +114,7 @@ P-DOC: 新增/修改文档 UTF-8 无 BOM、相对链接、diff 检查及上游�
 ## 03A / 03C Execution Handoff
 
 2026-11-06：仅执行本轮授权 A/C。实现/35 项定向检查见 [03A](2026-11-06_03A_editor-boundary.md#execution-report)，包版本、三入口实窗、维护成本、暂推荐方案与未验收项见 [03C](2026-11-06_03C_carrier-comparison.md#execution-report)。已有规划 dirty 保留。用户要求向 ADA集成-REV 发送独立评审请求，发送后本实施 session 停止；等待 review、承载确认与下一阶段授权，按 B→D→E→F 推进，不能自行进入下一项。
+
+## Repair handoff 2026-11-09
+
+R1 native policy df937cd；Window 自定义面板/恢复布局/直接 showPanel 补修 main b369c45→embedded6a2d2de。main 通用默认完整，embedded 声明并统一执行持久化上限，ADA 自有产品配置。最终固定包 clean source6a2d2de、mainBaseb369c45、bundleab12cc5d…、port2/native1/policy1；类型/构建及47项回归通过。旧深位深失败与 Window 入口红灯已复现，修复后通过。codec不依赖产品配置，合法存量读取保存边界不变。完整版本见 [端口](../../architecture/EMBEDDED_PORT_V1.md#native-editing-admission-2026-11-09)。ADA R2–R4、最终生产测试包/实窗/人工 Pending 与独立 review 以 ADA 正式任务本轮记录为准；未推送/发布或反向合并。

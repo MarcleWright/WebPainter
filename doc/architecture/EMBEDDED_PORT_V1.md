@@ -66,3 +66,11 @@
 | main 的 recovery/update/window/file/error handlers | embedded 不注册；独立 boot 保留 |
 
 03A 阶段的 36 项检查和旧实窗范围见原任务记录；03C 本轮面板补验及保留回归另行记录，不混算旧证据。全工具、完全离线、Photoshop、Provider、Profile/CAS 均没有由此获得验收。
+
+## Native Editing Admission (2026-11-09)
+
+Port2/native1 additive host field `capabilityPolicy?: {version:1,entries:Record<string,{visible:boolean,enabled:boolean}>}`. Native sessions intersect each request with the WP native editing ceiling; ADA owns its product overrides. `NATIVE_CAPABILITIES.policyVersion===1` identifies the contract. Visibility does not grant or revoke execution; enabled also requires native support and the existing document-state gate. Invalid policy shapes/entries reject initialization before claiming the editor.
+
+The finite local entries cover action/tool/panel/dialog/feature/paint/fill/adjustment/properties. Menus (including Window custom panel entries), palette, keymap, tool selection, popup controls, direct panels/dialogs and restored workspace tabs share admission. Raster gradient remains supported; stored gradient/pattern fills, channels/slices, effects/advanced blending and smart objects cannot be newly produced through excluded surfaces. UI configuration does not participate in native decoding/encoding, remove legal stored layers, or flatten content. Main defaults to full independent admission; no ADA/embedded dependency or plugin framework.
+
+The fixed final repair bundle is built clean from embedded6a2d2dedd3472417d495ad4bb4ccbffad908fc89/mainBaseb369c453969e28fd1f28f1da544b921dfe73caac; bundleab12cc5dc08de98a0d818e88d838768f2002c9e32524af91ee1a3498700aa20d, source5971cd21a8a4923e57ec53fd72c71b50da2d4e8f478f9eccde62a3277278483e. Main access/native27 checks, embedded access/native/lifecycle/RPC47 checks and types/build passed. Later documentation commits do not relabel this build source. ADA owns recovery/candidate persistence and the final packaged-window record.
