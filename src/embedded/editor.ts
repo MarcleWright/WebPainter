@@ -33,7 +33,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
   let generation = ++nextGeneration, sequence = 0, binding = '', disposed = false, opening = false;
   let offSession = () => {};
   let change=0;
-  const busy=()=>boundary.busy()||!!editor.currentTool?.busy?.()||!!textEditState()||editor.active?.mode.kind!=='none';
+  const busy=()=>boundary.busy()||!!editor.active?.outputPending||!!editor.currentTool?.busy?.()||!!textEditState()||editor.active?.mode.kind!=='none';
   const assertLive = () => { if (disposed) throw new Error('Editor disposed'); };
   const operation = (): Operation => ({ generation, operationId: `${generation}:${++sequence}`, binding });
   const valid = (op: Operation) => !disposed && op.generation === generation && op.binding === binding;
@@ -122,7 +122,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
       }
       return output;
     });
-    s.outputPending=pending.then(()=>true,()=>false);
+    s.outputPending=pending.then(()=>true,()=>false);s.notify();
     try{return await pending;}catch(e){if(publish&&valid(op)&&editor.session(s.id)===s)s.markUnsaved();throw e;}finally{s.outputPending=null;s.notify();}
   }
   const api: EmbeddedEditor = {
@@ -173,7 +173,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
         // The owner-held reservation protects the async read; release only for this command.
         s.editProtected=false;s.push(new CreateLayerCommand('Add image resource',layer,null,s.doc.root.children.length));s.editProtected=true;s.setActive(layer.id);
       })();
-      s.outputPending=pending.then(()=>true,()=>false);
+      s.outputPending=pending.then(()=>true,()=>false);s.notify();
       try{await pending;}finally{s.outputPending=null;s.editProtected=false;s.notify();}
     },
     async command(command) {
