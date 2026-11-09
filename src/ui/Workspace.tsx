@@ -1,3 +1,5 @@
+import {access} from '../app/access';
+import {admittedPanelModel} from './panelAdmission';
 import {AccessBoundary} from './AccessBoundary';
 /** Dockable workspace: canvas area plus panel tabsets (flexlayout), persisted per user. */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
@@ -58,11 +60,11 @@ function panelComponent(id: string): ComponentType {
 function loadModel(): Model {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return Model.fromJson(JSON.parse(raw));
+    if (raw) return admittedPanelModel(JSON.parse(raw));
   } catch {
     /* fall back to default */
   }
-  return Model.fromJson(DEFAULT_LAYOUT);
+  return admittedPanelModel(DEFAULT_LAYOUT);
 }
 
 export function Workspace() {
@@ -75,6 +77,7 @@ export function Workspace() {
     (window as unknown as { __celennePanelOpen?: (id: string) => boolean }).__celennePanelOpen = isOpen;
     const toggle = (e: Event, showOnly = false) => {
       const id = (e as CustomEvent<string>).detail;
+      if(!access('panel:'+id).enabled)return;
       const m = modelRef.current;
       const node = m.getNodeById(id);
       if (node) {
@@ -95,7 +98,7 @@ export function Workspace() {
     };
     const reset = () => {
       localStorage.removeItem(KEY);
-      setModel(Model.fromJson(DEFAULT_LAYOUT));
+      setModel(admittedPanelModel(DEFAULT_LAYOUT));
     };
     const show = (e: Event) => toggle(e, true);
     window.addEventListener('celenne:togglePanel', toggle);
