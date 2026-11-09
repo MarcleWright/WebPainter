@@ -32,7 +32,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
   const stopAccess=policy?installAccessPolicy(policy):()=>{};
   let generation = ++nextGeneration, sequence = 0, binding = '', disposed = false, opening = false;
   let offSession = () => {};
-  let change=0;
+  let change=0,historyRevision=0;
   const busy=()=>boundary.busy()||!!editor.active?.outputPending||!!editor.currentTool?.busy?.()||!!textEditState()||editor.active?.mode.kind!=='none';
   const assertLive = () => { if (disposed) throw new Error('Editor disposed'); };
   const operation = (): Operation => ({ generation, operationId: `${generation}:${++sequence}`, binding });
@@ -118,7 +118,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
       const output:Output={...op,format:'wpnative',...encoded,...(!requirePreview?{transfer:true as const}:{}),checkpoint:entry};
       if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale native checkpoint');
       if(publish){await host.save(output);if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale native receipt');
-        if(s.history.current.id===entry&&s.doc.rev!==revision)throw Error('Untracked mutation during native save');
+        if(s.history.current.id===entry&&s.doc.rev!==revision&&s.doc.rev!==historyRevision)throw Error('Untracked mutation during native save');
         s.markSaved(entry);
       }
       return output;
@@ -144,7 +144,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
         result.doc.filePath = null;
         const s = editor.addDocument(result.doc);
         if(resource.recovered)s.markUnsaved();
-        const offState=s.on(notify),offHistory=s.history.on(()=>{change++;notify();});offSession=()=>{offState();offHistory();}; notify();
+        historyRevision=s.doc.rev;const offState=s.on(notify),offHistory=s.history.on(()=>{change++;historyRevision=s.doc.rev;notify();});offSession=()=>{offState();offHistory();}; notify();
       } catch (e) { if (valid(op)) host.error({ generation, message: String(e) }); throw e; }
       finally { opening = false; }
     },

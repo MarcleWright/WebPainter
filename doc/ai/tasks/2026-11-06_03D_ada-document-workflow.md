@@ -157,3 +157,7 @@ worker 输入改为元数据与有界像素批次：每批最多 1MiB / 3ms 复�
 补齐后台恢复捕获的明确 deferred 错误，ADA 保留一份到期需求、操作结束后补捕获；不强制结束活动工具。worker 的超时/批次应答间失败记录为终态并释放，不能在下批等待悬挂。新增复制元数据、worker 创建与传输计时；返回预览的 native SHA 在预览 worker 计算并回报，父端仍校验准确 Primary hash/CAS。生产同步 fallback 与无消费者 preview API 均已删除。最终 WP typecheck 和 native/access/line/direct-UI/native/lifecycle/RPC/autosave/transfer 九组 74/74 通过。最终包和两个实窗入口仍需从本次 clean 提交验证，30c0a75 的诊断结果不能追认。
 
 补充：失焦仅清除可能丢失 keyup 的键跟踪；活动指针继续等待真实 up/cancel，不能因窗口 blur 提前认定属性手势结束。该小改动 typecheck 与 autosave/worker 12/12 通过；后续 clean 包应以本次源为准。
+
+### Checkpoint receipt composition regression
+
+补真实组合红灯：保存中修改后 Undo 回不可变原检查点，旧 doc.rev 防御误拒正确回执。修正为区分已完成 history 通知后的文档 revision 与未跟踪 mutation；主身份仍为稳定操作边界 seal 后不可变 history checkpoint，不以 rev 替代身份。Undo 回原点可确认、Redo 保持 dirty；原未跟踪 mutation 拒绝/失败保留仍通过。最终 native/access/line/真实UI/native/lifecycle/RPC/autosave/transfer **75/75** 与 typecheck 通过。本次需新 clean 配包，59c7580/914faf6e 的测试包不追认。
