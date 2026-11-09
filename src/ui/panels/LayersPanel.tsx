@@ -1,3 +1,4 @@
+import {access} from '../../app/access';
 import {AccessBoundary} from '../AccessBoundary';
 /** Layers panel. */
 import { imageSpace, rasterFromImage } from '../../formats/decodedRaster';
@@ -46,7 +47,7 @@ export function editLayerContent(s: DocumentSession, l: Layer) {
   else if (l.kind === 'text') {
     editor.setTool('type');
     return import('../../tools/typeTool').then((m) => m.startTextEdit(s, l.id, false));
-  } else ui.openDialog('layerStyle', { layerId: l.id });
+  } else if(access('action:layer.style').enabled)ui.openDialog('layerStyle', { layerId: l.id });
 }
 
 type DropPos = { id: LayerId; where: 'above' | 'below' | 'into' } | null;
@@ -80,7 +81,7 @@ function effectList(l: Layer): { kind: EffectKind; index: number; enabled: boole
 }
 
 function toggleEffect(s: DocumentSession, l: Layer, kind: EffectKind | 'all', index = 0) {
-  if (!l.effects) return;
+  if (!l.effects||!access('feature:effects').enabled) return;
   const fx = structuredClone(l.effects);
   if (kind === 'all') fx.enabled = !fx.enabled;
   else {
@@ -131,37 +132,37 @@ export function LayersPanel() {
     e.preventDefault();
     if (!s.selectedIds.has(l.id)) s.setActive(l.id);
     const items: PopupItem[] = [
-      { type: 'item', label: 'Blending Options…', run: () => ui.openDialog('layerStyle', { layerId: l.id }) },
+      { type: 'item', entry:'action:layer.style', label: 'Blending Options…', run: () => ui.openDialog('layerStyle', { layerId: l.id }) },
       { type: 'separator' },
-      { type: 'item', label: 'Duplicate Layer', run: () => L.duplicateLayers() },
-      { type: 'item', label: 'Delete Layer', run: () => L.deleteLayers() },
-      { type: 'item', label: 'Rename Layer', run: () => setRenaming(l.id) },
+      { type: 'item', entry:'action:layer.duplicate', label: 'Duplicate Layer', run: () => L.duplicateLayers() },
+      { type: 'item', entry:'action:layer.delete', label: 'Delete Layer', run: () => L.deleteLayers() },
+      { type: 'item', entry:'action:layer.rename', label: 'Rename Layer', run: () => setRenaming(l.id) },
       { type: 'separator' },
-      { type: 'item', label: 'Group from Layers', run: () => L.newGroup(true) },
-      ...(l.kind === 'group' ? [{ type: 'item' as const, label: 'Ungroup Layers', run: () => L.ungroup() }] : []),
+      { type: 'item', entry:'action:layer.groupLayers', label: 'Group from Layers', run: () => L.newGroup(true) },
+      ...(l.kind === 'group' ? [{ type: 'item' as const, entry:'action:layer.ungroup', label: 'Ungroup Layers', run: () => L.ungroup() }] : []),
       { type: 'separator' },
-      { type: 'item', label: 'Convert to Smart Object', run: () => L.convertToSmartObject() },
-      ...(l.kind === 'smartObject' ? [{ type: 'item' as const, label: 'Edit Contents', run: () => L.editSmartContents() }, { type: 'item' as const, label: 'Replace Contents…', run: () => L.replaceSmartContents() }] : []),
-      { type: 'item', label: l.kind === 'text' ? 'Rasterize Type' : l.kind === 'shape' ? 'Rasterize Shape' : 'Rasterize Layer', run: () => L.rasterize('layer'), disabled: ['pixel', 'group', 'adjustment'].includes(l.kind) },
-      ...(l.effects ? [{ type: 'item' as const, label: 'Rasterize Layer Style', run: () => L.rasterize('style') }] : []),
+      { type: 'item', entry:'action:layer.convertToSmartObject', label: 'Convert to Smart Object', run: () => L.convertToSmartObject() },
+      ...(l.kind === 'smartObject' ? [{ type: 'item' as const, entry:'action:layer.editContents', label: 'Edit Contents', run: () => L.editSmartContents() }, { type: 'item' as const, entry:'action:layer.replaceContents', label: 'Replace Contents…', run: () => L.replaceSmartContents() }] : []),
+      { type: 'item', entry:'action:layer.rasterize', label: l.kind === 'text' ? 'Rasterize Type' : l.kind === 'shape' ? 'Rasterize Shape' : 'Rasterize Layer', run: () => L.rasterize('layer'), disabled: ['pixel', 'group', 'adjustment'].includes(l.kind) },
+      ...(l.effects ? [{ type: 'item' as const, entry:'action:layer.rasterizeStyle', label: 'Rasterize Layer Style', run: () => L.rasterize('style') }] : []),
       { type: 'separator' },
-      { type: 'item', label: l.clipping ? 'Release Clipping Mask' : 'Create Clipping Mask', run: () => L.toggleClipping(l.id) },
-      ...(!l.mask ? [{ type: 'item' as const, label: 'Add Layer Mask', run: () => L.addMask('revealAll') }] : [
-        { type: 'item' as const, label: l.mask.enabled ? 'Disable Layer Mask' : 'Enable Layer Mask', run: () => L.setMaskProps({ enabled: !l.mask!.enabled }, 'Toggle Mask') },
-        { type: 'item' as const, label: 'Apply Layer Mask', run: () => L.deleteMask(true) },
-        { type: 'item' as const, label: 'Delete Layer Mask', run: () => L.deleteMask(false) },
+      { type: 'item', entry:'action:layer.toggleClipping', label: l.clipping ? 'Release Clipping Mask' : 'Create Clipping Mask', run: () => L.toggleClipping(l.id) },
+      ...(!l.mask ? [{ type: 'item' as const, entry:'action:layer.addMask', label: 'Add Layer Mask', run: () => L.addMask('revealAll') }] : [
+        { type: 'item' as const, entry:'action:layer.toggleMask', label: l.mask.enabled ? 'Disable Layer Mask' : 'Enable Layer Mask', run: () => L.setMaskProps({ enabled: !l.mask!.enabled }, 'Toggle Mask') },
+        { type: 'item' as const, entry:'action:layer.applyMask', label: 'Apply Layer Mask', run: () => L.deleteMask(true) },
+        { type: 'item' as const, entry:'action:layer.deleteMask', label: 'Delete Layer Mask', run: () => L.deleteMask(false) },
       ]),
-      ...(!l.vectorMask ? [{ type: 'item' as const, label: 'Add Vector Mask', run: () => L.addVectorMask(true) }] : [{ type: 'item' as const, label: 'Delete Vector Mask', run: () => L.deleteVectorMask() }]),
+      ...(!l.vectorMask ? [{ type: 'item' as const, entry:'action:layer.addVectorMask', label: 'Add Vector Mask', run: () => L.addVectorMask(true) }] : [{ type: 'item' as const, entry:'action:layer.deleteVectorMask', label: 'Delete Vector Mask', run: () => L.deleteVectorMask() }]),
       { type: 'separator' },
-      { type: 'item', label: 'Copy Layer Style', run: () => L.copyStyle() },
-      { type: 'item', label: 'Paste Layer Style', run: () => L.pasteStyle() },
-      { type: 'item', label: 'Clear Layer Style', run: () => L.clearStyle(), disabled: !l.effects },
+      { type: 'item', entry:'action:layer.copyStyle', label: 'Copy Layer Style', run: () => L.copyStyle() },
+      { type: 'item', entry:'action:layer.pasteStyle', label: 'Paste Layer Style', run: () => L.pasteStyle() },
+      { type: 'item', entry:'action:layer.clearStyle', label: 'Clear Layer Style', run: () => L.clearStyle(), disabled: !l.effects },
       { type: 'separator' },
       { type: 'submenu', label: 'Color', items: (['none', 'red', 'orange', 'yellow', 'green', 'blue', 'violet', 'gray'] as const).map((c) => ({ type: 'item' as const, label: c === 'none' ? 'No Color' : c[0].toUpperCase() + c.slice(1), run: () => L.setColorTag(l.id, c), checked: l.colorTag === c })) },
       { type: 'separator' },
-      { type: 'item', label: 'Merge Down', run: () => L.mergeDown() },
-      { type: 'item', label: 'Merge Visible', run: () => L.mergeVisible() },
-      { type: 'item', label: 'Flatten Image', run: () => L.flattenImage() },
+      { type: 'item', entry:'action:layer.mergeDown', label: 'Merge Down', run: () => L.mergeDown() },
+      { type: 'item', entry:'action:layer.mergeVisible', label: 'Merge Visible', run: () => L.mergeVisible() },
+      { type: 'item', entry:'action:image.flatten', label: 'Flatten Image', run: () => L.flattenImage() },
     ];
     openContextMenu(items, e.clientX, e.clientY);
   };
@@ -241,16 +242,16 @@ export function LayersPanel() {
           onDoubleClick={(e) => {
             // Quick clicks on the row's buttons (visibility, expand, effects, mask link) are not a double-click on the layer.
             if ((e.target as HTMLElement).closest('.eye, .twisty, .fx, .mask-link, .badges')) return;
-            if ((e.target as HTMLElement).closest('.name')) setRenaming(l.id);
+            if ((e.target as HTMLElement).closest('.name')) {if(access('action:layer.rename').enabled)setRenaming(l.id);}
             else editLayerContent(s, l);
           }}
           role="treeitem"
           aria-selected={selected}
           aria-level={depth + 1}
         >
-          <div className={`eye${l.visible ? '' : ' off'}`} title="Toggle visibility (Alt+click: show only this layer)" onMouseDown={(e) => { e.stopPropagation(); L.toggleVisibility(l.id, e.altKey); }}>
+          <AccessBoundary entry="action:layer.toggleVisibility"><div className={`eye${l.visible ? '' : ' off'}`} title="Toggle visibility (Alt+click: show only this layer)" onMouseDown={(e) => { e.stopPropagation(); L.toggleVisibility(l.id, e.altKey); }}>
             <Icon name="eye" size={14} />
-          </div>
+          </div></AccessBoundary>
           <div className="indent" style={{ width: depth * 14 }} />
           {l.kind === 'group' ? (
             <span className="twisty" onMouseDown={(e) => { e.stopPropagation(); l.expanded = !l.expanded; s.notify(); }}>{l.expanded ? '▼' : '▶'}</span>
@@ -270,7 +271,7 @@ export function LayersPanel() {
             }}
           />
           {l.mask && (
-            <>
+            <AccessBoundary entry="feature:masks">
               <span className="mask-link" title={l.mask.linked ? 'Mask linked (click to unlink)' : 'Mask unlinked'} onMouseDown={(e) => { e.stopPropagation(); s.setActive(l.id); L.setMaskProps({ linked: !l.mask!.linked }, 'Link Mask'); }}>
                 {l.mask.linked ? '⛓' : '·'}
               </span>
@@ -292,9 +293,9 @@ export function LayersPanel() {
                 />
                 {!l.mask.enabled && <span style={{ position: 'absolute', inset: 0, color: '#e5484d', fontSize: 22, lineHeight: '30px', textAlign: 'center', pointerEvents: 'none' }}>✕</span>}
               </div>
-            </>
+            </AccessBoundary>
           )}
-          {l.vectorMask && <div className="thumb icon" title="Vector mask" style={{ width: 24, height: 24 }}><Icon name="pen" size={14} /></div>}
+          {l.vectorMask && <AccessBoundary entry="feature:masks"><div className="thumb icon" title="Vector mask" style={{ width: 24, height: 24 }}><Icon name="pen" size={14} /></div></AccessBoundary>}
           <div className="name" title={l.name}>
             {renaming === l.id ? (
               <input
@@ -326,7 +327,7 @@ export function LayersPanel() {
           </div>
         </div>
         {fxRows.length > 0 && (
-          <>
+          <AccessBoundary entry="feature:effects">
             <div className="effect-row" style={{ paddingLeft: depth * 14 }}>
               <span className="eye" onMouseDown={() => toggleEffect(s, l, 'all')}>{l.effects!.enabled ? <Icon name="eye" size={12} /> : ''}</span>
               <span>Effects</span>
@@ -337,7 +338,7 @@ export function LayersPanel() {
                 <span>{EFFECT_LABELS[f.kind]}</span>
               </div>
             ))}
-          </>
+          </AccessBoundary>
         )}
         {l.kind === 'group' && l.expanded && [...l.children].reverse().map((c) => renderRow(c, depth + 1))}
       </div>
@@ -352,8 +353,8 @@ export function LayersPanel() {
     <div className="panel" onDragOver={(e) => e.preventDefault()}>
       <div className="layers-top">
         <div className="row">
-          <BlendSelect value={active?.blendMode ?? 'normal'} allowPassThrough={active?.kind === 'group'} onChange={(m) => active && L.setBlendMode(active.id, m)} width={128} />
-          <NumberField label="Opacity" value={Math.round((active?.opacity ?? 1) * 100)} onChange={(v) => active && L.setOpacity(active.id, v / 100)} onCommit={() => s.history.seal()} min={0} max={100} unit="%" width={46} disabled={!active} />
+          <AccessBoundary entry="action:layer.setBlendMode"><BlendSelect value={active?.blendMode ?? 'normal'} allowPassThrough={active?.kind === 'group'} onChange={(m) => active && L.setBlendMode(active.id, m)} width={128} /></AccessBoundary>
+          <AccessBoundary entry="action:layer.setOpacity"><NumberField label="Opacity" value={Math.round((active?.opacity ?? 1) * 100)} onChange={(v) => active && L.setOpacity(active.id, v / 100)} onCommit={() => s.history.seal()} min={0} max={100} unit="%" width={46} disabled={!active} /></AccessBoundary>
         </div>
         <div className="row">
           <span className="muted">Lock:</span>
@@ -362,7 +363,7 @@ export function LayersPanel() {
           {lockBtn('position', 'lockPosition', 'Lock position')}
           {lockBtn('all', 'lock', 'Lock all')}
           <div style={{ flex: 1 }} />
-          <NumberField label="Fill" value={Math.round((active?.fillOpacity ?? 1) * 100)} onChange={(v) => active && L.setOpacity(active.id, v / 100, true)} onCommit={() => s.history.seal()} min={0} max={100} unit="%" width={46} disabled={!active || active.kind === 'group'} />
+          <AccessBoundary entry="action:layer.setFillOpacity"><NumberField label="Fill" value={Math.round((active?.fillOpacity ?? 1) * 100)} onChange={(v) => active && L.setOpacity(active.id, v / 100, true)} onCommit={() => s.history.seal()} min={0} max={100} unit="%" width={46} disabled={!active || active.kind === 'group'} /></AccessBoundary>
         </div>
         <input className="txt" placeholder="Filter layers by name" value={filter} onChange={(e) => setFilter(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
       </div>
@@ -371,26 +372,26 @@ export function LayersPanel() {
         {!doc.root.children.length && <div className="empty">No layers</div>}
       </div>
       <div className="panel-toolbar">
-        <AccessBoundary entry="feature:effects"><IconButton icon="fx" title="Add a layer style" disabled={!active} onClick={() => active && ui.openDialog('layerStyle', { layerId: active.id })} /></AccessBoundary>
-        <IconButton icon="mask" title="Add layer mask" disabled={!active || !!active.mask} onClick={() => L.addMask('revealAll')} />
+        <AccessBoundary entry="action:layer.style"><IconButton icon="fx" title="Add a layer style" disabled={!active} onClick={() => active && ui.openDialog('layerStyle', { layerId: active.id })} /></AccessBoundary>
+        <AccessBoundary entry="action:layer.addMask"><IconButton icon="mask" title="Add layer mask" disabled={!active || !!active.mask} onClick={() => L.addMask('revealAll')} /></AccessBoundary>
         <IconButton
           icon="adjust"
           title="Create new fill or adjustment layer"
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
             openContextMenu([
-              { type: 'item', entry:'fill:solid', label: 'Solid Color…', run: () => run('layer.newFill.solid') },
-              { type: 'item', entry:'fill:gradient', label: 'Gradient…', run: () => run('layer.newFill.gradient') },
-              { type: 'item', entry:'fill:pattern', label: 'Pattern…', run: () => run('layer.newFill.pattern') },
+              { type: 'item', entry:'action:layer.newFill.solid', label: 'Solid Color…', run: () => run('layer.newFill.solid') },
+              { type: 'item', entry:'action:layer.newFill.gradient', label: 'Gradient…', run: () => run('layer.newFill.gradient') },
+              { type: 'item', entry:'action:layer.newFill.pattern', label: 'Pattern…', run: () => run('layer.newFill.pattern') },
               { type: 'separator' },
-              ...(Object.keys(ADJUSTMENT_LABELS) as AdjustmentType[]).map((t) => ({ type: 'item' as const, entry:'adjustment:'+t, label: `${ADJUSTMENT_LABELS[t]}…`, run: () => L.newAdjustmentLayer(t) })),
+              ...(Object.keys(ADJUSTMENT_LABELS) as AdjustmentType[]).map((t) => ({ type: 'item' as const, entry:'action:layer.newAdjustment.'+t, label: `${ADJUSTMENT_LABELS[t]}…`, run: () => L.newAdjustmentLayer(t) })),
             ], r.left, r.top - 420);
           }}
         />
-        <IconButton icon="folder" title="Create a new group" onClick={() => L.newGroup(false)} />
-        <IconButton icon="newLayer" title="Create a new layer (Shift+Ctrl+N)" onClick={() => L.newLayer()} />
+        <AccessBoundary entry="action:layer.newGroup"><IconButton icon="folder" title="Create a new group" onClick={() => L.newGroup(false)} /></AccessBoundary>
+        <AccessBoundary entry="action:layer.new"><IconButton icon="newLayer" title="Create a new layer (Shift+Ctrl+N)" onClick={() => L.newLayer()} /></AccessBoundary>
         <div className="spacer" />
-        <IconButton icon="trash" title="Delete layer" disabled={!active} onClick={() => L.deleteLayers()} />
+        <AccessBoundary entry="action:layer.delete"><IconButton icon="trash" title="Delete layer" disabled={!active} onClick={() => L.deleteLayers()} /></AccessBoundary>
       </div>
     </div>
   );
