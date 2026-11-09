@@ -1,3 +1,4 @@
+import {access} from './access';
 /**
  * UI state store. Holds only lightweight, serializable UI state. Documents, pixel buffers and
  * history live in the Editor / DocumentSession objects; components subscribe to revision
@@ -150,6 +151,7 @@ export const ui = {
   set: useApp.setState,
   get: useApp.getState,
   openDialog(type: string, props?: Record<string, unknown>): number {
+    if(!access('dialog:'+type).enabled)return 0;
     const id = seq++;
     useApp.setState((s) => ({ dialogs: [...s.dialogs, { id, type, props }] }));
     return id;

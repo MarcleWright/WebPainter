@@ -1,4 +1,5 @@
 import { portalTarget } from './surface';
+import {access} from '../app/access';
 /** Left toolbar with flyout tool groups and color chips. */
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -19,11 +20,11 @@ export function Toolbar() {
   const [flyout, setFlyout] = useState<{ group: string; x: number; y: number } | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const groups = TOOL_GROUP_ORDER.map((g) => TOOLS.filter((t) => t.group === g));
+  const groups = TOOL_GROUP_ORDER.map((g) => TOOLS.filter((t) => t.group === g && access('tool:'+t.id).visible));
   const shown = (group: string): ToolId => {
-    const inGroup = TOOLS.filter((t) => t.group === group);
+    const inGroup = TOOLS.filter((t) => t.group === group && access('tool:'+t.id).visible);
     if (inGroup.some((t) => t.id === tool)) return tool;
-    return groupTool[group] ?? inGroup[0].id;
+    return inGroup.some(t=>t.id===groupTool[group])?groupTool[group]:inGroup[0].id;
   };
   const openFlyout = (group: string, el: HTMLElement) => {
     const r = el.getBoundingClientRect();
@@ -33,6 +34,7 @@ export function Toolbar() {
   return (
     <div className="toolbar" role="toolbar" aria-label="Tools" aria-orientation="vertical">
       {groups.map((items) => {
+        if(!items.length)return null;
         const g = items[0].group;
         const id = shown(g);
         const info = TOOLS.find((t) => t.id === id)!;
@@ -40,6 +42,7 @@ export function Toolbar() {
         return (
           <div key={g} style={{ display: 'contents' }}>
             <button
+              disabled={!access('tool:'+id).enabled}
               className={`tool-btn${items.some((t) => t.id === tool) ? ' active' : ''}`}
               title={`${info.label}${key ? ` (${key})` : ''}${info.comingSoon ? ' — Coming Soon' : ''}`}
               aria-label={info.label}
@@ -85,14 +88,14 @@ export function Toolbar() {
           <>
             <div style={{ position: 'fixed', inset: 0, zIndex: 899 }} onMouseDown={() => setFlyout(null)} />
             <div className="flyout" style={{ left: flyout.x, top: flyout.y }} role="menu">
-              {TOOLS.filter((t) => t.group === flyout.group).map((t) => (
+              {TOOLS.filter((t) => t.group === flyout.group && access('tool:'+t.id).visible).map((t) => (
                 <div
                   key={t.id}
                   className={`menu-item${t.id === tool ? ' active' : ''}`}
                   role="menuitem"
                   onClick={() => {
                     setFlyout(null);
-                    editor.setTool(t.id);
+                    if(access('tool:'+t.id).enabled)editor.setTool(t.id);
                   }}
                 >
                   <span className="check">{t.id === tool ? '■' : ''}</span>

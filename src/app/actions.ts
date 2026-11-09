@@ -2,6 +2,7 @@
  * Action registry. Menus, keyboard shortcuts, the command palette, recorded macros and plugins
  * all invoke application functionality through these ids.
  */
+import { access } from './access';
 import { editor } from './editor';
 import { ui, useApp } from './store';
 import * as file from './fileOps';
@@ -33,6 +34,7 @@ export interface Action {
   label: string;
   shortcut?: string;
   run: (args?: Record<string, unknown>) => unknown;
+  visible?: () => boolean;
   enabled?: () => boolean;
   checked?: () => boolean;
   comingSoon?: boolean;
@@ -46,16 +48,20 @@ export function register(a: Action): void {
 }
 
 export function action(id: string): Action | undefined {
-  return registry.get(id);
+  const a=registry.get(id);if(!a)return undefined;
+  return {...a,visible:()=>access('action:'+id).visible&&(a.visible?.()??true),enabled:()=>access('action:'+id).enabled&&(a.enabled?.()??true),run:args=>{if(access('action:'+id).enabled&&(a.enabled?.()??true))return a.run(args);}};
 }
 
 export function allActions(): Action[] {
-  return [...registry.values()];
+  return [...registry.keys()].map(id=>action(id)!);
+}
+
+export function actionDefinitions():Action[]{return [...registry.values()];
 }
 
 export async function run(id: string, args?: Record<string, unknown>): Promise<void> {
   if (editor.active && !editor.active.canEdit() && !/^(file\.|view\.|window\.|app\.)/.test(id)) { ui.toast("info", "This document is busy saving or closing."); return; }
-  const a = registry.get(id);
+  const a = action(id);
   if (!a) {
     console.warn(`Unknown action ${id}`);
     return;

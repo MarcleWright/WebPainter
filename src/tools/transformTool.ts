@@ -1,3 +1,4 @@
+import {access} from '../app/access';
 /**
  * Free Transform (Ctrl+T) and quick transforms.
  *
@@ -278,6 +279,7 @@ export function beginTransformSelection(): void {
 
 /** Switches the running transform to warp mode (the current transform becomes the envelope). */
 export function setWarpMode(): void {
+  if(!access('feature:warp').enabled)return;
   const s = st;
   if (!s || s.warp) return;
   const H = homography(s);

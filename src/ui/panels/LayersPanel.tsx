@@ -1,3 +1,4 @@
+import {AccessBoundary} from '../AccessBoundary';
 /** Layers panel. */
 import { imageSpace, rasterFromImage } from '../../formats/decodedRaster';
 import { convertRasterSpace, spaceOfDoc } from '../../color/convertDocument';
@@ -370,7 +371,7 @@ export function LayersPanel() {
         {!doc.root.children.length && <div className="empty">No layers</div>}
       </div>
       <div className="panel-toolbar">
-        <IconButton icon="fx" title="Add a layer style" disabled={!active} onClick={() => active && ui.openDialog('layerStyle', { layerId: active.id })} />
+        <AccessBoundary entry="feature:effects"><IconButton icon="fx" title="Add a layer style" disabled={!active} onClick={() => active && ui.openDialog('layerStyle', { layerId: active.id })} /></AccessBoundary>
         <IconButton icon="mask" title="Add layer mask" disabled={!active || !!active.mask} onClick={() => L.addMask('revealAll')} />
         <IconButton
           icon="adjust"
@@ -378,11 +379,11 @@ export function LayersPanel() {
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
             openContextMenu([
-              { type: 'item', label: 'Solid Color…', run: () => run('layer.newFill.solid') },
-              { type: 'item', label: 'Gradient…', run: () => run('layer.newFill.gradient') },
-              { type: 'item', label: 'Pattern…', run: () => run('layer.newFill.pattern') },
+              { type: 'item', entry:'fill:solid', label: 'Solid Color…', run: () => run('layer.newFill.solid') },
+              { type: 'item', entry:'fill:gradient', label: 'Gradient…', run: () => run('layer.newFill.gradient') },
+              { type: 'item', entry:'fill:pattern', label: 'Pattern…', run: () => run('layer.newFill.pattern') },
               { type: 'separator' },
-              ...(Object.keys(ADJUSTMENT_LABELS) as AdjustmentType[]).map((t) => ({ type: 'item' as const, label: `${ADJUSTMENT_LABELS[t]}…`, run: () => L.newAdjustmentLayer(t) })),
+              ...(Object.keys(ADJUSTMENT_LABELS) as AdjustmentType[]).map((t) => ({ type: 'item' as const, entry:'adjustment:'+t, label: `${ADJUSTMENT_LABELS[t]}…`, run: () => L.newAdjustmentLayer(t) })),
             ], r.left, r.top - 420);
           }}
         />

@@ -1,3 +1,4 @@
+import {access} from '../access';
 /** Layer menu / Layers panel operations. Every change is recorded as an undoable command. */
 import { plateCount } from '../../color/plates';
 import { editor } from '../editor';
@@ -468,6 +469,7 @@ export function deleteVectorMask(): void {
 // Adjustment & fill layers
 // ---------------------------------------------------------------------------------------------
 export function newAdjustmentLayer(type: AdjustmentType, clip = false): void {
+  if(!access('adjustment:'+type).enabled)return;
   const s = need();
   if (!s) return;
   const layer = createAdjustmentLayer(defaultAdjustment(type));
@@ -482,6 +484,7 @@ export function newAdjustmentLayer(type: AdjustmentType, clip = false): void {
 }
 
 export function newFillLayer(fill: FillContent): void {
+  if(!access('fill:'+fill.type).enabled)return;
   const s = need();
   if (!s) return;
   const layer = createFillLayer(fill);
@@ -559,6 +562,7 @@ export function rasterize(what: 'layer' | 'style' = 'layer'): void {
 }
 
 export function convertToSmartObject(): void {
+  if(!access('feature:smartObject').enabled)return;
   const s = need();
   if (!s) return;
   const layers = topLevelSelection(s);
@@ -809,6 +813,7 @@ export function distribute(axis: 'horizontal' | 'vertical'): void {
 // Styles
 // ---------------------------------------------------------------------------------------------
 export function setEffects(id: LayerId, fx: LayerEffects | null, label = 'Layer Style'): void {
+  if(fx&&!access('feature:effects').enabled)return;
   const s = need();
   const l = s?.doc.getLayer(id);
   if (!s || !l) return;

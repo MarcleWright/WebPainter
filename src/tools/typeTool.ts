@@ -1,3 +1,4 @@
+import {access} from '../app/access';
 /** Horizontal and Vertical Type tools and text editing session management. */
 import type { Tool, ToolHost, ToolPointer } from './tool';
 import { opts } from './helpers';
@@ -237,6 +238,7 @@ export async function fitTextToFrame(): Promise<void> {
 
 /** Type ▸ Warp Text: sets (or with null, removes) the warp of a text layer. */
 export function setTextWarp(layerId: string, warp: TextData['warp'] | null, label = 'Warp Text'): void {
+  if(warp&&!access('feature:textWarp').enabled)return;
   const s = editor.active;
   const l = s?.doc.getLayer(layerId);
   if (!s || !l || l.kind !== 'text') return;
@@ -279,6 +281,7 @@ export function setTextPath(layerId: string, patch: Partial<TextPath> | null, la
 
 /** The path under the pointer that text can be placed on: the active (or work) path, or the active shape layer's path. */
 function pathUnder(h: ToolHost, p: ToolPointer): { subpath: SubPath; start: number } | null {
+  if(!access('feature:textPath').enabled)return null;
   const s = h.session;
   const cands: SubPath[] = [];
   const active = s.activePathId ? s.doc.paths.find((x) => x.id === s.activePathId) : s.doc.paths.find((x) => x.kind === 'work');
