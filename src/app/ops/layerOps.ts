@@ -180,6 +180,7 @@ export function toggleVisibility(id: LayerId, solo = false): void {
 }
 
 export function setLock(id: LayerId, lock: keyof Layer['locks'], value?: boolean): void {
+  if(lock==='all'&&!access('action:layer.lockAll').enabled)return;
   const s = need();
   const l = s?.doc.getLayer(id);
   if (!s || !l) return;

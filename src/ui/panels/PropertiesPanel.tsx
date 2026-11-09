@@ -310,7 +310,7 @@ export function PropertiesPanel() {
       body = (
         <AccessBoundary entry="feature:externalServices"><Section title="Quick Actions">
           <div className="row wrap">
-            <button className="btn small" onClick={async () => { const { aiProvider } = await import('../../ai/provider'); const p = ui.progress('Removing background…'); try { const m = await aiProvider().removeBackground(s, l.id); const { CreateMaskCommand } = await import('../../commands/layerCommands'); s.push(new CreateMaskCommand('Remove Background', l.id, l.mask, { raster: m, x: 0, y: 0, enabled: true, linked: true, density: 1, feather: 0 })); } finally { p.done(); } }}>Remove Background</button>
+            <AccessBoundary entry="action:layer.addMask"><button className="btn small" onClick={async () => { const { aiProvider } = await import('../../ai/provider'); const p = ui.progress('Removing background…'); try { const m = await aiProvider().removeBackground(s, l.id); const { CreateMaskCommand } = await import('../../commands/layerCommands'); s.push(new CreateMaskCommand('Remove Background', l.id, l.mask, { raster: m, x: 0, y: 0, enabled: true, linked: true, density: 1, feather: 0 })); } finally { p.done(); } }}>Remove Background</button></AccessBoundary>
             <button className="btn small" onClick={() => run('select.subject')}>Select Subject</button>
           </div>
         </Section></AccessBoundary>

@@ -317,8 +317,8 @@ export function AdjustmentsPanel() {
       <div className="panel-body">
         <div className="muted">Add a non-destructive adjustment layer:</div>
         <div className="brush-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(34px, 1fr))' }}>
-          {types.filter(t=>access('adjustment:'+t).visible).map((t) => (
-            <button key={t} disabled={!access('adjustment:'+t).enabled} className="icon-btn" style={{ width: '100%', height: 30, fontSize: 16 }} title={ADJUSTMENT_LABELS[t]} onClick={() => newAdjustmentLayer(t)}>{icon[t]}</button>
+          {types.filter(t=>access('action:layer.newAdjustment.'+t).visible).map((t) => (
+            <button key={t} disabled={!access('action:layer.newAdjustment.'+t).enabled} className="icon-btn" style={{ width: '100%', height: 30, fontSize: 16 }} title={ADJUSTMENT_LABELS[t]} onClick={() => newAdjustmentLayer(t)}>{icon[t]}</button>
           ))}
         </div>
       </div>

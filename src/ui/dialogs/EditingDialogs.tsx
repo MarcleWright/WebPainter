@@ -1,4 +1,5 @@
 /** Color picker, filter, adjustment, color range and select-and-mask dialogs. */
+import {access} from '../../app/access';
 import { cmykToSrgb, exactCmyk, exactLab, labToSrgb, srgbToCmyk, srgbToLab } from '../../color/plates';
 import { uiCmykProfile } from '../../app/colorSettings';
 import { applyDocAdjustmentStraight } from '../../adjustments/docAdjust';
@@ -263,6 +264,7 @@ export function SelectAndMaskDialog({ close }: { close: () => void }) {
   const [busy, setBusy] = useState(false);
   const run = async () => {
     const sel = s.doc.selection;
+    if(output!=='selection'&&(!access('action:layer.addMask').enabled||(output==='newLayerMask'&&!access('action:layer.new').enabled)))return;
     const b = sel.bounds(s.doc.bounds);
     if (!b) return close();
     setBusy(true);
@@ -284,6 +286,7 @@ export function SelectAndMaskDialog({ close }: { close: () => void }) {
       if (shift < 0) contractSelection(sel, s.doc.bounds, (-shift / 100) * 20);
       void feather;
     };
+    if(output!=='selection'&&(!access('action:layer.addMask').enabled||(output==='newLayerMask'&&!access('action:layer.new').enabled))){setBusy(false);return;}
     const l = s.activeLayer();
     if (output === 'selection' || !l) changeSelection(s, 'Select and Mask', apply);
     else {
@@ -312,7 +315,7 @@ export function SelectAndMaskDialog({ close }: { close: () => void }) {
       <Slider label="Feather" value={featherPx} min={0} max={250} step={0.1} unit="px" onChange={setFeather} />
       <Slider label="Contrast" value={contrast} min={0} max={100} unit="%" onChange={setContrast} />
       <Slider label="Shift Edge" value={shift} min={-100} max={100} unit="%" onChange={setShift} />
-      <Select label="Output To" value={output} onChange={setOutput} options={[{ value: 'selection', label: 'Selection' }, { value: 'mask', label: 'Layer Mask' }, { value: 'newLayerMask', label: 'New Layer with Layer Mask' }]} />
+      <Select<'selection'|'mask'|'newLayerMask'> label="Output To" value={output} onChange={setOutput} options={[{ value: 'selection', label: 'Selection' }, ...(access('action:layer.addMask').visible?[{value:'mask' as const,label:'Layer Mask',disabled:!access('action:layer.addMask').enabled}]:[]), ...(access('action:layer.addMask').visible&&access('action:layer.new').visible?[{value:'newLayerMask' as const,label:'New Layer with Layer Mask',disabled:!access('action:layer.addMask').enabled||!access('action:layer.new').enabled}]:[])]} />
     </Modal>
   );
 }
