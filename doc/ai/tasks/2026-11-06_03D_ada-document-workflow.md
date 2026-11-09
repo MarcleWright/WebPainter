@@ -1,5 +1,9 @@
 # Task 03D: ADA 文档身份、保存与二维作品闭环
 
+## Review Repairs 2026-11-09
+
+当前独立实现 review 为 Changes Requested（4 项 P2）。Owner 确认一次修完：WP 通用嵌入能力限制与 ADA 产品配置分离；ADA 修复旧恢复候选阻断重开、慢写期间漏补捕获、被替换载荷未回收。详细执行合同与定向验收归 [ADA 统一修复任务](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#review-repairs-2026-11-09)。只保留一个有效恢复候选，替换期间允许旧候选加新暂存文件；正式 Primary 独立保留。下方 Implemented 为修复前交付，不表示四项已关闭。
+
 ## Status
 
 Implemented / 已授权实施并完成有限验证；待统一 review 和 Owner 验收。依赖 [03B](2026-11-06_03B_native-document-codec.md) 和 [03C](2026-11-06_03C_carrier-comparison.md#confirmed-iframe-decision) 已确认的本地 iframe; 既有保存关闭修复需复审/必要人工收口。父任务 [03](2026-11-06_03_ada-integration-architecture.md)。

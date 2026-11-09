@@ -1,5 +1,9 @@
 # Task 03: ADA 集成架构规划
 
+## 2026-11-09 Review Repair Decision
+
+03B–03F 独立实现审查为 **Changes Requested：4 项 P2，无 P1**。Owner 已确认统一能力配置、旧候选不阻断已保存版本、恢复补捕获及有限文件保留方案。四项连续修复、分阶段本地提交、统一交 ADA集成-REV 复审；当前仅更新任务，尚未实施修复。执行范围、复现与验收统一归 [ADA 四项修复任务](../../../../auto_design_Agent/doc/ai/tasks/2026-11-06_03BDEF_webpainter-production-integration.md#review-repairs-2026-11-09)。iframe 决策不变，旧通过记录保留原版本与范围，不追认为修复通过。
+
 ## 2026-11-07 Authorized Implementation State
 
 Owner已授权并连续实施03B→D→E→F，按阶段本地提交。通用native在main1b00ef79，只有main→embedded同步；ADA正式iframe/真实Artifact、GenerationRuntime与Results已接通，有限生产包/离线实窗/实际PS检查见[03F](2026-11-06_03F_offline-psd-acceptance.md)。Direct仍隔离，不是两套产品。当前是代码与有限技术验证完成、待统一独立review及Owner人工验收；没有推送/发布或ADA主线合并。历史03C Inconclusive只保留原证据范围，不能追认全部人工/GPU/手绘板验收。以下11-06文档交接与旧Status按历史时点保留。
