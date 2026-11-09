@@ -138,6 +138,7 @@ export function initializeEditor(host: HostPort): EmbeddedEditor {
         result.doc.filePath = null;
         const s = editor.addDocument(result.doc);
         if(resource.recovered)s.markUnsaved();
+        if(native&&!resource.recovered)published={document:snapshotDocument(s.doc),checkpoint:s.history.current.id,op};
         offSession = s.on(notify); notify();
       } catch (e) { if (valid(op)) host.error({ generation, message: String(e) }); throw e; }
       finally { opening = false; }
