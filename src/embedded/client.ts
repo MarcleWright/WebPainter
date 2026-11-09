@@ -49,3 +49,6 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
     },
   };
 }
+
+/** Derived preview may outlive the editing iframe. No editor singleton is imported here. */
+export function createNativePreviewWorker():Worker{return new Worker(new URL('./checkpoint-worker.ts',import.meta.url),{type:'module'});}
