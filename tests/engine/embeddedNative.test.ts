@@ -84,3 +84,10 @@ it('policy separates hidden from disabled, cannot exceed codec ceiling, and pres
  edit();expect(await api!.save()).toBe(true);const o=vi.mocked(h.save).mock.calls[0][0];expect(decodeNative(o.bytes).doc.layerCount()).toBe(count+1);
  expect(()=>nativePolicy({version:1,entries:{bad:{visible:true,enabled:true}}},new Set())).toThrow();
 });
+
+it('F1 reverse line passes recovery capture, canonical save and generation snapshot, and native reopen editing',async()=>{
+ const h=host(),s=await open(h);editor.setTool('line');const t=editor.tool('line')!,pointer=(x:number,y:number)=>({x,y,sx:x,sy:y,pressure:1,tiltX:0,tiltY:0,twist:0,button:0,buttons:1,shift:false,alt:false,mod:false,pointerType:'mouse',time:1,clickCount:1}),toolHost={editor,session:s,redraw(){},setCursor(){},viewportSize:()=>({w:64,h:64})};
+ t.down!(toolHost,pointer(40,40));t.up!(toolHost,pointer(10,10));const line=s.activeLayer()!;expect(line).toMatchObject({kind:'shape',origin:{x:40,y:40,w:-30,h:-30}});
+ const captured=await api!.captureNative();expect(s.modified).toBe(true);expect(h.save).not.toHaveBeenCalled();const snapshot=await api!.saveAndCapture();expect(snapshot.checkpoint).toBe(captured.checkpoint);expect(h.save).toHaveBeenCalledTimes(1);expect(decodeNative(snapshot.bytes).doc.getLayer(line.id)).toMatchObject({kind:'shape',origin:{w:-30,h:-30}});expect(Array.from(decodePNG(snapshot.preview!).data)).toEqual(Array.from(flattenToPixels(s.doc).data));
+ expect(await api!.requestClose()).toBe(true);h.readResource=async()=>({name:'reopen.wpnative',bytes:snapshot.bytes});await api!.open('reopened-line','work');expect(editor.active!.doc.getLayer(line.id)).toMatchObject({kind:'shape',origin:{w:-30,h:-30}});editor.active!.setActive(line.id);const {commitAppearance}=await import('../../src/app/ops/layerOps'),{pathFromOrigin}=await import('../../src/vector/shapes');commitAppearance(editor.active!,line.id,'Edit reopened line',l=>{if(l.kind==='shape'){l.origin={...l.origin!,w:-35};l.path=pathFromOrigin(l.origin);}});expect(await api!.save()).toBe(true);
+});
