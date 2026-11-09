@@ -29,6 +29,8 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean)
   const surface = isolated ? container.attachShadow({ mode: 'open' }) : container;
   const style = document.createElement('style');
   style.textContent = (isolated ? css.replace(':root', ':host').replace('html, body, #root', ':host, #wp-root') : css) + '\n' + dockCss;
+  // An external single-document owner with disabled Close has one visible exit.
+  if(host.capabilityPolicy?.entries['action:file.close']?.enabled===false)style.textContent+='\n.doc-tabs{display:none}';
   const rootNode = document.createElement('div'); rootNode.id = 'wp-root';
   rootNode.style.cssText = 'height:100%;width:100%';
   const portals = document.createElement('div');
