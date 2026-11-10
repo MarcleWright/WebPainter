@@ -1,4 +1,4 @@
-import {isComposing} from '../../app/inputContext';
+import {isComposing,isTextTarget} from '../../app/inputContext';
 /**
  * Liquify workspace: edits a displacement field on a proxy of the active layer, previews it live
  * and applies it once at full resolution (undoable as a single history step).
@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { Check, NumberField, Slider } from '../controls';
 import { editor } from '../../app/editor';
-import { ui } from '../../app/store';
+import { ui, useApp } from '../../app/store';
 import { DEFAULT_LIQUIFY_BRUSH, LIQUIFY_TOOLS, LiquifyBrush, LiquifyMesh, LiquifyTool, sampleBilinearPremul, warpWithField } from '../../filters/liquify';
 import { editRaster } from '../../commands/rasterCommands';
 import { resolveTarget } from '../../commands/rasterTarget';
@@ -243,11 +243,10 @@ function LiquifyWorkspace({ setup, close }: { setup: Setup; close: () => void })
   // Keyboard: tool keys, [ ] brush size, Ctrl+Z undo.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isComposing(e)) return;
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+      if (isComposing(e) || e.defaultPrevented || isTextTarget(e.target) || useApp.getState().dialogs.at(-1)?.type !== 'liquify') return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.stopPropagation(); undo(); return; }
-      if (e.key === '[') { setBrush((b) => ({ ...b, size: Math.max(1, Math.round(b.size * 0.85)) })); return; }
-      if (e.key === ']') { setBrush((b) => ({ ...b, size: Math.min(15000, Math.round(b.size * 1.18) + 1) })); return; }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key === '[') { setBrush((b) => ({ ...b, size: Math.max(1, Math.round(b.size * 0.85)) })); return; }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key === ']') { setBrush((b) => ({ ...b, size: Math.min(15000, Math.round(b.size * 1.18) + 1) })); return; }
       const k = (e.shiftKey ? 'Shift+' : '') + e.key.toUpperCase();
       const def = LIQUIFY_TOOLS.find((x) => x.key === k);
       if (def && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); setTool(def.id); }

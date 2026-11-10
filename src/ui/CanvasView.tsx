@@ -1,3 +1,5 @@
+import {panHeld, setInputPointerBusy} from '../app/heldPan';
+import {access} from '../app/access';
 import {isComposing, inputBlocked} from '../app/inputContext';
 /** Document tabs + interactive canvas viewport. */
 import { buildCmykGrid, evalCmykGrid } from '../color/cmykDisplayGrid';
@@ -120,9 +122,9 @@ export function CanvasView() {
   const ants = useRef<AntsCache | null>(null);
   const pointerDown = useRef(false);
   const lastPointer = useRef<ToolPointer | null>(null);
-  const spaceHeld = useRef(false);
   const guideDrag = useRef<{ id: string | null; orientation: 'horizontal' | 'vertical'; start: number } | null>(null);
-  const panDrag = useRef<{ x: number; y: number } | null>(null);
+  const panDrag = useRef<{ x: number; y: number; session: NonNullable<typeof editor.active>; pointer: number } | null>(null);
+  const pointerSession = useRef<typeof editor.active>(null);
   const [dropping, setDropping] = useState(false);
   const [, setTick] = useState(0);
   const viewFlags = useApp((s) => s.view);
@@ -534,12 +536,6 @@ export function CanvasView() {
     };
   };
 
-  const spring = (): Tool | null => {
-    // Space → hand; Ctrl+Space → zoom; Alt → eyedropper for painting tools.
-    if (spaceHeld.current) return editor.tool(lastPointer.current?.mod ? 'zoom' : 'hand');
-    return null;
-  };
-
   const guideAt = (p: ToolPointer): string | null => {
     const s = editor.active;
     if (!s || !useApp.getState().view.guides || guidesLocked) return null;
@@ -558,8 +554,10 @@ export function CanvasView() {
     const p = toPointer(e);
     if (!p) return;
     lastPointer.current = p;
-    if (e.button === 1 || (e.button === 0 && spaceHeld.current && !p.mod)) {
-      panDrag.current = { x: e.clientX, y: e.clientY };
+    if (e.button === 1 || (e.button === 0 && panHeld(s))) {
+      if (!access('tool:hand').enabled) return;
+      panDrag.current = { x: e.clientX, y: e.clientY, session: s, pointer: e.pointerId };
+      setInputPointerBusy(true);
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       return;
     }
@@ -575,9 +573,12 @@ export function CanvasView() {
         return;
       }
     }
-    const t = spring() ?? (p.alt && ALL_SPRING.altEyedropper.includes(editor.currentToolId) ? editor.tool('eyedropper') : null) ?? currentTool();
+    const t = (p.alt && ALL_SPRING.altEyedropper.includes(editor.currentToolId) ? editor.tool('eyedropper') : null) ?? currentTool();
     if (!t) return;
+    if (!access('tool:'+editor.currentToolId).enabled) return;
     pointerDown.current = true;
+    pointerSession.current = s;
+    setInputPointerBusy(true);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     activeTool.current = t;
     t.down?.(h, p);
@@ -606,9 +607,10 @@ export function CanvasView() {
     if (!s || !h) return;
     const events = (e.nativeEvent as PointerEvent).getCoalescedEvents?.() ?? [e.nativeEvent];
     if (panDrag.current) {
+      if (panDrag.current.session !== s || panDrag.current.pointer !== e.pointerId) return;
       s.view.panX += e.clientX - panDrag.current.x;
       s.view.panY += e.clientY - panDrag.current.y;
-      panDrag.current = { x: e.clientX, y: e.clientY };
+      panDrag.current = {...panDrag.current, x: e.clientX, y: e.clientY};
       dirty.current = overlayDirty.current = true;
       return;
     }
@@ -626,7 +628,8 @@ export function CanvasView() {
       return;
     }
     publishCursor(p.x, p.y, p.x >= 0 && p.y >= 0 && p.x < s.doc.width && p.y < s.doc.height);
-    const t = pointerDown.current ? activeTool.current : spring() ?? currentTool();
+    if (pointerDown.current && (pointerSession.current !== s || !s.canEdit() || !access('tool:'+editor.currentToolId).enabled)) return;
+    const t = pointerDown.current ? activeTool.current : panHeld(s) ? editor.tool('hand') : currentTool();
     if (pointerDown.current && t?.move) {
       for (const ev of events.length > 1 ? events : [e.nativeEvent]) {
         const pp = toPointer(ev as PointerEvent);
@@ -643,7 +646,7 @@ export function CanvasView() {
   const onPointerUp = (e: React.PointerEvent) => {
     const s = editor.active;
     const h = host();
-    if (panDrag.current) { panDrag.current = null; return; }
+    if (panDrag.current) { if (panDrag.current.pointer !== e.pointerId) return; panDrag.current = null; setInputPointerBusy(false); return; }
     if (guideDrag.current && s) {
       const gd = guideDrag.current;
       guideDrag.current = null;
@@ -665,7 +668,10 @@ export function CanvasView() {
       return;
     }
     if (!pointerDown.current || !h) return;
+    if (pointerSession.current !== s || !s?.canEdit()) return;
     pointerDown.current = false;
+    pointerSession.current = null;
+    setInputPointerBusy(false);
     const p = toPointer(e);
     const t = activeTool.current;
     activeTool.current = null;
@@ -699,33 +705,17 @@ export function CanvasView() {
     ui.bump('viewRev');
   };
 
-  // Keyboard: spring-loaded tools.
+  // Invalidating a held override clears only view interaction, never the underlying tool.
   useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !isTyping(e)) {
-        if (!spaceHeld.current) {
-          spaceHeld.current = true;
-          if (viewRef.current) viewRef.current.style.cursor = 'grab';
-        }
-        e.preventDefault();
-      }
-    };
-    const up = (e: KeyboardEvent) => {
-      if (e.code === 'Space') spaceHeld.current = false;
-    };
-    // Switching windows while Space is held never delivers the keyup: don't get stuck panning.
-    const blur = () => {
-      spaceHeld.current = false;
+    const clear = () => {
+      const drag = panDrag.current;
+      panDrag.current = null;
+      if (drag && viewRef.current?.hasPointerCapture?.(drag.pointer)) viewRef.current.releasePointerCapture(drag.pointer);
+      if (drag) setInputPointerBusy(false);
       if (viewRef.current) viewRef.current.style.cursor = '';
     };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    window.addEventListener('blur', blur);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-      window.removeEventListener('blur', blur);
-    };
+    window.addEventListener('celenne:clearHeldPan',clear);
+    return () => {clear();setInputPointerBusy(false);window.removeEventListener('celenne:clearHeldPan',clear);};
   }, []);
 
   // Context menu.
@@ -879,7 +869,7 @@ export function CanvasView() {
               onKeyDown={(e) => {
                 e.stopPropagation();
                 if (isComposing(e)) return;
-                if (inputBlocked()) { e.preventDefault(); return; }
+                if (inputBlocked() || !access('tool:type').enabled) { e.preventDefault(); return; }
                 if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); commitTextEdit(); return; }
                 const l = editedText();
                 if (l && caretKey(e, e.currentTarget, l)) overlayDirty.current = true;
@@ -899,11 +889,6 @@ export function CanvasView() {
       </div>
     </div>
   );
-}
-
-function isTyping(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement | null;
-  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
 }
 
 function Welcome() {

@@ -7,128 +7,22 @@ import { Workspace } from './Workspace';
 import { DialogHost } from './dialogs/DialogHost';
 import { useApp, ui } from '../app/store';
 import { editor } from '../app/editor';
-import { action, run } from '../app/actions';
-import { chordFromEvent, cycleTool, keymap } from '../app/shortcuts';
-import { toolInfo, ToolId } from '../tools/toolTypes';
+import { run } from '../app/actions';
+import {installInputDispatch} from '../app/inputDispatch';
 import { useSession, useViewRev } from './hooks';
 import { zoomTo } from '../app/ops/viewOps';
 import { Icon } from './icons';
-import {isComposing, installInputContext} from '../app/inputContext';
-
-/** Tools whose size/hardness/opacity come from the shared brush settings. */
-const BRUSH_TOOLS = new Set<ToolId>(['brush', 'pencil', 'eraser', 'bgEraser', 'cloneStamp', 'patternStamp', 'healing', 'spotHealing', 'remove', 'colorReplace', 'blur', 'sharpen', 'smudge', 'dodge', 'burn', 'sponge', 'quickSelect']);
-
-function isTyping(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement | null;
-  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
-}
-
-let digitBuffer = '';
-let digitTimer: ReturnType<typeof setTimeout> | null = null;
-
-/** Number keys set opacity like Photoshop: 1 = 10%, 0 = 100%, two quick digits = exact value. */
-function handleDigit(d: string, shift: boolean) {
-  digitBuffer += d;
-  if (digitTimer) clearTimeout(digitTimer);
-  const apply = () => {
-    const v = digitBuffer.length >= 2 ? Number(digitBuffer.slice(0, 2)) / 100 || 1 : digitBuffer === '0' ? 1 : Number(digitBuffer) / 10;
-    digitBuffer = '';
-    const t = editor.currentToolId;
-    if (BRUSH_TOOLS.has(t)) {
-      if (shift) ui.setBrush({ flow: v });
-      else ui.setBrush({ opacity: v });
-    } else {
-      const l = editor.active?.activeLayer();
-      if (l) run(shift ? 'layer.setFillOpacity' : 'layer.setOpacity', { value: v });
-    }
-  };
-  if (digitBuffer.length >= 2) apply();
-  else digitTimer = setTimeout(apply, 350);
-}
-
-function onGlobalKeyDown(e: KeyboardEvent) {
-  if (e.defaultPrevented || isComposing(e) || isTyping(e)) return;
-  if (useApp.getState().dialogs.length) return;
-  const host = editor.hostFactory?.();
-  // The active tool gets first refusal (Enter/Esc commit/cancel, arrow nudges, Delete for paths…).
-  if (host && host.session.canEdit() && editor.currentTool?.keyDown?.(host, e)) {
-    e.preventDefault();
-    return;
-  }
-  // No commands in the middle of a drag or stroke (e.g. Ctrl+Z while moving a layer would undo
-  // underneath the tool, which then commits against a document state that no longer exists).
-  if (editor.currentTool?.busy?.()) {
-    if (e.key === 'Escape') editor.cancelTool(); // Esc still cancels the drag
-    if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) e.preventDefault();
-    return;
-  }
-  const chord = chordFromEvent(e);
-  const bound = keymap.lookup(chord);
-  if (bound) {
-    e.preventDefault();
-    if (bound.startsWith('tool:')) {
-      const id = bound.slice(5) as ToolId;
-      const info = toolInfo(id);
-      const g = useApp.getState().groupTool[info.group] as ToolId | undefined;
-      editor.setTool(g ?? id);
-      return;
-    }
-    const a = action(bound);
-    if (a?.comingSoon) { ui.toast('info', `${a.label.replace('…', '')} is coming soon.`); return; }
-    if (e.repeat && !/^view\.zoom/.test(bound)) return;
-    if (a && (!a.enabled || a.enabled())) void run(bound);
-    return;
-  }
-  // Shift + tool letter cycles through the tool's flyout group.
-  if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && /^[a-z]$/i.test(e.key)) {
-    const next = cycleTool(useApp.getState().tool, e.key);
-    if (next) { e.preventDefault(); editor.setTool(next); return; }
-  }
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const k = e.key;
-  if (k === 'd' || k === 'D') { editor.setForeground({ r: 0, g: 0, b: 0 }); editor.setBackground({ r: 1, g: 1, b: 1 }); return; }
-  if (k === 'x' || k === 'X') { const { fg, bg } = useApp.getState(); editor.setForeground(bg); editor.setBackground(fg); return; }
-  if (k === '[' || k === ']' || k === '{' || k === '}') {
-    const b = useApp.getState().brush;
-    if (e.shiftKey || k === '{' || k === '}') ui.setBrush({ hardness: Math.max(0, Math.min(1, b.hardness + (k === ']' || k === '}' ? 0.25 : -0.25))) });
-    else {
-      const step = b.size < 10 ? 1 : b.size < 50 ? 5 : b.size < 100 ? 10 : b.size < 300 ? 25 : 50;
-      ui.setBrush({ size: Math.max(1, Math.min(5000, b.size + (k === ']' ? step : -step))) });
-    }
-    host?.redraw();
-    e.preventDefault();
-    return;
-  }
-  if (/^[0-9]$/.test(k) || (e.shiftKey && /^Digit[0-9]$/.test(e.code))) {
-    handleDigit(/^[0-9]$/.test(k) ? k : e.code.slice(5), e.shiftKey);
-    return;
-  }
-  if (k === 'Tab') {
-    e.preventDefault();
-    window.dispatchEvent(new CustomEvent('celenne:togglePanels'));
-    return;
-  }
-  if (k === 'Escape') editor.cancelTool();
-}
-
-function onGlobalKeyUp(e: KeyboardEvent) {
-  const host = editor.hostFactory?.();
-  if (host) editor.currentTool?.keyUp?.(host, e);
-}
+import {isComposing} from '../app/inputContext';
 
 export function App() {
   const screenMode = useApp((s) => s.screenMode);
   const [panelsHidden, setPanelsHidden] = useState(false);
   useEffect(() => {
-    const removeContext = installInputContext();
-    window.addEventListener('keydown', onGlobalKeyDown);
-    window.addEventListener('keyup', onGlobalKeyUp);
+    const removeInput = installInputDispatch();
     const toggle = () => setPanelsHidden((v) => !v);
     window.addEventListener('celenne:togglePanels', toggle);
     return () => {
-      removeContext();
-      window.removeEventListener('keydown', onGlobalKeyDown);
-      window.removeEventListener('keyup', onGlobalKeyUp);
+      removeInput();
       window.removeEventListener('celenne:togglePanels', toggle);
     };
   }, []);

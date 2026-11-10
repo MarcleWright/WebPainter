@@ -14,7 +14,7 @@ export function isTextTarget(target: EventTarget | null): boolean {
 }
 export function inputBlocked(): boolean {
   const s = editor.active;
-  if (s && !s.canEdit()) {ui.toast('info', 'This document is busy saving or closing.'); return true;}
+  if (s && (!s.canEdit() || !!s.outputPending || !!s.closePending)) {ui.toast('info', 'This document is busy saving or closing.'); return true;}
   return false;
 }
 export const MODAL_VIEW = new Set(['view.zoomIn', 'view.zoomOut', 'view.fit', 'view.fill', 'view.100']);

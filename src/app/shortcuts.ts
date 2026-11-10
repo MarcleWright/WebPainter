@@ -104,9 +104,10 @@ export class Keymap {
   reassign(id: string, chord: string): void {
     const next = structuredClone(this.overrides), n = normalizeChord(chord);
     for (const other of this.conflicts(n, id)) {
-      // A derived cycle is released by removing its base key from every default member.
+      // An explicit Shift chord suppresses only the derived cycle, preserving the base group.
       const b = this.binding(n)!;
-      const remove = b.kind === 'cycle' ? n.replace(/^Shift\+/, '') : n;
+      if (b.kind === 'cycle') continue;
+      const remove = n;
       next[other] = this.bindingsFor(other).filter(c => c !== remove);
     }
     next[id] = [...this.bindingsFor(id).filter(c => c !== n), n];

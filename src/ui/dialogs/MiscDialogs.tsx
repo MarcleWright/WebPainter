@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { Check, NumberField, Select, Slider, ColorSwatch } from '../controls';
 import { editor } from '../../app/editor';
-import { ui } from '../../app/store';
+import { ui, useApp } from '../../app/store';
 import { DEFAULT_PREFERENCES, Preferences } from '../../app/settings';
 import { platform } from '../../app/platform/platform';
 import type { RecoveryEntry } from '../../app/platform/platform';
@@ -233,7 +233,7 @@ export function ShortcutsDialog({ close }: { close: () => void }) {
   useEffect(() => {
     if (!recording) return;
     const onKey = (e: KeyboardEvent) => {
-      if (isComposing(e)) return;
+      if (isComposing(e) || e.defaultPrevented || useApp.getState().dialogs.at(-1)?.type !== 'shortcuts') return;
       e.preventDefault();
       e.stopPropagation();
       if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;

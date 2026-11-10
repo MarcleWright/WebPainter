@@ -1,6 +1,6 @@
 import {access} from '../app/access';
 /** Left toolbar with flyout tool groups and color chips. */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, ui } from '../app/store';
 import { editor } from '../app/editor';
@@ -11,6 +11,8 @@ import { rgbCss } from '../color/convert';
 import { run } from '../app/actions';
 
 export function Toolbar() {
+  const [,refreshBindings] = useState(0);
+  useEffect(() => keymap.on(() => refreshBindings(n => n+1)), []);
   const tool = useApp((s) => s.tool);
   const groupTool = useApp((s) => s.groupTool);
   const fg = useApp((s) => s.fg);
@@ -101,7 +103,7 @@ export function Toolbar() {
                   <Icon name={t.id} />
                   <span className="label">{t.label}</span>
                   {t.comingSoon && <span className="soon">Coming Soon</span>}
-                  {t.shortcut && <span className="kbd">{t.shortcut}</span>}
+                  {keymap.bindingsFor(`tool:${t.id}`)[0] && <span className="kbd">{keymap.bindingsFor(`tool:${t.id}`)[0]}</span>}
                 </div>
               ))}
             </div>

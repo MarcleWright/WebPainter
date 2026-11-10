@@ -300,25 +300,6 @@ export class PaintTool implements Tool {
     this.before = null;
   }
 
-  keyDown(_h: ToolHost, e: KeyboardEvent): boolean {
-    const b = useApp.getState().brush;
-    if (e.key === ']' || e.key === '[') {
-      if (e.shiftKey) ui.setBrush({ hardness: Math.max(0, Math.min(1, b.hardness + (e.key === ']' ? 0.25 : -0.25))) });
-      else {
-        const step = b.size < 10 ? 1 : b.size < 50 ? 5 : b.size < 100 ? 10 : b.size < 300 ? 25 : 50;
-        ui.setBrush({ size: Math.max(1, Math.min(5000, b.size + (e.key === ']' ? step : -step))) });
-      }
-      return true;
-    }
-    // Number keys set opacity (1 = 10% … 0 = 100%).
-    if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.altKey) {
-      const v = e.key === '0' ? 1 : Number(e.key) / 10;
-      if (this.kind === 'brush' || this.kind === 'pencil' || this.kind === 'eraser' || this.kind === 'cloneStamp') ui.setBrush({ opacity: v });
-      return true;
-    }
-    return false;
-  }
-
   drawOverlay(h: ToolHost, g: CanvasRenderingContext2D) {
     if (this.op instanceof MaskAccumulateOp) {
       // Show the area that will be healed.

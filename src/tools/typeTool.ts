@@ -28,7 +28,7 @@ interface EditState {
 }
 
 function editable(s: DocumentSession): boolean {
-  if (editor.session(s.id) === s && s.canEdit()) return true;
+  if (editor.session(s.id) === s && s.canEdit() && access('tool:type').enabled) return true;
   ui.toast('info', 'This document is busy saving or closing.');
   return false;
 }

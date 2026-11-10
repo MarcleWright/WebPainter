@@ -168,7 +168,7 @@ P1 可列出其他缺少的 Photoshop 默认键, 但不据此自动加入本轮;
 | --- | --- | --- |
 | P1 | Gate Passed | 清单/fixture 已建立；baseline 1/1、P-TYPE、diff --check 通过；人工 Pending |
 | P2 | Gate Passed | 输入定向 9/9、P-TYPE 通过；事件链与原子配置证据见下；人工 Pending |
-| P3 | Planned | 待 P2 |
+| P3 | Gate Passed | 定向 51/51、P-TYPE/P-MOVE 通过；人工 Pending |
 | P4 | Planned | 待 P3 |
 | P5 | Planned | 待 P4 |
 
@@ -216,3 +216,11 @@ P1 commit: ff6c0a1。P2 实际范围：shortcuts 有效表来源/优先级、精
 验证：`npm exec -- vitest run tests/input` 3 files / 9 tests Passed；`npm run typecheck` Passed。listeners.test.tsx 挂载实际 App+CanvasView/NumberField/Modal，替换仅布局/无关面板与图形 renderer；未 mock dispatcher、工具或 run。保存计数测试替换已注册 file.save 的 IO 端点；文字 session 及 Enter/Esc 为实际实现。原子导入拒绝形状/值/保留键/用户主备用冲突，保留旧配置；共享 B 全成员释放、Shift 派生、数字和 held 冲突、精确工具用途通过。P3 原路径迁移尚未计完成。
 
 补正 P1 曲线清单：实际 src/ui/panels/AdjustmentEditors.tsx CurveEditor 只支持拖出删点，没有现成 Delete 监听；本轮验证曲线焦点 Delete 被 Modal 隔离、不清空背后图层，不虚称已有键盘删点。首版保留现有点编辑语义，不增加图像功能。生产窗口及中文输入法实操 Pending；独立实现复审 Pending。
+
+### P3 evidence
+
+P2 commit: d8afe72。P3 实际范围：公共 D/X、笔刷尺寸/硬度、Tab 进入原 Action 注册表；数字为唯一共享处理器，绑定原 session/doc/layer 对象、mode、编辑目标、tool/参数用途并取消旧缓存；删除 PaintTool 重复消费和 App 旧分支。App 使用 inputDispatch，局部确认/取消/删点保留精确按键归属；busy 中阻止全局 undo，Move pointer 期间也不插入箭头历史。有效 toolGroup/explicit tool/cycle 按当前覆盖与 access 解析；工具栏/flyout 读取有效键。Space 改为 heldPan 视图覆盖，不 setTool/deactivate，不引入临时 zoom；pointer up 仍交给原平移，blur/切文档/文字/modal/显式工具切换清理临时模式，迟到事件不改新目标。保存请求到快照间的输入也拒绝，避免仅快照后受保护；普通命令/工具/局部键各自检查，非目标文档可用。异步 transform 动态入口绑定原目标，改变后取消。
+
+验证：`npm exec -- vitest run tests/input tests/engine/moveSelection.test.ts tests/gpu/moveOutput.test.ts tests/engine/access.test.ts`：6 files / 51 tests Passed；P-TYPE Passed。真实 App/Canvas 监听验证 brush Ctrl+] 前移层且 size 不变、原 bracket 释放、pencil 独立键、Shift+B/数字/Space 重分配，350ms 延迟跨层/工具/文档/焦点/modal 失效，held repeat/松键后 pointer 收尾/blur/换文档/改绑。真实文字 session、transform、polyLasso、Move pointer、PaintTool 和 Pen 点交互验证保护与历史；实际 file.save + 受控 IO 延迟验证 undo→save 快照及 save→undo 拒绝、工具/局部拒绝，复用 moveOutput 保存关闭及 GPU 结果回归。第一次迭代中测试纠正了“禁用 brush 后 B 会按组记忆选 pencil”的错误断言，未改变产品规则。无人工项目记为 Passed。
+
+G3 与 P-TYPE/P-MOVE 通过。生产窗口 Space/IME/硬件、Owner 和独立实现审查 Pending。

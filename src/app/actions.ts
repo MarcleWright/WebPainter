@@ -97,6 +97,21 @@ function reg(id: string, label: string, run: Action['run'], extra: Partial<Actio
 // ---------------------------------------------------------------------------------------------
 // File
 // ---------------------------------------------------------------------------------------------
+// Public input operations use the existing registry so overrides release their original keys.
+reg('color.reset', 'Default Foreground / Background', () => {editor.setForeground({r:0,g:0,b:0});editor.setBackground({r:1,g:1,b:1});}, {shortcut:'D'});
+reg('color.swap', 'Swap Foreground / Background', () => {const {fg,bg}=useApp.getState();editor.setForeground(bg);editor.setBackground(fg);}, {shortcut:'X'});
+for (const direction of [-1,1]) {
+  const suffix = direction < 0 ? 'decrease' : 'increase', key = direction < 0 ? '[' : ']';
+  reg(`brush.size.${suffix}`, `${direction < 0 ? 'Decrease' : 'Increase'} Brush Size`, () => {
+    const b=useApp.getState().brush, step=b.size<10?1:b.size<50?5:b.size<100?10:b.size<300?25:50;
+    ui.setBrush({size:Math.max(1,Math.min(5000,b.size+direction*step))});editor.hostFactory?.()?.redraw();
+  }, {shortcut:key});
+  reg(`brush.hardness.${suffix}`, `${direction < 0 ? 'Decrease' : 'Increase'} Brush Hardness`, () => {
+    ui.setBrush({hardness:Math.max(0,Math.min(1,useApp.getState().brush.hardness+direction*0.25))});editor.hostFactory?.()?.redraw();
+  }, {shortcut:`Shift+${key}`});
+}
+reg('view.togglePanels', 'Show / Hide Panels', () => window.dispatchEvent(new CustomEvent('celenne:togglePanels')), {shortcut:'Tab'});
+
 reg('file.new', 'New…', dialog('newDocument'), { shortcut: 'Ctrl+N' });
 reg('file.open', 'Open…', () => file.openDialog(), { shortcut: 'Ctrl+O' });
 reg('file.openPath', 'Open Recent', (a) => file.openPath(String(a?.path)));
@@ -166,11 +181,15 @@ reg('file.runScript', 'Run Script', (a) => runPluginScript(String(a?.id ?? '')),
 reg('edit.commandPalette', 'Search Commands…', dialog('commandPalette'), { shortcut: 'Ctrl+F' });
 
 async function startTransform(kind?: string) {
+  const target = editor.active, doc = target?.doc, tool = editor.currentToolId;
   const { beginTransform } = await import('../tools/transformTool');
+  if (!target || editor.active !== target || target.doc !== doc || editor.currentToolId !== tool || !target.canEdit() || !access('action:edit.freeTransform').enabled || useApp.getState().dialogs.length) return;
   beginTransform(kind as never);
 }
 async function quickTransform(kind: string) {
+  const target = editor.active, doc = target?.doc;
   const { quickTransformLayer } = await import('../tools/transformTool');
+  if (!target || editor.active !== target || target.doc !== doc || !target.canEdit() || useApp.getState().dialogs.length) return;
   quickTransformLayer(kind as never);
 }
 

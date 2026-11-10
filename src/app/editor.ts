@@ -215,6 +215,7 @@ export class Editor {
   }
 
   setTool(id: ToolId): void {
+    if (this.active && !this.active.canEdit()) {ui.toast('info', 'This document is busy saving or closing.'); return;}
     if(!access('tool:'+id).enabled)return;
     const info = toolInfo(id);
     if (info.comingSoon) {
@@ -234,7 +235,7 @@ export class Editor {
   /** Cancels the in-progress interaction of the current tool. */
   cancelTool(): void {
     const host = this.hostFactory?.();
-    if (host) this.currentTool?.cancel?.(host);
+    if (host && host.session.canEdit() && access('tool:'+this.currentToolId).enabled) this.currentTool?.cancel?.(host);
   }
 
   finishMove(s: DocumentSession, commit = true) {
