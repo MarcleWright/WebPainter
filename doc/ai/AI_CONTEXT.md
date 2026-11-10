@@ -1,6 +1,6 @@
 # 当前上下文
 
-2026-11-10 [图块级内容边界缓存任务](tasks/2026-11-10_02_tile-content-bounds-cache.md)已按 Owner 授权实施阶段一：每 raster 私有 Tile 局部精确边界缓存，保留 version/COW/fill 合同，10文件132项定向测试通过；阶段二构建、完整窗口前后性能/像素验证待执行，独立 review 待 ADA集成-REV 统一进行。只交付 main 本地提交，不更新 embedded/ADA 或推送发布。
+2026-11-10 [图块级内容边界缓存任务](tasks/2026-11-10_02_tile-content-bounds-cache.md)两阶段已完成：局部精确缓存及132项定向测试、构建通过；同配方完整native开发窗口D的RAF p95中位数改善88.7%/90.8%，低频逐tile像素SHA及边界一致。待 ADA集成-REV 统一独立review；真实手绘笔/物理呈现/Owner原作品及生产dist性能仍Pending。只交付 main 两次本地提交，既存启动dirty保留，不推进embedded/ADA或推送发布。
 
 2026-11-06 03B：main独立worktree通用native v1已实施，待后续统一review。初始main ef3eea8；75项首次组合检查、追加后native18项/类型及构建通过，6层4K codec与tile往返有记录。格式/拒绝边界见 [native格式](../engineering/NATIVE_FORMAT.md)，[执行证据](tasks/2026-11-06_03B_native-codec.md)。只由main单向合入embedded供ADA固定包使用，不引入ADA/embedded依赖；未推送/发布，人工/Photoshop未验收。
 
