@@ -116,12 +116,22 @@ export function tileRange(r: Rect, size = TS): { tx0: number; ty0: number; tx1: 
   };
 }
 
+interface LocalBoundsEntry {
+  rev: number;
+  channels: 1 | 4;
+  depth: BitDepth;
+  fillRaw: number;
+  bounds: Rect | null;
+}
+
 export class TiledRaster {
   tiles = new Map<number, Tile>();
   /** Increments on every mutation; render caches key on this. */
   version = 0;
   private gen = nextGen();
   private mips: Map<number, MipEntry>[] = [];
+  // Derived geometry only: no pixel arrays or strong references to removed tiles.
+  private localBounds = new WeakMap<Tile, LocalBoundsEntry>();
   /**
    * CMYK documents: the black plate (K', K', K', A — inverted ink), kept alongside this raster
    * (which holds C', M', Y', A). Cloned, snapshotted and restored together with it.
@@ -143,7 +153,10 @@ export class TiledRaster {
     return this.tiles.get(tileKey(tx, ty));
   }
 
-  /** Returns a tile safe to mutate (allocating or cloning as required by copy-on-write). */
+  /**
+   * Returns a tile safe to mutate (allocating or cloning as required by copy-on-write).
+   * Finish synchronous writes before querying bounds. Reacquire or touch before later writes.
+   */
   writableTile(tx: number, ty: number): Tile {
     const k = tileKey(tx, ty);
     let t = this.tiles.get(k);
@@ -162,6 +175,8 @@ export class TiledRaster {
   }
 
   touch(): void {
+    // Unknown write extent: invalidate only this raster, including unchanged tile revisions.
+    this.localBounds = new WeakMap();
     this.version++;
   }
 
@@ -172,6 +187,7 @@ export class TiledRaster {
   }
 
   restore(s: RasterSnapshot): void {
+    this.localBounds = new WeakMap();
     this.tiles = new Map(s.tiles);
     this.fill = s.fill;
     this.gen = nextGen();
@@ -192,6 +208,7 @@ export class TiledRaster {
   }
 
   clear(fill = this.fill): void {
+    this.localBounds = new WeakMap();
     this.tiles = new Map();
     this.fill = fill;
     this.gen = nextGen();
@@ -221,22 +238,31 @@ export class TiledRaster {
     const eps = this.depth === 32 ? 1e-6 : 0.5;
     for (const [k, t] of this.tiles) {
       const [tx, ty] = keyToTile(k);
-      const d = t.data;
-      let tx0 = TS, ty0 = TS, tx1 = -1, ty1 = -1;
-      for (let y = 0; y < TS; y++) {
-        let row = y * TS * ch + (ch === 4 ? 3 : 0);
-        for (let x = 0; x < TS; x++, row += ch) {
-          if (Math.abs(d[row] - fillRaw) > eps) {
-            if (x < tx0) tx0 = x;
-            if (x > tx1) tx1 = x;
-            if (y < ty0) ty0 = y;
-            ty1 = y;
+      let hit = this.localBounds.get(t);
+      if (!hit || hit.rev !== t.rev || hit.channels !== ch || hit.depth !== this.depth || !Object.is(hit.fillRaw, fillRaw)) {
+        // Read/scan may throw (scratch). Publish only a successfully computed result, even empty.
+        const d = t.data;
+        let tx0 = TS, ty0 = TS, tx1 = -1, ty1 = -1;
+        for (let y = 0; y < TS; y++) {
+          let row = y * TS * ch + (ch === 4 ? 3 : 0);
+          for (let x = 0; x < TS; x++, row += ch) {
+            if (Math.abs(d[row] - fillRaw) > eps) {
+              if (x < tx0) tx0 = x;
+              if (x > tx1) tx1 = x;
+              if (y < ty0) ty0 = y;
+              ty1 = y;
+            }
           }
         }
+        hit = { rev: t.rev, channels: ch, depth: this.depth, fillRaw,
+          bounds: tx1 < 0 ? null : { x: tx0, y: ty0, w: tx1 - tx0 + 1, h: ty1 - ty0 + 1 } };
+        this.localBounds.set(t, hit);
       }
-      if (tx1 < 0) continue;
-      x0 = Math.min(x0, tx * TS + tx0); y0 = Math.min(y0, ty * TS + ty0);
-      x1 = Math.max(x1, tx * TS + tx1 + 1); y1 = Math.max(y1, ty * TS + ty1 + 1);
+      const b = hit.bounds;
+      if (!b) continue;
+      // Union the current map, at its current coordinates: removals and shrinkage are exact.
+      x0 = Math.min(x0, tx * TS + b.x); y0 = Math.min(y0, ty * TS + b.y);
+      x1 = Math.max(x1, tx * TS + b.x + b.w); y1 = Math.max(y1, ty * TS + b.y + b.h);
     }
     return x1 > x0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
   }
