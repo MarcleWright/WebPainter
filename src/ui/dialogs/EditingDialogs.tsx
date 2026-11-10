@@ -193,9 +193,12 @@ export function FilterDialog({ close, id, smart }: { close: () => void; id: stri
 export function AdjustmentDialog({ close, type }: { close: () => void; type: AdjustmentType }) {
   const [adj, setAdj] = useState<Adjustment>(() => defaultAdjustment(type));
   const [preview, setPreview] = useState(true);
-  const s = editor.active!;
-  const layer = s.activeLayer()!;
+  const [target] = useState(() => {const session=editor.active!;return {session, doc:session.doc, layer:session.activeLayer()!};});
+  const {session:s, layer} = target;
+  const valid = () => editor.active === s && s.doc === target.doc && s.activeLayer() === layer && s.canEdit() && !s.outputPending && !s.closePending && access(`action:image.adjust.${type}`).enabled;
+  const permit = () => {if (valid()) return true;ui.toast('info','The adjustment target is unavailable or busy saving or closing.');return false;};
   useEffect(() => {
+    if (!valid()) return;
     if (!preview) {
       s.engine.setOverride(layer.id, null, null);
       return;
@@ -214,7 +217,7 @@ export function AdjustmentDialog({ close, type }: { close: () => void; type: Adj
   }, [adj, preview]);
   useEffect(() => () => s.engine.setOverride(layer.id, null, null), []);
   return (
-    <Modal title={ADJUSTMENT_LABELS[type]} onClose={() => { s.engine.setOverride(layer.id, null, null); close(); }} onOk={() => { s.engine.setOverride(layer.id, null, null); close(); applyPixelAdjustment(adj); }} width={380}
+    <Modal title={ADJUSTMENT_LABELS[type]} onClose={() => { if (!permit()) return; s.engine.setOverride(layer.id, null, null); close(); }} onOk={() => { if (!permit()) return; s.engine.setOverride(layer.id, null, null); close(); applyPixelAdjustment(adj); }} width={380}
       footerLeft={<Check label="Preview" checked={preview} onChange={setPreview} />}>
       <div className="faint">Applies directly to the pixels of “{layer.name}”. For a non-destructive version use Layer › New Adjustment Layer.</div>
       <AdjustmentEditor adj={adj} onChange={setAdj} />

@@ -261,10 +261,21 @@ export interface FillSpec {
   preserveTransparency: boolean;
 }
 
+/** Shared fill admission for menu, aliases and recorded fill operations. */
+export function fillBlockReason(s: DocumentSession | null = editor.active): string | null {
+  if (!s) return 'Open a document first.';
+  const l=s.activeLayer(), target=s.paintTarget(useApp.getState().quickMask);
+  if (!target) return s.paintBlockReason(false) ?? 'Cannot fill this target.';
+  if ((target.kind === 'layer' || target.kind === 'mask') && l && (l.locks.all || target.kind === 'layer' && l.locks.pixels)) return `"${l.name}" is locked.`;
+  return null;
+}
+
 export async function fill(spec: FillSpec): Promise<void> {
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
+  const blocked = fillBlockReason(s);
+  if (blocked) {ui.toast('info', blocked);return;}
   if (spec.use === 'contentAware') return contentAwareFill();
   const target = s.paintTarget(useApp.getState().quickMask);
   if (!target) {

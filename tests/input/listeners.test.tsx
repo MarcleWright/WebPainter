@@ -23,7 +23,7 @@ beforeEach(()=>{
  HTMLElement.prototype.setPointerCapture=()=>{};HTMLElement.prototype.releasePointerCapture=()=>{};HTMLElement.prototype.hasPointerCapture=()=>false;
  vi.stubGlobal('__APP_VERSION__','test');
  vi.stubGlobal('ResizeObserver',class {observe(){} disconnect(){}});
- vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue(null);
+ vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockImplementation(()=>new Proxy({measureText:()=>({width:10}),createImageData:(w:number,h:number)=>({data:new Uint8ClampedArray(w*h*4),width:w,height:h})},{get:(object,key)=>Reflect.get(object,key)??(()=>{})}) as any);
  vi.stubGlobal('requestAnimationFrame',()=>1);vi.stubGlobal('cancelAnimationFrame',()=>{});
  container=document.createElement('div');document.body.append(container);root=createRoot(container);keymap.reset();ui.set({groupTool:{}, tool:'move'});
 });
@@ -150,4 +150,78 @@ it('real paint stroke and pen point interaction retain their own history and pro
  await act(async()=>{editor.setTool('pen');pointer(canvas,'pointerdown',1,1);pointer(canvas,'pointerup',1,1);pointer(canvas,'pointerdown',10,6);pointer(canvas,'pointerup',10,6);});
  const entry=session.history.current.id, paths=JSON.stringify(session.doc.paths);session.editProtected=true;await act(async()=>{key(canvas,'Enter');key(canvas,'Escape');key(canvas,'b');});expect(session.history.current.id).toBe(entry);expect(JSON.stringify(session.doc.paths)).toBe(paths);expect(useApp.getState().tool).toBe('pen');
  session.editProtected=false;await act(async()=>key(canvas,'Enter'));expect(session.history.current.id).not.toBe(entry);
+});
+import {createMask,createGroupLayer} from '../../src/document/layerFactory';
+const pixels=(layer:ReturnType<typeof createPixelLayer>)=>layer.raster.readFloat({x:0,y:0,w:16,h:12});
+function paintFixture(session:ReturnType<typeof inputSession>['session']) {
+ const layer=session.activeLayer()!;if(layer.kind!=='pixel')throw Error('fixture');
+ const data=new Float32Array(16*12*4);for(let i=0;i<16*12;i++){data[i*4]=.2;data[i*4+1]=.4;data[i*4+2]=.6;data[i*4+3]=1;}layer.raster.writeFloat({x:0,y:0,w:16,h:12},data);return layer;
+}
+it('Ctrl+J copies soft selection once with final business macro, rebind migrates context behavior, Cut undo/redo preserves coverage',async()=>{
+ const {session}=await mount();const source=paintFixture(session);session.doc.selection.setRegion({x:1,y:1,w:2,h:2},new Float32Array([.25,.5,.75,1]));const original=pixels(source), count=session.history.entries.length;
+ await act(async()=>key(window,'j',{ctrlKey:true}));expect(session.doc.layerCount()).toBe(2);expect(pixels(source)).toEqual(original);expect(session.history.entries.length).toBe(count+1);expect(session.history.current.command?.record?.action).toBe('layer.viaCopy');
+ const copied=session.activeLayer()!;if(copied.kind!=='pixel')throw Error('fixture');const alpha=copied.raster.readFloat({x:1,y:1,w:2,h:2});expect(alpha[3]).toBeCloseTo(.25,2);expect(alpha[7]).toBeCloseTo(.5,2);expect(copied.raster.readFloat({x:0,y:0,w:1,h:1})[3]).toBe(0);
+ await act(async()=>key(window,'z',{ctrlKey:true}));expect(session.doc.layerCount()).toBe(1);await act(async()=>key(window,'z',{ctrlKey:true,shiftKey:true}));expect(session.doc.layerCount()).toBe(2);
+ await act(async()=>key(window,'z',{ctrlKey:true}));session.setActive(source.id);keymap.set('layer.copyContext',['F6']);await act(async()=>key(window,'j',{ctrlKey:true}));expect(session.doc.layerCount()).toBe(1);await act(async()=>key(window,'F6'));expect(session.doc.layerCount()).toBe(2);
+ await act(async()=>key(window,'z',{ctrlKey:true}));session.setActive(source.id);await act(async()=>key(window,'j',{ctrlKey:true,shiftKey:true}));expect(session.history.current.command?.record?.action).toBe('layer.viaCut');expect(source.raster.readFloat({x:1,y:1,w:1,h:1})[3]).toBeCloseTo(.75,2);
+ await act(async()=>key(window,'z',{ctrlKey:true}));expect(pixels(source)).toEqual(original);await act(async()=>key(window,'z',{ctrlKey:true,shiftKey:true}));expect(source.raster.readFloat({x:1,y:1,w:1,h:1})[3]).toBeCloseTo(.75,2);
+});
+it('context copy duplicates no-selection/non-pixel/multi-layer targets; empty intersection and denied final action never fall back',async()=>{
+ const {session}=await mount();const source=paintFixture(session);
+ await act(async()=>key(window,'j',{ctrlKey:true}));expect(session.history.current.command?.record?.action).toBe('layer.duplicate');await act(async()=>key(window,'z',{ctrlKey:true}));session.setActive(source.id);
+ session.doc.selection.setRegion({x:40,y:40,w:2,h:2},new Float32Array(4).fill(1));await act(async()=>key(window,'j',{ctrlKey:true}));expect(session.doc.layerCount()).toBe(1);
+ session.doc.selection.setRegion({x:1,y:1,w:2,h:2},new Float32Array(4).fill(1));const restore=installAccessPolicy(id=>({visible:true,enabled:id!=='action:layer.viaCopy'}));await act(async()=>key(window,'j',{ctrlKey:true}));expect(session.doc.layerCount()).toBe(1);expect(useApp.getState().toasts.at(-1)?.message).toMatch(/unavailable/);restore();
+ const group=createGroupLayer('Group');session.doc.insertLayer(group);session.setActive(group.id);await act(async()=>key(window,'j',{ctrlKey:true}));expect(session.history.current.command?.record?.action).toBe('layer.duplicate');await act(async()=>key(window,'z',{ctrlKey:true}));
+ session.setActive(source.id);session.selectedIds.add(group.id);const n=session.doc.layerCount();await act(async()=>key(window,'j',{ctrlKey:true}));expect(session.doc.layerCount()).toBe(n+2);expect(session.history.current.command?.record?.action).toBe('layer.duplicate');
+});
+it('foreground/background aliases and Fill dialog each use one history entry, preserve selection, mask targets and pixel locks',async()=>{
+ const {session}=await mount();let layer=paintFixture(session);session.doc.selection.setRegion({x:1,y:1,w:1,h:1},new Float32Array([.5]));ui.set({fg:{r:1,g:0,b:0},bg:{r:0,g:0,b:1}});const original=pixels(layer);
+ for (const [value,init] of [['Backspace',{altKey:true}],['Delete',{altKey:true}],['Backspace',{ctrlKey:true}],['Delete',{ctrlKey:true}]] as [string,KeyboardEventInit][]) {
+  const n=session.history.index;await act(async()=>key(window,value,init));expect(session.history.index).toBe(n+1);expect(pixels(layer)).not.toEqual(original);expect(layer.raster.readFloat({x:0,y:0,w:1,h:1})[0]).toBeCloseTo(.2,2);await act(async()=>key(window,'z',{ctrlKey:true}));expect(pixels(layer)).toEqual(original);
+ }
+ layer.locks.pixels=true;const entry=session.history.current.id;await act(async()=>key(window,'Delete',{altKey:true}));expect(session.history.current.id).toBe(entry);expect(pixels(layer)).toEqual(original);layer.locks.pixels=false;
+ layer.mask=createMask(true);session.editMask=true;await act(async()=>key(window,'Delete',{altKey:true}));expect(pixels(layer)).toEqual(original);expect(layer.mask.raster.readFloat({x:1,y:1,w:1,h:1})[0]).not.toBe(1);await act(async()=>key(window,'z',{ctrlKey:true}));expect(layer.mask.raster.readFloat({x:1,y:1,w:1,h:1})[0]).toBe(1);session.editMask=false;
+ for(const [value,init] of [['F5',{shiftKey:true}],['Backspace',{shiftKey:true}],['Delete',{shiftKey:true}]] as [string,KeyboardEventInit][]) {
+  await act(async()=>key(window,value,init));expect(container.querySelector('[role=dialog]')?.getAttribute('aria-label')).toBe('Fill');const before=session.history.current.id;await act(async()=>container.querySelector<HTMLButtonElement>('[role=dialog] button.primary')!.click());expect(session.history.current.id).not.toBe(before);expect(session.history.current.command?.record?.action).toBe('edit.fill');await act(async()=>key(window,'z',{ctrlKey:true}));
+ }
+});
+async function modifyAdjustment(kind:string) {
+ if(kind==='curves') {
+  const canvas=container.querySelector<HTMLCanvasElement>('.curve-editor')!;vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:240,height:240,right:240,bottom:240,x:0,y:0,toJSON(){}});
+  await act(async()=>{pointer(canvas,'pointerdown',110,65);pointer(canvas,'pointerup',110,65);});
+ } else {
+  const label=kind==='hueSaturation'?'Lightness':kind==='levels'?'Gamma':'Cyan ↔ Red';const input=container.querySelector<HTMLInputElement>(`input[type=range][aria-label="${label}"]`)!;expect(input).not.toBeNull();
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,kind==='levels'?'2':'25');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));});
+ }
+}
+it.each([['u','hueSaturation','Hue/Saturation'],['m','curves','Curves'],['l','levels','Levels'],['b','colorBalance','Color Balance']])('Ctrl+%s real adjustment preview/cancel/confirm changes pixels once and retains undo/redo',async(value,kind,title)=>{
+ const {session}=await mount();const layer=paintFixture(session), original=pixels(layer), index=session.history.index;
+ await act(async()=>key(window,value,{ctrlKey:true}));expect(container.querySelector('[role=dialog]')?.getAttribute('aria-label')).toBe(title);await modifyAdjustment(kind);
+ expect(pixels(layer)).toEqual(original);expect(session.history.index).toBe(index);const preview=session.engine.getOverride(layer.id)!;expect(preview).toBeTruthy();expect(preview.read!({x:0,y:0,w:1,h:1},0)).not.toEqual(original.slice(0,4));
+ await act(async()=>key(container.querySelector('[role=dialog]')!,'Escape'));expect(session.engine.getOverride(layer.id)).toBeFalsy();expect(pixels(layer)).toEqual(original);expect(session.history.index).toBe(index);
+ await act(async()=>key(window,value,{ctrlKey:true}));await modifyAdjustment(kind);await act(async()=>{key(container.querySelector('[role=dialog]')!,'Enter');await new Promise(r=>setTimeout(r,5));});
+ expect(session.history.index).toBe(index+1);expect(session.history.current.command?.record?.action).toBe('image.adjust');expect(session.doc.layerCount()).toBe(1);const adjusted=pixels(layer);expect(adjusted).not.toEqual(original);
+ await act(async()=>key(window,'z',{ctrlKey:true}));expect(pixels(layer)).toEqual(original);await act(async()=>key(window,'z',{ctrlKey:true,shiftKey:true}));expect(pixels(layer)).toEqual(adjusted);
+});
+it('context menu displays rebound copy entry and invokes the same action; direct legacy Duplicate remains whole-layer',async()=>{
+ const {session}=await mount();const layer=paintFixture(session);session.doc.selection.setRegion({x:1,y:1,w:1,h:1},new Float32Array([1]));keymap.set('layer.copyContext',['F6']);
+ await act(async()=>{[...container.querySelectorAll<HTMLElement>('.menu-title')].find(e=>e.textContent==='Layer')!.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));});
+ const entry=[...document.querySelectorAll<HTMLElement>('[role=menuitem]')].find(e=>e.textContent?.includes('复制选区或图层'))!;expect(entry.textContent).toContain('F6');await act(async()=>entry.click());expect(session.history.current.command?.record?.action).toBe('layer.viaCopy');
+ await act(async()=>key(window,'z',{ctrlKey:true}));session.setActive(layer.id);await run('layer.duplicate');const copy=session.activeLayer()!;if(copy.kind!=='pixel')throw Error('fixture');expect(copy.raster.readFloat({x:0,y:0,w:1,h:1})[3]).toBe(1);expect(session.history.current.command?.record?.action).toBe('layer.duplicate');
+});
+it('new adjustment/fill keys do not cross text or numeric focus; unsupported layer disables pixel adjustment',async()=>{
+ const {session}=await mount(<NumberField label="Focus" value={1} onChange={()=>{}}/>);const input=container.querySelector('input')!;
+ await act(async()=>{key(input,'u',{ctrlKey:true});key(input,'Delete',{altKey:true});key(input,'Delete',{shiftKey:true});});expect(container.querySelector('[role=dialog]')).toBeNull();
+ const group=createGroupLayer('Group');session.doc.insertLayer(group);session.setActive(group.id);await act(async()=>key(window,'u',{ctrlKey:true}));expect(container.querySelector('[role=dialog]')).toBeNull();expect(useApp.getState().toasts.at(-1)?.message).toMatch(/unavailable/);
+});
+it('adjustment confirmation cannot act on a changed document; modal keys stay isolated during protection',async()=>{
+ const {session}=await mount();paintFixture(session);await act(async()=>key(window,'u',{ctrlKey:true}));await modifyAdjustment('hueSaturation');
+ const index=session.history.index;session.editProtected=true;await act(async()=>{key(container.querySelector('[role=dialog]')!,'Escape');key(container.querySelector('[role=dialog]')!,'Enter');await new Promise(r=>setTimeout(r,5));});expect(session.history.index).toBe(index);expect(container.querySelector('[role=dialog]')).not.toBeNull();session.editProtected=false;
+ let other!:ReturnType<typeof inputSession>;await act(async()=>{other=inputSession();});const entry=other.session.history.current.id;await act(async()=>container.querySelector<HTMLButtonElement>('[role=dialog] button.primary')!.click());expect(other.session.history.current.id).toBe(entry);expect(session.history.index).toBe(index);await act(async()=>ui.set({dialogs:[]}));
+});
+it('adjustment selection coverage changes only selected pixels and undo/redo restores exact raster values',async()=>{
+ const {session}=await mount();const layer=paintFixture(session), original=pixels(layer);session.doc.selection.setRegion({x:1,y:1,w:1,h:1},new Float32Array([.5]));
+ await act(async()=>key(window,'u',{ctrlKey:true}));await modifyAdjustment('hueSaturation');await act(async()=>container.querySelector<HTMLButtonElement>('[role=dialog] button.primary')!.click());const adjusted=pixels(layer);
+ expect(layer.raster.readFloat({x:0,y:0,w:1,h:1})).toEqual(original.slice(0,4));expect(layer.raster.readFloat({x:1,y:1,w:1,h:1})[0]).not.toBe(original[0]);expect(session.doc.selection.read({x:1,y:1,w:1,h:1})[0]).toBeCloseTo(.5,2);
+ await act(async()=>key(window,'z',{ctrlKey:true}));expect(pixels(layer)).toEqual(original);await act(async()=>key(window,'z',{ctrlKey:true,shiftKey:true}));expect(pixels(layer)).toEqual(adjusted);
 });

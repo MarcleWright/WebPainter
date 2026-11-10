@@ -29,3 +29,15 @@ it('single reset refuses collision, reset all restores validated defaults; expli
  const k=new Keymap({});k.set('file.save',['F6']);k.set('file.open',['Ctrl+S']);expect(()=>k.reset('file.save')).toThrow();expect(k.lookup('F6')).toBe('file.save');
  k.reset();expect(k.lookup('Ctrl+S')).toBe('file.save');k.set('tool:pencil',['B']);expect(k.binding('B')?.kind).toBe('exactTool');expect(k.bindingsFor('tool:brush')).toEqual([]);
 });
+it('context copy legacy overrides including empty arrays persist without reviving defaults; reset all opts in',()=>{
+ for(const old of [{'layer.duplicate':[]},{'layer.viaCopy':['F6']},{'file.open':['Ctrl+J']}] as Record<string,string[]>[]) {
+  const k=new Keymap(old);expect(k.bindingsFor('layer.copyContext')).toEqual([]);const next=new Keymap(JSON.parse(k.exportJSON()));expect(next.bindingsFor('layer.copyContext')).toEqual([]);
+  expect(JSON.parse(k.exportJSON())['layer.copyContext']).toEqual([]);k.reset();expect(k.lookup('Ctrl+J')).toBe('layer.copyContext');
+ }
+ const k=new Keymap({});k.set('edit.fillForeground',[]);expect(k.bindingsFor('edit.fillForeground')).toEqual([]);k.set('edit.fillBackground',['F8']);expect(k.bindingsFor('edit.fillBackground')).toEqual(['F8']);
+});
+it('failed storage write preserves effective map and emits no partial update',()=>{
+ const k=new Keymap({});k.set('file.save',['F6']);const before=k.exportJSON();let notifications=0;k.on(()=>notifications++);
+ const original=Storage.prototype.setItem;Storage.prototype.setItem=()=>{throw new Error('quota');};
+ try {expect(()=>k.importJSON('{"file.save":["F7"]}')).toThrow('quota');expect(k.exportJSON()).toBe(before);expect(k.lookup('F6')).toBe('file.save');expect(notifications).toBe(0);}finally{Storage.prototype.setItem=original;}
+});

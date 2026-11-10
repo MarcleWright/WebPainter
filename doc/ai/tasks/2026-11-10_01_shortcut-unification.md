@@ -169,7 +169,7 @@ P1 可列出其他缺少的 Photoshop 默认键, 但不据此自动加入本轮;
 | P1 | Gate Passed | 清单/fixture 已建立；baseline 1/1、P-TYPE、diff --check 通过；人工 Pending |
 | P2 | Gate Passed | 输入定向 9/9、P-TYPE 通过；事件链与原子配置证据见下；人工 Pending |
 | P3 | Gate Passed | 定向 51/51、P-TYPE/P-MOVE 通过；人工 Pending |
-| P4 | Planned | 待 P3 |
+| P4 | Gate Passed | 三类业务均覆盖；定向 64/64、P-TYPE 通过；人工 Pending |
 | P5 | Planned | 待 P4 |
 
 ## Review Result
@@ -224,3 +224,13 @@ P2 commit: d8afe72。P3 实际范围：公共 D/X、笔刷尺寸/硬度、Tab �
 验证：`npm exec -- vitest run tests/input tests/engine/moveSelection.test.ts tests/gpu/moveOutput.test.ts tests/engine/access.test.ts`：6 files / 51 tests Passed；P-TYPE Passed。真实 App/Canvas 监听验证 brush Ctrl+] 前移层且 size 不变、原 bracket 释放、pencil 独立键、Shift+B/数字/Space 重分配，350ms 延迟跨层/工具/文档/焦点/modal 失效，held repeat/松键后 pointer 收尾/blur/换文档/改绑。真实文字 session、transform、polyLasso、Move pointer、PaintTool 和 Pen 点交互验证保护与历史；实际 file.save + 受控 IO 延迟验证 undo→save 快照及 save→undo 拒绝、工具/局部拒绝，复用 moveOutput 保存关闭及 GPU 结果回归。第一次迭代中测试纠正了“禁用 brush 后 B 会按组记忆选 pencil”的错误断言，未改变产品规则。无人工项目记为 Passed。
 
 G3 与 P-TYPE/P-MOVE 通过。生产窗口 Space/IME/硬件、Owner 和独立实现审查 Pending。
+
+### P4 evidence
+
+P3 commit: ee51a5f。P4 实际范围：Ctrl+U/M/L/B 绑定原像素调整入口，填充主/备用键读取同一有效表；新增薄 Action layer.copyContext 与 Layer 菜单入口，按单像素有选区/其他（含多选）分发，历史和宏只记录最终 layer.viaCopy / layer.duplicate / layer.viaCut。旧相关覆盖（含空数组）或用户占 Ctrl+J 时持久化 copyContext:[]；Reset All 主动恢复新默认，独立重绑随 Action 迁移，无物理 J 特判。配置持久化失败不变更 live map 或通知。
+
+G4 验证中落实任务已有边界：Fill 旧入口未检查像素/all 锁，增加共享填充 admission，菜单/快捷键/原填充均使用；mask 不受像素锁影响、all 锁保护 layer/mask，channel/quick-mask 沿用既有目标。viaCopy 对非空但已完全在画布外的选区原先 sel.bounds=null 会走整层区域，增加空目标拒绝，不以复制整层回退。均为目标准入检查，不重写像素算法。真实调整和 Fill 对话框固定原 session/doc/layer（Fill 还固定 mask/channel），确认前再检查身份与保护，避免活跃目标改变后调用错误文档。Modal 延迟使用当前回调但保留原实例/目标身份，repeat 确认不会二次执行。
+
+验证：`npm exec -- vitest run tests/input tests/engine/moveSelection.test.ts tests/gpu/moveOutput.test.ts tests/engine/access.test.ts`：6 files / 64 tests Passed；P-TYPE、diff --check Passed。四个真实调整对话框逐一验证正确标题、实际参数预览、取消无像素/历史、确认一条 image.adjust 历史和 undo/redo；另测半覆盖选区和背后未选像素。前景/背景四个填充主/备用键、三个 Fill 打开键各自验证真实结果/一次历史、mask 目标和像素锁。Copy/Cut 验证源像素/柔边 alpha、undo/redo、单层无选区/非像素/多层、画布外选区无结果、final access 拒绝不回退、F6 改绑/旧键释放、真实菜单提示与调用、直接旧 Duplicate 宏仍复制整层。旧覆盖/空数组/占键的导入和重建、存储 quota 失败保持旧 map 通过。
+
+G4/P-TYPE 通过，三类业务均有独立像素与历史证据，未用其中一类替代另一类。生产窗口人工与 Owner 验收、独立实现复审仍 Pending。

@@ -1,3 +1,4 @@
+import {access} from '../../app/access';
 /** New Document, Image Size, Canvas Size, Rotate, Trim, Fill, Stroke, selection & guide dialogs. */
 import { workingCmykProfile } from '../../app/colorSettings';
 import { useState } from 'react';
@@ -193,6 +194,12 @@ export function TrimDialog({ close }: { close: () => void }) {
 }
 
 export function FillDialog({ close }: { close: () => void }) {
+  const [target] = useState(() => {const session=editor.active!;return {session, doc:session.doc, layer:session.activeLayer(), mask:session.editMask, channel:session.activeChannelId};});
+  const permit = () => {
+    const s=target.session;
+    if (editor.active === s && s.doc === target.doc && s.activeLayer() === target.layer && s.editMask === target.mask && s.activeChannelId === target.channel && s.canEdit() && !s.outputPending && !s.closePending && access('action:edit.fill').enabled) return true;
+    ui.toast('info','The fill target is unavailable or busy saving or closing.');return false;
+  };
   const [use, setUse] = useState<FillSpec['use']>('foreground');
   const [mode, setMode] = useState<BlendMode>('normal');
   const [opacity, setOpacity] = useState(100);
@@ -200,7 +207,7 @@ export function FillDialog({ close }: { close: () => void }) {
   const [pattern, setPattern] = useState<string>([...(editor.active?.doc.patterns.keys() ?? [])][0] ?? '');
   const patterns = [...(editor.active?.doc.patterns.values() ?? [])];
   return (
-    <Modal title="Fill" onClose={close} onOk={() => { close(); fill({ use, mode, opacity: opacity / 100, preserveTransparency: preserve, patternId: pattern }); }}>
+    <Modal title="Fill" onClose={close} onOk={() => { if (!permit()) return; close(); fill({ use, mode, opacity: opacity / 100, preserveTransparency: preserve, patternId: pattern }); }}>
       <Select label="Contents" value={use} onChange={setUse} options={[{ value: 'foreground', label: 'Foreground Color' }, { value: 'background', label: 'Background Color' }, { value: 'contentAware', label: 'Content-Aware' }, { value: 'pattern', label: 'Pattern' }, { value: 'black', label: 'Black' }, { value: 'gray', label: '50% Gray' }, { value: 'white', label: 'White' }]} />
       {use === 'pattern' && <Select label="Pattern" value={pattern} onChange={setPattern} options={patterns.length ? patterns.map((p) => ({ value: p.id, label: p.name })) : [{ value: '', label: '(Define a pattern first)' }]} />}
       {use !== 'contentAware' && (

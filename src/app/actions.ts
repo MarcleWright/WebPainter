@@ -84,6 +84,7 @@ export async function run(id: string, args?: Record<string, unknown>): Promise<v
 
 const hasDoc = () => !!editor.active;
 const hasLayer = () => !!editor.active?.activeLayer();
+const canFill = () => hasLayer() && !edit.fillBlockReason();
 const hasSel = () => !!editor.active && !editor.active.doc.selection.isEmpty();
 const activeKind = () => editor.active?.activeLayer()?.kind;
 const dialog = (type: string, props?: Record<string, unknown>) => () => {
@@ -154,9 +155,9 @@ reg('edit.paste', 'Paste', (a) => edit.paste((a?.mode as 'normal') ?? 'normal'),
 reg('edit.pasteInPlace', 'Paste in Place', () => edit.paste('inPlace'), { shortcut: 'Shift+Ctrl+V', enabled: hasDoc });
 reg('edit.pasteInto', 'Paste Into', () => edit.paste('into'), { shortcut: 'Alt+Shift+Ctrl+V', enabled: hasSel });
 reg('edit.clear', 'Clear', () => edit.clear(), { shortcut: 'Delete', enabled: hasLayer });
-reg('edit.fill', 'Fill…', (a) => (a ? edit.fill(a as never) : ui.openDialog('fill')), { shortcut: 'Shift+F5', enabled: hasLayer });
-reg('edit.fillForeground', 'Fill with Foreground', () => edit.fill({ use: 'foreground', mode: 'normal', opacity: 1, preserveTransparency: false }), { shortcut: 'Alt+Backspace', enabled: hasLayer });
-reg('edit.fillBackground', 'Fill with Background', () => edit.fill({ use: 'background', mode: 'normal', opacity: 1, preserveTransparency: false }), { shortcut: 'Ctrl+Backspace', enabled: hasLayer });
+reg('edit.fill', 'Fill…', (a) => (a ? edit.fill(a as never) : ui.openDialog('fill')), { shortcut: 'Shift+F5', shortcuts: ['Shift+F5','Shift+Backspace','Shift+Delete'], enabled: canFill });
+reg('edit.fillForeground', 'Fill with Foreground', () => edit.fill({ use: 'foreground', mode: 'normal', opacity: 1, preserveTransparency: false }), { shortcut: 'Alt+Backspace', shortcuts: ['Alt+Backspace','Alt+Delete'], enabled: canFill });
+reg('edit.fillBackground', 'Fill with Background', () => edit.fill({ use: 'background', mode: 'normal', opacity: 1, preserveTransparency: false }), { shortcut: 'Ctrl+Backspace', shortcuts: ['Ctrl+Backspace','Ctrl+Delete'], enabled: canFill });
 reg('edit.stroke', 'Stroke…', dialog('stroke'), { enabled: hasSel });
 reg('edit.contentAwareFill', 'Content-Aware Fill', () => edit.contentAwareFill(), { enabled: hasSel });
 reg('edit.generativeFill', 'Generative Fill…', () => edit.generativeFill(), { enabled: hasSel });
@@ -181,9 +182,9 @@ reg('file.runScript', 'Run Script', (a) => runPluginScript(String(a?.id ?? '')),
 reg('edit.commandPalette', 'Search Commands…', dialog('commandPalette'), { shortcut: 'Ctrl+F' });
 
 async function startTransform(kind?: string) {
-  const target = editor.active, doc = target?.doc, tool = editor.currentToolId;
+  const target = editor.active, doc = target?.doc, tool = editor.currentToolId, mode = target?.mode, layer = target?.activeLayer();
   const { beginTransform } = await import('../tools/transformTool');
-  if (!target || editor.active !== target || target.doc !== doc || editor.currentToolId !== tool || !target.canEdit() || !access('action:edit.freeTransform').enabled || useApp.getState().dialogs.length) return;
+  if (!target || editor.active !== target || target.doc !== doc || editor.currentToolId !== tool || target.mode !== mode || target.activeLayer() !== layer || !!target.outputPending || !!target.closePending || !target.canEdit() || !access('action:edit.freeTransform').enabled || useApp.getState().dialogs.length) return;
   beginTransform(kind as never);
 }
 async function quickTransform(kind: string) {
@@ -221,7 +222,7 @@ reg('image.revealAll', 'Reveal All', () => img.revealAll(), { enabled: hasDoc })
 reg('image.flatten', 'Flatten Image', () => layer.flattenImage(), { enabled: hasDoc });
 reg('image.docInfo', 'Document Properties…', dialog('docInfo'), { enabled: hasDoc });
 for (const t of Object.keys(ADJUSTMENT_LABELS) as AdjustmentType[]) {
-  reg(`image.adjust.${t}`, `${ADJUSTMENT_LABELS[t]}…`, (a) => (a?.adjustment ? img.applyPixelAdjustment(a.adjustment as never) : ui.openDialog('adjustment', { type: t, destructive: true })), { enabled: () => activeKind() === 'pixel' });
+  reg(`image.adjust.${t}`, `${ADJUSTMENT_LABELS[t]}…`, (a) => (a?.adjustment ? img.applyPixelAdjustment(a.adjustment as never) : ui.openDialog('adjustment', { type: t, destructive: true })), { shortcut: ({hueSaturation:'Ctrl+U',curves:'Ctrl+M',levels:'Ctrl+L',colorBalance:'Ctrl+B'} as Partial<Record<AdjustmentType,string>>)[t], enabled: () => activeKind() === 'pixel' });
 }
 reg('image.adjust.desaturate', 'Desaturate', () => img.applyPixelAdjustment({ ...defaultAdjustment('hueSaturation'), master: { hue: 0, saturation: -100, lightness: 0 } } as never), { shortcut: 'Shift+Ctrl+U', enabled: () => activeKind() === 'pixel' });
 reg('image.adjust.invertPixels', 'Invert', () => img.applyPixelAdjustment({ type: 'invert' }), { shortcut: 'Ctrl+I', enabled: () => activeKind() === 'pixel' });
@@ -233,7 +234,15 @@ reg('layer.new', 'New Layer', () => layer.newLayer(), { shortcut: 'Shift+Ctrl+N'
 reg('layer.newGroup', 'New Group', () => layer.newGroup(false), { enabled: hasDoc });
 reg('layer.groupLayers', 'Group Layers', () => layer.newGroup(true), { shortcut: 'Ctrl+G', enabled: hasLayer });
 reg('layer.ungroup', 'Ungroup Layers', () => layer.ungroup(), { shortcut: 'Shift+Ctrl+G', enabled: () => activeKind() === 'group' });
-reg('layer.duplicate', 'Duplicate Layer', () => layer.duplicateLayers(), { shortcut: 'Ctrl+J', enabled: hasLayer });
+reg('layer.duplicate', 'Duplicate Layer', () => layer.duplicateLayers(), { enabled: hasLayer });
+reg('layer.copyContext', '复制选区或图层', () => {
+  const s = editor.active;
+  if (!s || !s.canEdit()) {ui.toast('info', 'This document is busy saving or closing.');return;}
+  const target = s.selectedLayers().length === 1 && s.activeLayer()?.kind === 'pixel' && !s.doc.selection.isEmpty() ? 'layer.viaCopy' : 'layer.duplicate';
+  const command = action(target);
+  if (!command || command.enabled?.() === false) {ui.toast('info', `${command?.label ?? target} is unavailable for the current target.`);return;}
+  return run(target);
+}, {shortcut:'Ctrl+J', enabled:hasLayer});
 reg('layer.viaCopy', 'Layer via Copy', () => layer.layerVia(false), { enabled: hasLayer });
 reg('layer.viaCut', 'Layer via Cut', () => layer.layerVia(true), { shortcut: 'Shift+Ctrl+J', enabled: hasLayer });
 reg('layer.delete', 'Delete Layer', () => layer.deleteLayers(), { enabled: hasLayer });

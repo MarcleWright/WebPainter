@@ -5,6 +5,7 @@ import {TOOLS, type ToolId} from '../tools/toolTypes';
 import {loadJSON, saveJSON} from './settings';
 
 const KEY = 'celenne.shortcuts.v1';
+const COPY_INIT = 'celenne.shortcuts.copyContext.v1';
 export type Overrides = Record<string, string[]>;
 export type BindingKind = 'command' | 'exactTool' | 'toolGroup' | 'cycle' | 'held' | 'digits';
 export interface Binding {chord: string; ids: string[]; kind: BindingKind; source: 'user' | 'default' | 'derived'; index: number}
@@ -39,9 +40,20 @@ export class Keymap {
   private overrides: Overrides;
   private map = new Map<string, Binding>();
   private listeners = new Set<() => void>();
-  constructor(initial: Overrides = loadJSON<Overrides>(KEY, {})) {
-    try { this.overrides = this.validate(initial); this.map = this.resolve(this.overrides); }
-    catch { this.overrides = {}; this.map = this.resolve({}); }
+  constructor(initial?: Overrides) {
+    const persisted = initial === undefined;
+    try {
+      this.overrides = this.validate(initial ?? loadJSON<Overrides>(KEY, {}));
+      if (!persisted || !loadJSON(COPY_INIT, false)) this.overrides = this.copyCompatibility(this.overrides);
+      this.map = this.resolve(this.overrides);
+      if (persisted) {saveJSON(KEY, this.overrides);saveJSON(COPY_INIT, true);}
+    } catch {this.overrides = {}; this.map = this.resolve({});}
+  }
+  private copyCompatibility(value: Overrides): Overrides {
+    if (Object.hasOwn(value, 'layer.copyContext')) return value;
+    const old = Object.hasOwn(value, 'layer.duplicate') || Object.hasOwn(value, 'layer.viaCopy');
+    const occupied = Object.values(value).some(keys => keys.includes('Ctrl+J'));
+    return old || occupied ? {...value, 'layer.copyContext': []} : value;
   }
   on(l: () => void): () => void {this.listeners.add(l); return () => {this.listeners.delete(l);};}
   private definitions() {
@@ -58,6 +70,7 @@ export class Keymap {
     for (const [id, keys] of Object.entries(value)) {
       if (!ids.has(id) || !Array.isArray(keys) || keys.some(k => typeof k !== 'string')) throw new Error(`Invalid shortcut entry: ${id}`);
       out[id] = [...new Set(keys.map(normalizeChord))];
+      if ((id === 'input.opacity' || id === 'input.flow') && out[id].some(k => !(id === 'input.opacity' ? /^\d$/ : /^Shift\+\d$/).test(k))) throw new Error('Numeric parameters require digit chords; assign a command to take over a digit.');
       if (out[id].some(k => RESERVED_CHORDS.includes(k))) throw new Error(`Reserved Windows shortcut: ${id}`);
     }
     return out;
@@ -95,7 +108,8 @@ export class Keymap {
   conflict(chord: string, exceptId: string): string | undefined {return this.conflicts(chord, exceptId)[0];}
   private commit(value: unknown) {
     const next = this.validate(value), map = this.resolve(next);
-    saveJSON(KEY, next);
+    // A failed persistence write must leave the live map and notifications untouched.
+    if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(next));
     this.overrides = next; this.map = map;
     for (const l of this.listeners) l();
   }
@@ -126,7 +140,7 @@ export class Keymap {
     this.commit(id ? next : {});
   }
   exportJSON(): string {return JSON.stringify(this.overrides, null, 2);}
-  importJSON(json: string): void {this.commit(JSON.parse(json));}
+  importJSON(json: string): void {this.commit(this.copyCompatibility(this.validate(JSON.parse(json))));}
   toolFor(binding: Binding, current: ToolId, remembered: Record<string, string>): ToolId | null {
     const allowed = binding.ids.map(id => TOOLS.find(t => `tool:${t.id}` === id)).filter(t => t && !t.comingSoon && access(`tool:${t.id}`).enabled);
     if (!allowed.length) return null;

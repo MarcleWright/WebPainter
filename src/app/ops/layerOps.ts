@@ -755,6 +755,7 @@ export function layerVia(cut: boolean): void {
   }
   const sel = s.doc.selection;
   const selB = sel.isEmpty() ? null : sel.bounds(s.doc.bounds);
+  if (!sel.isEmpty() && !selB) {ui.toast('info', 'The selected area is empty.');return;}
   const cb = layerContentBounds(l);
   if (!cb) return;
   const region = selB ? intersect(selB, cb) : cb;
