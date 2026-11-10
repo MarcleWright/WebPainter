@@ -175,3 +175,12 @@ worker 输入改为元数据与有界像素批次：每批最多 1MiB / 3ms 复�
 - 两隔离Profile DB/磁盘均仅主D与显式narrow夹具各一份native Primary、无sidecar/额外native文件，hash匹配登记。共享`.packaging/runtime`受检文件hash/mtime未变，原12199 PID2480仍在。原始材料保存在ADA `.packaging/autosave-after-drawing-84d363ad-move/`、`-smoke/`、policy与`autosave-dev-drawing-84d363ad-move/`，不入Git；完整版本、测量、复现命令和Pending归ADA 03BDEF任务最终交接。
 
 人工中文IME、手绘板压力/倾斜、Photoshop/完整PSD、真实模型、更多硬件和超出本配方压力场景 **Pending/Inconclusive**。未发现必须扩围main的证据，不自行扩围通用内核。完成发送评审请求后暂停。
+
+
+## Owner Feedback and Push Authorization 2026-11-10
+
+ADA集成-REV 已给本轮四项局部重做有限独立复审 Approved：独立WP定向32/32、ADA真实owner27/27、Worker/调度检查和隔离生产窗口22阶段通过；性能六轮为核对coder原始证据，未冒充reviewer重跑。无新增阻断P1/P2，不等于完整人工或发布验收。
+
+Owner本日实际使用反馈：此前隔几秒卡顿一次的问题已消失；当前测试手绘笔可用，但绘画过程相较独立WP仍有延迟，需后续优化。此为用户观察，尚未测量延迟来源；“手绘笔可用”不等于压力/倾斜/全部设备验收。后续应对齐笔刷、作品、缩放、GPU/窗口与输入条件，测量输入到显示链路，区分绘制、事件处理和后台资源竞争；不能直接认定iframe或main为原因。本轮不实施新的延迟优化，不重开已关闭的保存问题或宣称绘画性能全面验收。
+
+Owner明确授权先提交并推送当前版本，仅当前WP integration/embedded与ADA codex/isolate-drawing-interface-20261104，不合主线、不发布。既有实现已本地提交；本次追加review与反馈文档记录后正常推送，不force、不重写历史。固定构建仍为WP060b6a4/bundledf16465d/port3-native1-policy1、ADA生产ee4b91cf/drawing-84d363ad；本次文档提交不重标包版本。人工IME、更多硬件、真实Provider及完整PSD等未验项继续Pending。
