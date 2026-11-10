@@ -1,3 +1,4 @@
+import {isComposing} from '../../app/inputContext';
 /** History, Channels and Paths panels. */
 import { editColor } from '../../color/plates';
 import { useState } from 'react';
@@ -35,7 +36,7 @@ export function HistoryPanel() {
           <div key={sn.id} className="list-item" onClick={() => h.restoreSnapshot(sn.id)} onContextMenu={(e) => { e.preventDefault(); openContextMenu([{ type: 'item', label: 'Rename Snapshot', run: () => setRenaming(sn.id) }, { type: 'item', label: 'Delete Snapshot', run: () => h.deleteSnapshot(sn.id) }], e.clientX, e.clientY); }} title="Click to restore this snapshot (undoable)">
             <Icon name="snapshot" size={14} />
             {renaming === sn.id ? (
-              <input className="txt" autoFocus defaultValue={sn.name} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { h.renameSnapshot(sn.id, e.target.value); setRenaming(null); }} />
+              <input className="txt" autoFocus defaultValue={sn.name} onKeyDown={(e) => { if (isComposing(e)) return; e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { h.renameSnapshot(sn.id, e.target.value); setRenaming(null); }} />
             ) : (
               <span className="grow">{sn.name}</span>
             )}
@@ -46,7 +47,7 @@ export function HistoryPanel() {
           <div key={e.id} className={`list-item${i === h.index ? ' active' : i > h.index ? ' future' : ''}`} onClick={() => h.goto(i)} onDoubleClick={() => setRenaming(e.id)} title={new Date(e.time).toLocaleTimeString()}>
             <span style={{ width: 14 }}>{i === h.index ? '▸' : ''}</span>
             {renaming === e.id ? (
-              <input className="txt" autoFocus defaultValue={e.label} onKeyDown={(ev) => { ev.stopPropagation(); if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} onBlur={(ev) => { h.renameEntry(e.id, ev.target.value); setRenaming(null); }} />
+              <input className="txt" autoFocus defaultValue={e.label} onKeyDown={(ev) => { if (isComposing(ev)) return; ev.stopPropagation(); if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} onBlur={(ev) => { h.renameEntry(e.id, ev.target.value); setRenaming(null); }} />
             ) : (
               <span className="grow">{e.label}</span>
             )}
@@ -134,7 +135,7 @@ export function ChannelsPanel() {
             </span>
             <RasterThumb raster={c.raster} width={s.doc.width} height={s.doc.height} size={30} />
             {renaming === c.id ? (
-              <input className="txt" autoFocus defaultValue={c.name} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { setChannels('Rename Channel', s.doc.channels.map((x) => (x.id === c.id ? { ...x, name: e.target.value || x.name } : x))); setRenaming(null); }} />
+              <input className="txt" autoFocus defaultValue={c.name} onKeyDown={(e) => { if (isComposing(e)) return; e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { setChannels('Rename Channel', s.doc.channels.map((x) => (x.id === c.id ? { ...x, name: e.target.value || x.name } : x))); setRenaming(null); }} />
             ) : (
               <span className="grow">{c.kind === 'spot' && <span className="swatch-dot" style={{ display: 'inline-block', width: 9, height: 9, marginRight: 5, borderRadius: 2, border: '1px solid var(--border)', background: `rgb(${c.color.r * 255},${c.color.g * 255},${c.color.b * 255})` }} />}{c.name}{c.kind === 'spot' && s.doc.canvas.colorMode !== 'multichannel' ? ' (spot)' : ''}</span>
             )}
@@ -213,7 +214,7 @@ export function PathsPanel() {
             ], e.clientX, e.clientY); }}>
             <Icon name="pen" size={13} />
             {renaming === p.id ? (
-              <input className="txt" autoFocus defaultValue={p.name} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { setPaths('Rename Path', (ps) => ps.map((x) => (x.id === p.id ? { ...x, name: e.target.value || x.name } : x))); setRenaming(null); }} />
+              <input className="txt" autoFocus defaultValue={p.name} onKeyDown={(e) => { if (isComposing(e)) return; e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { setPaths('Rename Path', (ps) => ps.map((x) => (x.id === p.id ? { ...x, name: e.target.value || x.name } : x))); setRenaming(null); }} />
             ) : (
               <span className="grow" style={{ fontStyle: p.kind === 'work' ? 'italic' : undefined }}>{p.name}{p.kind === 'clipping' ? ' (clipping)' : ''}</span>
             )}

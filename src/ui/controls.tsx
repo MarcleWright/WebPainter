@@ -1,3 +1,4 @@
+import {isComposing} from '../app/inputContext';
 /** Reusable form controls. */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { rgbCss } from '../color/convert';
@@ -108,7 +109,7 @@ export function NumberField({ label, value, onChange, onCommit, min = -Infinity,
           commitText();
         }}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
+        onKeyDown={(e) => { if (isComposing(e)) return;
           e.stopPropagation();
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {

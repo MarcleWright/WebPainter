@@ -1,3 +1,4 @@
+import {isComposing} from '../../app/inputContext';
 /**
  * Application dialogs: Preferences, Keyboard Shortcuts, About, File Info, Document Properties,
  * Missing Fonts, Recovered Documents, Assign/Convert Profile, Export As, PSD Compatibility Matrix,
@@ -15,7 +16,7 @@ import { DEFAULT_PREFERENCES, Preferences } from '../../app/settings';
 import { platform } from '../../app/platform/platform';
 import type { RecoveryEntry } from '../../app/platform/platform';
 import { allActions, run } from '../../app/actions';
-import { chordFromEvent, keymap, normalizeChord } from '../../app/shortcuts';
+import { chordFromEvent, keymap, normalizeChord, INPUT_BINDINGS } from '../../app/shortcuts';
 import { TOOLS } from '../../tools/toolTypes';
 import { exportAs, openBytes } from '../../app/fileOps';
 import { exporters, exportModeNote } from '../../formats/registry';
@@ -225,22 +226,25 @@ export function ShortcutsDialog({ close }: { close: () => void }) {
   const rows = useMemo(() => {
     const a = allActions().filter((x) => x.category !== 'replay').map((x) => ({ id: x.id, label: x.label, cat: x.id.split('.')[0] }));
     const t = TOOLS.map((x) => ({ id: `tool:${x.id}`, label: x.label, cat: 'tool' }));
-    return [...t, ...a];
+    return [...t, ...a, ...INPUT_BINDINGS.map(b => ({id: b.id, label: b.label, cat: 'tool'}))];
   }, []);
   const labelOf = (id: string) => rows.find((r) => r.id === id)?.label ?? id;
   const filtered = rows.filter((r) => !q || r.label.toLowerCase().includes(q.toLowerCase()) || keymap.bindingsFor(r.id).some((b) => b.toLowerCase().includes(q.toLowerCase())));
   useEffect(() => {
     if (!recording) return;
     const onKey = (e: KeyboardEvent) => {
+      if (isComposing(e)) return;
       e.preventDefault();
       e.stopPropagation();
       if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
       if (e.key === 'Escape') { setRecording(null); return; }
+      try {
       const chord = normalizeChord(chordFromEvent(e));
-      const other = keymap.conflict(chord, recording);
+      const other = keymap.conflicts(chord, recording).join(", " );
       if (other) setPending({ id: recording, chord, conflictId: other });
       else keymap.set(recording, [...keymap.bindingsFor(recording).filter((c) => normalizeChord(c) !== chord), chord]);
       setRecording(null);
+      } catch (error) { ui.toast('error', 'Could not assign shortcut', (error as Error).message); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -258,8 +262,8 @@ export function ShortcutsDialog({ close }: { close: () => void }) {
       <input className="txt" style={{ width: '100%', marginBottom: 8 }} placeholder="Search commands or keys…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search shortcuts" />
       {pending && (
         <div className="tag warn" style={{ display: 'block', marginBottom: 8 }}>
-          {pending.chord} is already used by “{labelOf(pending.conflictId)}”.{' '}
-          <button className="btn small" onClick={() => { keymap.set(pending.conflictId, keymap.bindingsFor(pending.conflictId).filter((c) => normalizeChord(c) !== pending.chord)); keymap.set(pending.id, [...keymap.bindingsFor(pending.id), pending.chord]); setPending(null); }}>Reassign</button>{' '}
+          {pending.chord} is already used by “{pending.conflictId.split(", " ).map(labelOf).join(", " )}”.{' '}
+          <button className="btn small" onClick={() => { keymap.reassign(pending.id, pending.chord); setPending(null); }}>Reassign</button>{' '}
           <button className="btn small" onClick={() => setPending(null)}>Cancel</button>
         </div>
       )}
@@ -280,7 +284,7 @@ export function ShortcutsDialog({ close }: { close: () => void }) {
                         ))}
                         {recording === r.id ? <span className="tag">Press keys… (Esc to cancel)</span> : <button className="btn small" onClick={() => setRecording(r.id)}>+</button>}
                       </td>
-                      <td style={{ width: 60 }}><button className="btn small" onClick={() => keymap.reset(r.id)} title="Restore default">Reset</button></td>
+                      <td style={{ width: 60 }}><button className="btn small" onClick={() => {try {keymap.reset(r.id);} catch (error) {ui.toast('error', 'Reset conflicts with another binding', (error as Error).message);}}} title="Restore default">Reset</button></td>
                     </tr>
                   );
                 })}
@@ -808,7 +812,7 @@ export function CommandPaletteDialog({ close }: { close: () => void }) {
         value={q}
         aria-label="Command"
         onChange={(e) => { setQ(e.target.value); setIdx(0); }}
-        onKeyDown={(e) => {
+        onKeyDown={(e) => { if (isComposing(e)) return;
           if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(items.length - 1, i + 1)); }
           if (e.key === 'ArrowUp') { e.preventDefault(); setIdx((i) => Math.max(0, i - 1)); }
           if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); exec(idx); }

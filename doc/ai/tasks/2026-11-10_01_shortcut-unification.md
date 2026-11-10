@@ -167,7 +167,7 @@ P1 可列出其他缺少的 Photoshop 默认键, 但不据此自动加入本轮;
 | 阶段 | 状态 | Commit / 自动检查 / 人工边界 |
 | --- | --- | --- |
 | P1 | Gate Passed | 清单/fixture 已建立；baseline 1/1、P-TYPE、diff --check 通过；人工 Pending |
-| P2 | Planned | 待 P1 |
+| P2 | Gate Passed | 输入定向 9/9、P-TYPE 通过；事件链与原子配置证据见下；人工 Pending |
 | P3 | Planned | 待 P2 |
 | P4 | Planned | 待 P3 |
 | P5 | Planned | 待 P4 |
@@ -208,3 +208,11 @@ P1 可列出其他缺少的 Photoshop 默认键, 但不据此自动加入本轮;
 配置样例（P4）：无旧覆盖→copyContext Ctrl+J；duplicate:[] 或 viaCopy:[F6]→新增 copyContext:[] 并持久化；另一用户占 Ctrl+J→新默认被抑制；显式 copyContext:[F6]→仅 F6 调用上下文命令。旧命令 ID 和宏不变。
 
 事件/真实 session fixture: tests/input/fixture.ts；baseline.test.ts 保证真实 brush 与 arrange 注册可复用，不提交预期失败用例。P2 负责实际传播/IME/import；P3 负责实际工具/pointer、定时目标和保护；P4 分别负责调整、填充、Copy/Cut 的像素/历史；P5 负责生产窗口/持久化及人工矩阵。各 K 子项按 G2–G5 归属，无新增图像算法。人工与独立实现审查均 Pending。
+
+### P2 evidence
+
+P1 commit: ff6c0a1。P2 实际范围：shortcuts 有效表来源/优先级、精确匹配、原子导入/重分配/Reset 校验，held/数字/派生用途注册；App IME/repeat；真实 Canvas 文字、数值、菜单、Modal 和 capture 组合输入保护；文字焦点仅有效 file.save 由 capture 协调 stopPropagation，仍复用 actions.run。Modal 延迟 OK 验证组件存活、当前 session 和 dialog 身份。
+
+验证：`npm exec -- vitest run tests/input` 3 files / 9 tests Passed；`npm run typecheck` Passed。listeners.test.tsx 挂载实际 App+CanvasView/NumberField/Modal，替换仅布局/无关面板与图形 renderer；未 mock dispatcher、工具或 run。保存计数测试替换已注册 file.save 的 IO 端点；文字 session 及 Enter/Esc 为实际实现。原子导入拒绝形状/值/保留键/用户主备用冲突，保留旧配置；共享 B 全成员释放、Shift 派生、数字和 held 冲突、精确工具用途通过。P3 原路径迁移尚未计完成。
+
+补正 P1 曲线清单：实际 src/ui/panels/AdjustmentEditors.tsx CurveEditor 只支持拖出删点，没有现成 Delete 监听；本轮验证曲线焦点 Delete 被 Modal 隔离、不清空背后图层，不虚称已有键盘删点。首版保留现有点编辑语义，不增加图像功能。生产窗口及中文输入法实操 Pending；独立实现复审 Pending。

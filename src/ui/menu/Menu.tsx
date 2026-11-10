@@ -1,3 +1,4 @@
+import {isComposing} from '../../app/inputContext';
 import {access} from '../../app/access';
 /** Popup menus: application menu bar, context menus and submenus (keyboard navigable). */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -65,6 +66,7 @@ export function PopupMenu({ items, x, y, onClose, parentWidth = 0 }: { items: Po
     it.run();
   };
   const onKey = (e: React.KeyboardEvent) => {
+    if (isComposing(e)) return;
     e.stopPropagation();
     const selectable = items.map((it, i) => (it.type !== 'separator' && !('disabled' in it && it.disabled) ? i : -1)).filter((i) => i >= 0);
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(selectable[(selectable.indexOf(active) + 1) % selectable.length] ?? -1); }
@@ -159,7 +161,7 @@ export function MenuBar() {
               setOpen({ id: m.id, x: r.left, y: r.bottom + 2 });
             }
           }}
-          onKeyDown={(e) => {
+          onKeyDown={(e) => { if (isComposing(e)) return;
             if (e.key === 'Enter' || e.key === 'ArrowDown') {
               const r = e.currentTarget.getBoundingClientRect();
               setOpen({ id: m.id, x: r.left, y: r.bottom + 2 });

@@ -1,3 +1,8 @@
+import {isComposing, MODAL_VIEW} from '../../app/inputContext';
+import {keymap, chordFromEvent} from '../../app/shortcuts';
+import {run} from '../../app/actions';
+import {editor} from '../../app/editor';
+import {useApp} from '../../app/store';
 /** Modal dialog frame (draggable, Esc/Enter aware, focus-trapped). */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { IconButton } from '../controls';
@@ -15,6 +20,9 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
 }) {
   const [off, setOff] = useState({ x: 0, y: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const alive = useRef(false);
+  const pending = useRef(false);
+  useEffect(() => {alive.current = true; return () => {alive.current = false;};}, []);
   useEffect(() => {
     const el = ref.current;
     const first = el?.querySelector<HTMLElement>('input, select, textarea, button.primary');
@@ -22,8 +30,14 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
   }, []);
   const onKey = (e: React.KeyboardEvent) => {
     e.stopPropagation();
+    if (isComposing(e)) return;
+    const bound = keymap.lookup(chordFromEvent(e.nativeEvent));
+    if (bound && MODAL_VIEW.has(bound)) {e.preventDefault(); void run(bound); return;}
     if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-    if (e.key === 'Enter' && onOk && !okDisabled && (e.target as HTMLElement).tagName !== 'TEXTAREA' && (e.target as HTMLElement).tagName !== 'BUTTON') { e.preventDefault(); (document.activeElement as HTMLElement | null)?.blur(); setTimeout(onOk, 0); }
+    if (e.key === 'Enter' && onOk && !okDisabled && (e.target as HTMLElement).tagName !== 'TEXTAREA' && (e.target as HTMLElement).tagName !== 'BUTTON') { e.preventDefault(); (document.activeElement as HTMLElement | null)?.blur(); if (pending.current || e.repeat) return;
+      pending.current = true;
+      const session = editor.active, dialog = useApp.getState().dialogs.at(-1);
+      setTimeout(() => {pending.current = false; if (alive.current && editor.active === session && useApp.getState().dialogs.at(-1) === dialog) onOk();}, 0); }
   };
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} onKeyDown={onKey}>

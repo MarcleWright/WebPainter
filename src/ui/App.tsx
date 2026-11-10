@@ -13,6 +13,7 @@ import { toolInfo, ToolId } from '../tools/toolTypes';
 import { useSession, useViewRev } from './hooks';
 import { zoomTo } from '../app/ops/viewOps';
 import { Icon } from './icons';
+import {isComposing, installInputContext} from '../app/inputContext';
 
 /** Tools whose size/hardness/opacity come from the shared brush settings. */
 const BRUSH_TOOLS = new Set<ToolId>(['brush', 'pencil', 'eraser', 'bgEraser', 'cloneStamp', 'patternStamp', 'healing', 'spotHealing', 'remove', 'colorReplace', 'blur', 'sharpen', 'smudge', 'dodge', 'burn', 'sponge', 'quickSelect']);
@@ -46,7 +47,7 @@ function handleDigit(d: string, shift: boolean) {
 }
 
 function onGlobalKeyDown(e: KeyboardEvent) {
-  if (e.defaultPrevented || isTyping(e)) return;
+  if (e.defaultPrevented || isComposing(e) || isTyping(e)) return;
   if (useApp.getState().dialogs.length) return;
   const host = editor.hostFactory?.();
   // The active tool gets first refusal (Enter/Esc commit/cancel, arrow nudges, Delete for paths…).
@@ -74,6 +75,7 @@ function onGlobalKeyDown(e: KeyboardEvent) {
     }
     const a = action(bound);
     if (a?.comingSoon) { ui.toast('info', `${a.label.replace('…', '')} is coming soon.`); return; }
+    if (e.repeat && !/^view\.zoom/.test(bound)) return;
     if (a && (!a.enabled || a.enabled())) void run(bound);
     return;
   }
@@ -118,11 +120,13 @@ export function App() {
   const screenMode = useApp((s) => s.screenMode);
   const [panelsHidden, setPanelsHidden] = useState(false);
   useEffect(() => {
+    const removeContext = installInputContext();
     window.addEventListener('keydown', onGlobalKeyDown);
     window.addEventListener('keyup', onGlobalKeyUp);
     const toggle = () => setPanelsHidden((v) => !v);
     window.addEventListener('celenne:togglePanels', toggle);
     return () => {
+      removeContext();
       window.removeEventListener('keydown', onGlobalKeyDown);
       window.removeEventListener('keyup', onGlobalKeyUp);
       window.removeEventListener('celenne:togglePanels', toggle);
@@ -181,6 +185,7 @@ function StatusBar() {
         onBlur={() => setEditing(false)}
         onKeyDown={(e) => {
           e.stopPropagation();
+          if (isComposing(e)) return;
           if (e.key === 'Enter') {
             const v = parseFloat(zoomText.replace('%', ''));
             if (isFinite(v) && v > 0) zoomTo(Math.max(0.01, Math.min(64, v / 100)));

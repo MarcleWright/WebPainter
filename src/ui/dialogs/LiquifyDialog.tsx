@@ -1,3 +1,4 @@
+import {isComposing} from '../../app/inputContext';
 /**
  * Liquify workspace: edits a displacement field on a proxy of the active layer, previews it live
  * and applies it once at full resolution (undoable as a single history step).
@@ -242,6 +243,7 @@ function LiquifyWorkspace({ setup, close }: { setup: Setup; close: () => void })
   // Keyboard: tool keys, [ ] brush size, Ctrl+Z undo.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isComposing(e)) return;
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.stopPropagation(); undo(); return; }
       if (e.key === '[') { setBrush((b) => ({ ...b, size: Math.max(1, Math.round(b.size * 0.85)) })); return; }

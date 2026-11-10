@@ -1,3 +1,4 @@
+import {isComposing} from '../../app/inputContext';
 import {access} from '../../app/access';
 import {AccessBoundary} from '../AccessBoundary';
 /** Layers panel. */
@@ -303,7 +304,7 @@ export function LayersPanel() {
                 autoFocus
                 defaultValue={l.name}
                 onMouseDown={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
+                onKeyDown={(e) => { if (isComposing(e)) return;
                   e.stopPropagation();
                   if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                   if (e.key === 'Escape') setRenaming(null);

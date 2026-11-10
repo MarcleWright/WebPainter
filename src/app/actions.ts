@@ -33,6 +33,8 @@ export interface Action {
   id: string;
   label: string;
   shortcut?: string;
+  /** Primary then alternate defaults. User arrays replace the complete list. */
+  shortcuts?: string[];
   run: (args?: Record<string, unknown>) => unknown;
   visible?: () => boolean;
   enabled?: () => boolean;

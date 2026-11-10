@@ -1,3 +1,4 @@
+import {isComposing, inputBlocked} from '../app/inputContext';
 /** Document tabs + interactive canvas viewport. */
 import { buildCmykGrid, evalCmykGrid } from '../color/cmykDisplayGrid';
 import { hasInkAppearance } from '../rendering/inkView';
@@ -877,6 +878,8 @@ export function CanvasView() {
               onSelect={() => { caretChanged(); overlayDirty.current = true; }}
               onKeyDown={(e) => {
                 e.stopPropagation();
+                if (isComposing(e)) return;
+                if (inputBlocked()) { e.preventDefault(); return; }
                 if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); commitTextEdit(); return; }
                 const l = editedText();
                 if (l && caretKey(e, e.currentTarget, l)) overlayDirty.current = true;
