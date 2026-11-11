@@ -707,6 +707,7 @@ fn gather(@builtin(global_invocation_id) id: vec3u) {
 }
 // Compose at native resolution before the same 2x2 reductions as the RGBA8 pyramid.
 fn affineTap(x: i32,y: i32)->vec4f {
+  if((p.flags&1u)!=0u){let q=p.srcOff;if(f32(x)<df(q+12u)||f32(y)<df(q+13u)||f32(x)>=df(q+12u)+df(q+14u)||f32(y)>=df(q+13u)+df(q+15u)){return vec4f(0.0);}}
   let c=atlasAt(x,y,p.gx0,p.gy0,p.gw,p.gh,p.grid);return vec4f(c.rgb*c.a,c.a);
 }
 @compute @workgroup_size(16,16)
@@ -715,8 +716,12 @@ fn affine(@builtin(global_invocation_id) id: vec3u) {
   let q=p.srcOff;
   let x=(f32(id.x)+df(q+10u)+0.5)*df(q+9u);let y=(f32(id.y)+df(q+11u)+0.5)*df(q+9u);
   let ls=f32(1u<<p.mode);
-  let u=(df(q)*x+df(q+1u)*y+df(q+2u))/ls-0.5;
-  let v=(df(q+3u)*x+df(q+4u)*y+df(q+5u))/ls-0.5;
+  var z=1.0;
+  if((p.flags&1u)!=0u){z=df(q+6u)*x+df(q+7u)*y+df(q+8u);if(abs(z)<0.000001){dst[id.y*p.w+id.x]=vec4f(0.0);return;}}
+  let u=(df(q)*x+df(q+1u)*y+df(q+2u))/z/ls-0.5;
+  let v=(df(q+3u)*x+df(q+4u)*y+df(q+5u))/z/ls-0.5;
+  // Avoid undefined conversion near an inverse horizon outside the admitted source projection.
+  if((p.flags&1u)!=0u&&(u<df(q+12u)-1.0||v<df(q+13u)-1.0||u>df(q+12u)+df(q+14u)||v>df(q+13u)+df(q+15u))){dst[id.y*p.w+id.x]=vec4f(0.0);return;}
   let ix=i32(floor(u));let iy=i32(floor(v));let fx=fract(u);let fy=fract(v);
   let a=affineTap(ix,iy);let b=affineTap(ix+1,iy);let c=affineTap(ix,iy+1);let d=affineTap(ix+1,iy+1);
   let out=a+(b-a)*fx+(c-a)*fy+(a-b-c+d)*fx*fy;

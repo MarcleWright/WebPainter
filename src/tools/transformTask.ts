@@ -2,12 +2,12 @@ import { TiledRaster, Tile, nextGen, tileKey } from '../image-engine/tiledRaster
 import type { TransformPlan } from '../image-engine/transformPlan';
 
 export class TransformWorkerUnavailable extends Error {}
-export interface TransformMetrics { operation:string; snapshotMs:number; admitMs:number; computeWallMs:number; packMs:number; transferWaitMs:number; assembleMs:number; computeMs:number; totalMs:number; installMs:number; maxPackUnitMs:number; peakInFlightBytes:number; estimatedPeakBytes:number; cancelled:boolean }
+export interface TransformMetrics { operation:string; backend:'worker'|'cpu-fallback'; snapshotMs:number; admitMs:number; computeWallMs:number; packMs:number; transferWaitMs:number; assembleMs:number; computeMs:number; totalMs:number; installMs:number; maxPackUnitMs:number; peakInFlightBytes:number; estimatedPeakBytes:number; cancelled:boolean }
 export interface TransformTask { promise:Promise<TiledRaster>; cancel():void; metrics:TransformMetrics }
 export function startTransformTask(source:TiledRaster,plan:TransformPlan,id:string,onProgress:(f:number)=>void,
   create:()=>Worker=()=>new Worker(new URL('./transformWorker.ts',import.meta.url),{type:'module'})):TransformTask {
   const started=performance.now();
-  const metrics:TransformMetrics={operation:id,snapshotMs:0,admitMs:0,computeWallMs:0,packMs:0,transferWaitMs:0,assembleMs:0,computeMs:0,totalMs:0,installMs:0,maxPackUnitMs:0,peakInFlightBytes:0,estimatedPeakBytes:plan.peakBytes,cancelled:false};
+  const metrics:TransformMetrics={operation:id,backend:'worker',snapshotMs:0,admitMs:0,computeWallMs:0,packMs:0,transferWaitMs:0,assembleMs:0,computeMs:0,totalMs:0,installMs:0,maxPackUnitMs:0,peakInFlightBytes:0,estimatedPeakBytes:plan.peakBytes,cancelled:false};
   let worker:Worker|null=null,closed=false,ready=false,resolveWait:(()=>void)|null=null,rejectWait:((e:Error)=>void)|null=null;
   let rejectResult:(e:Error)=>void=()=>{},resolveResult:(r:TiledRaster)=>void=()=>{};
   const out=new TiledRaster(4,8),seen=new Set<number>();let block=0,blockTiles=0,pixels=0;

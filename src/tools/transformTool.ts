@@ -32,7 +32,7 @@ import type { Rect } from '../image-engine/rect';
 import { union } from '../image-engine/rect';
 import { layerContentBounds } from '../rendering/bounds';
 import { rasterContentBounds } from '../rendering/bounds';
-import { warpRaster } from '../image-engine/resample';
+import { warpRaster, warpSampleContext } from '../image-engine/resample';
 import { warpLayerRaster, transformLayer } from '../app/ops/imageOps';
 import { CompositeCommand, ReplaceLayerCommand, TransformLayerCommand } from '../commands/layerCommands';
 import { updateAppearance } from '../layers/appearance';
@@ -59,6 +59,8 @@ interface FloatState {
 
 interface State {
   session: DocumentSession;
+  previewError?:string;
+  lastValid?:{M:Affine;quad:Quad|null};
   job?: { id:string; task:TransformTask; token:symbol };
   sourceKeys?: Map<LayerId, {raster: TiledRaster; version: number; rev: number}>;
   gpuDisabled?: boolean;
@@ -151,19 +153,19 @@ function sourceChanged(s: State): boolean {
 }
 function gpuFor(s: State, src: Layer & {raster:TiledRaster}): GpuCompositor | null {
   const doc=s.session.doc, gpu=gpuCompositor(), M=s.M;
-  if(s.gpuDisabled || !gpu || gpu.disposed || s.float || s.selOnly || s.warp || s.quad || s.ids.length!==1 ||
+  if(s.gpuDisabled || !gpu || gpu.disposed || s.float || s.selOnly || s.warp || s.ids.length!==1 ||
      doc.canvas.colorMode!=='rgb' || doc.canvas.bitDepth!==8 || !doc.selection.isEmpty() || !src.visible ||
-     Math.abs(M[0]*M[2]+M[1]*M[3])>1e-7 || Math.abs(M[0]*M[3]-M[1]*M[2])<1e-8 ||
+     (!s.quad && (Math.abs(M[0]*M[2]+M[1]*M[3])>1e-7 || Math.abs(M[0]*M[3]-M[1]*M[2])<1e-8)) ||
      doc.root.children.length>3 || gpu.viewSupported(doc,s.session.engine.view))return null;
   if(doc.root.mask || doc.root.vectorMask || doc.root.opacity!==1 || hasEnabledEffect(doc.root.effects))return null;
   if(!doc.root.children.every(l=>l.kind==='pixel' && l.blendMode==='normal' && l.opacity===1 && l.fillOpacity===1 &&
      !l.mask && !l.vectorMask && !l.clipping && !hasEnabledEffect(l.effects) && !blendIfActive(l.advanced.blendIf) &&
      l.advanced.channels.every(Boolean) && l.advanced.knockout==='none'))return null;
   const b=rasterContentBounds(src.raster);
-  return b && src.raster.depth===8 && src.raster.fill===0 && gpu.canPrepareAffine(b,s.session.engine.lastVisible?.tiles.length??32)?gpu:null;
+  return b && src.raster.depth===8 && src.raster.fill===0 && (s.quad?gpu.canPrepareProjective(b,s.session.engine.lastVisible?.tiles.length??32):gpu.canPrepareAffine(b,s.session.engine.lastVisible?.tiles.length??32))?gpu:null;
 }
 
-function updatePreview(s: State): void {
+function updatePreview(s: State, recoverLast=false): void {
   if (s.selOnly) return; // outline only (drawn by the overlay)
   const eng = s.session.engine;
   const changed=sourceChanged(s);
@@ -176,8 +178,15 @@ function updatePreview(s: State): void {
     s.sourceKeys=new Map();
     for(const id of s.ids){const l=s.session.doc.getLayer(id);if(l && hasRaster(l))s.sourceKeys.set(id,{raster:l.raster,version:l.raster.version,rev:l.rev});}
   }
+  let geometry=s;
+  if(!s.warp){
+    try{commitInputs(s);s.previewError=undefined;s.lastValid={M:[...s.M] as Affine,quad:s.quad?.map(p=>({...p})) as Quad??null};}
+    catch(error){s.previewError=String(error);if(!recoverLast||!s.lastValid)return;geometry={...s,...s.lastValid};try{commitInputs(geometry);}catch{return;}}
+  }
+  geometry={...geometry,M:[...geometry.M] as Affine,quad:geometry.quad?.map(p=>({...p})) as Quad??null};
+  const qualification=geometry;
   const overrides=new Map<LayerId,LayerOverride>();
-  const H = homography(s);
+  const H = homography(geometry);
   const inv = invertH(H);
   const mesh = s.warp ? sampleMesh(warpMap(s)) : null;
   const base = s.base;
@@ -230,22 +239,26 @@ function updatePreview(s: State): void {
       },
     };
     const src=orig;
-    const gpu=src?gpuFor(s,src):null;
+    const gpu=src?gpuFor(qualification,src):null;
     if(gpu && src) {
       const bounds=rasterContentBounds(src.raster)!;
       const inverse=multiplyH([1,0,-src.x,0,1,-src.y,0,0,1],inv);
-      ov.gpu={affine:{raster:src.raster,bounds,inverse,device:gpu.device}};
+      ov.gpu={affine:{raster:src.raster,bounds,inverse,device:gpu.device,projective:!!geometry.quad}};
       s.gpuSources??=new Map();s.gpuSources.set(src.raster,gpu);
       ov.prepare=(level,budget)=>{
         if(gpuCompositor()!==gpu || gpu.disposed)return true;
-        const mip=affinePreviewLevel(inverse,level);
-        return gpu.prepareAffine(src.raster,bounds,mip,budget);
+        if(!geometry.quad)return gpu.prepareAffine(src.raster,bounds,affinePreviewLevel(inverse,level),budget);
+        const started=performance.now(),sc=1<<level,invDisplay=multiplyH(inverse,[sc,0,0,0,sc,0,0,0,1]);
+        const needed=new Set<number>(),size=eng.levelSize(level);
+        for(const [tx,ty]of eng.lastVisible?.tiles??[]){const r={x:tx*256,y:ty*256,w:Math.min(256,size.w-tx*256),h:Math.min(256,size.h-ty*256)};const sampling=warpSampleContext(bounds,invDisplay,r);if(sampling)needed.add(sampling.level);}
+        for(const mip of needed)if(!gpu.prepareAffine(src.raster,bounds,mip,Math.max(0,budget-(performance.now()-started))))return false;
+        return true;
       };
     }
     const rev=s.session.doc.rev;
     ov.interaction={valid:()=>st===s && editor.session(s.session.id)===s.session && !sourceChanged(s) &&
-      s.session.doc.rev===rev && (!gpu || (gpuCompositor()===gpu && !gpu.disposed && !!src && gpuFor(s,src)===gpu)),
-      abort:()=>{if(st!==s)return;s.gpuDisabled=true;releaseSources(s);updatePreview(s);}};
+      s.session.doc.rev===rev && (!gpu || (gpuCompositor()===gpu && !gpu.disposed && !!src && gpuFor(qualification,src)===gpu)),
+      abort:()=>{if(st!==s)return;s.gpuDisabled=true;releaseSources(s);updatePreview(s,true);}};
     overrides.set(l.id,ov);
   }
   const lostQualification=!!s.gpuSources?.size && ![...overrides.values()].some(ov=>!!ov.gpu?.affine);
@@ -417,7 +430,9 @@ function commitInputs(s:State):TransformPlan[]{
     if(root.kind!=='pixel'&&root.kind!=='group'&&root.kind!=='video')throw Error('Dynamic appearance capacity cannot be verified for this transform');
     for(const l of rasterLayers(root))if(hasRaster(l)){if(l.kind!=='pixel'&&l.kind!=='video')throw Error('Dynamic appearance capacity cannot be verified');add(l.raster,l.x,l.y);if(l.mask)add(l.mask.raster,l.mask.x,l.mask.y);}
   }
-  return planTransforms(homography(s),inputs,s.quad);
+  const plans=planTransforms(homography(s),inputs,s.quad);
+  // Floating CPU placement holds both full destination read buffers at once.
+  return s.float?planTransforms(homography(s),inputs,s.quad,plans[0].output.w*plans[0].output.h*32):plans;
 }
 function backgroundSource(s:State):(Layer&{raster:TiledRaster;x:number;y:number})|null{
   if(s.float||s.selOnly||s.warp||s.ids.length!==1||s.session.doc.canvas.colorMode!=='rgb'||s.session.doc.canvas.bitDepth!==8)return null;
@@ -436,17 +451,23 @@ function restoreFailedCommit(s:State,root:ReturnType<typeof cloneLayer>,selectio
 }
 export function commitTransform(): void {
   const s=st;if(!s||s.job||editor.session(s.session.id)!==s.session||!s.session.canEdit()||s.session.outputPending||s.session.closePending)return;
+  lastTransformMetrics=null;
   if(sourceChanged(s))updatePreview(s);
   const admitStart=performance.now();
   let plans:TransformPlan[];
   try{plans=commitInputs(s);}catch(error){ui.toast('error','Transform cannot be confirmed.',String(error));return;}
   const admitMs=performance.now()-admitStart;
   const source=backgroundSource(s);
-  if(!source||typeof Worker==='undefined'){
-    ui.toast('info','Using the bounded CPU transform path.');
+  const identity=!s.quad&&!s.warp&&s.M.every((v,i)=>Math.abs(v-[1,0,0,1,0,0][i])<1e-9);
+  if(identity||!source||typeof Worker==='undefined'){
+    if(!identity)ui.toast('info','Using standard transform processing; the app may pause.');
     const doc=s.session.doc,root=cloneLayer(doc.root),selection=doc.selection.snapshot(),entry=s.session.history.current.id;
-    try{applyTransform(s);}catch(error){if(!restoreFailedCommit(s,root,selection,entry,error))return;}
-    finishTransform(s);return;
+    const token=s.session.acquireEditProtection('transform');
+    try{
+      try{applyTransform(s,token);}catch(error){if(!restoreFailedCommit(s,root,selection,entry,error))return;}
+      finishTransform(s);
+    }finally{s.session.releaseEditProtection(token);s.session.notify();}
+    return;
   }
   const session=s.session,doc=session.doc,revision=doc.rev,H=homography(s),entry=session.history.current.id;
   const snapshotStart=performance.now();
@@ -466,7 +487,8 @@ export function commitTransform(): void {
       try{result=await task.promise;}
       catch(error){
         if(error instanceof TransformWorkerUnavailable&&st===s&&s.job===job){
-          ui.toast('warning','Background transform unavailable; using the bounded CPU path.',String(error));
+          task.metrics.backend='cpu-fallback';
+          ui.toast('warning','Background processing is unavailable; applying the transform may pause the app.',String(error));
           try{applyTransform(s,token);}catch(failure){if(!restoreFailedCommit(s,root,selection,entry,failure))return false;}
           committed=true;finishTransform(s);return true;
         }

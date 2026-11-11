@@ -1,3 +1,5 @@
+import { warpSampleContext } from '../image-engine/resample';
+import { multiplyH } from '../image-engine/matrix';
 /**
  * GPU tile compositor (WebGPU compute). Mirrors the CPU reference compositor
  * (rendering/compositor.ts) operation for operation: the layer tree is walked on the CPU with the
@@ -226,6 +228,15 @@ export class GpuCompositor {
   canPrepareAffine(bounds: Rect, visibleTiles: number): boolean {
     const rg = tileRange(bounds), count = (rg.tx1 - rg.tx0 + 1) * (rg.ty1 - rg.ty0 + 1);
     return !this.disposed && count <= 256 && count + visibleTiles * 2 <= this.atlases[0].layers * this.atlases[0].pages.length;
+  }
+  canPrepareProjective(bounds:Rect,visibleTiles:number):boolean {
+    if(!this.canPrepareAffine(bounds,visibleTiles))return false;
+    let count=0;
+    for(let level=0;level<=8;level++){
+      const sc=1<<level,rg=tileRange({x:Math.floor(bounds.x/sc),y:Math.floor(bounds.y/sc),w:Math.ceil((bounds.x+bounds.w)/sc)-Math.floor(bounds.x/sc),h:Math.ceil((bounds.y+bounds.h)/sc)-Math.floor(bounds.y/sc)});
+      count+=(rg.tx1-rg.tx0+1)*(rg.ty1-rg.ty0+1);
+    }
+    return count+visibleTiles*2<=this.atlases[0].layers*this.atlases[0].pages.length;
   }
   prepareAffine(raster: TiledRaster, bounds: Rect, level: number, budgetMs: number): boolean {
     let levels = this.affineSources.get(raster);
@@ -655,12 +666,13 @@ export class GpuCompositor {
       const a=g.affine;
       if (a.device!==this.device || this.disposed || ctx.plate || ctx.doc.canvas.colorMode!=='rgb')return null;
       const inv=a.inverse, scale=1<<ctx.level;
-      const level=affinePreviewLevel(inv,ctx.level), ls=1<<level;
+      const sampling=a.projective?warpSampleContext(a.bounds,multiplyH(inv,[scale,0,0,0,scale,0,0,0,1]),r):null;
+      const level=a.projective?(sampling?.level??0):affinePreviewLevel(inv,ctx.level), ls=1<<level;
       const region={x:Math.floor(a.bounds.x/ls),y:Math.floor(a.bounds.y/ls),w:Math.ceil((a.bounds.x+a.bounds.w)/ls)-Math.floor(a.bounds.x/ls),h:Math.ceil((a.bounds.y+a.bounds.h)/ls)-Math.floor(a.bounds.y/ls)};
       const atlas=this.atlasSource(enc,a.raster,{x:0,y:0},region,level);
-      const meta=enc.pushF32(Float32Array.from([...inv,scale,r.x,r.y]));
+      const meta=enc.pushF32(Float32Array.from([...inv,scale,r.x,r.y,...(a.projective?[sampling?.region.x??0,sampling?.region.y??0,sampling?.region.w??0,sampling?.region.h??0]:[])]));
       const out=this.take(enc,r.w*r.h);
-      this.raw(enc,'filter:affine',{w:r.w,h:r.h,mode:level,srcOff:meta,atlas},out,null,null);
+      this.raw(enc,'filter:affine',{w:r.w,h:r.h,mode:level,flags:a.projective?1:0,srcOff:meta,atlas},out,null,null);
       return {src:SRC.straight,buf:out,srcOff:0};
     }
     if (g.floating) {

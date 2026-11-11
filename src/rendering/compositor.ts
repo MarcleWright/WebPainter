@@ -62,7 +62,7 @@ export interface LayerOverride {
    * stays the CPU path): a destructive adjustment or a filter on the layer's pixels, blended by
    * the selection.
    */
-  gpu?: { affine?: { raster: import('../image-engine/tiledRaster').TiledRaster; bounds: Rect; inverse: import('../image-engine/matrix').Homography; device: GPUDevice }; adjustment?: Adjustment; filter?: { id: string; params: Record<string, unknown> }; floating?: { cut: import('../image-engine/tiledRaster').TiledRaster; pixels: import('../image-engine/tiledRaster').TiledRaster; x: number; y: number } };
+  gpu?: { affine?: { raster: import('../image-engine/tiledRaster').TiledRaster; bounds: Rect; inverse: import('../image-engine/matrix').Homography; device: GPUDevice; projective?: boolean }; adjustment?: Adjustment; filter?: { id: string; params: Record<string, unknown> }; floating?: { cut: import('../image-engine/tiledRaster').TiledRaster; pixels: import('../image-engine/tiledRaster').TiledRaster; x: number; y: number } };
 }
 
 export interface CompositeOptions {

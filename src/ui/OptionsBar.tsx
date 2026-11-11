@@ -109,6 +109,7 @@ export function OptionsBar() {
             <NumberField label="Skew" value={n.skew} onChange={(skew) => setTransformNumbers({ skew })} unit="°" step={0.1} />
           </>
         )}
+        {ts?.previewError && <span role="status" className="muted">Preview rejected: adjust the transform or cancel.</span>}
         {n?.free && <span className="muted">Distort / perspective active — drag the corners.</span>}
         <span className="faint">Shift: constrain · Alt: from center · Ctrl: distort · Ctrl+Shift: skew · Ctrl+Alt+Shift: perspective</span>
         <AccessBoundary entry="feature:warp"><button className="btn" title="Switch to Warp mode" onClick={() => setWarpMode()}>Warp</button></AccessBoundary>

@@ -127,3 +127,28 @@ Session保护按token/owner持有；兼容legacy布尔仅操作自己的legacy�
 夹具纠正：首次before来自继承的全不透明源，最初透明注入表达式因索引含小数没有生效，整组不得充作本轮合格性能对比。核验后统一使用全透明/半透明非均匀4K夹具，before-transparent在实施前保全的a2fac7d源码副本重采12份；不切main或覆盖dirty，环境相同，正式Enter最长主线程任务8063–8840ms。原始错误夹具和两组证据全部保留。C最终三轮及D性能在整体阶段继续。
 
 C阶段代码和以上证据本地提交后进入D；不涉及大笔刷、embedded/ADA或通用任务框架。
+
+
+## 10. D实现及阶段验证
+
+在原gpu.affine override描述中增projective标记，继续使用同一atlas与合成管线。WGSL增加齐次分母除法、接近零及转换为整数前的范围保护，源采样仍是premultiplied bilinear。几何安全由共同预检对完整源正投影及正式输出逆投影域证明；显示域中落在有效源投影外、接近逆分母零的像素安全返回透明，不构造无界采样区。每个显示逻辑tile使用其自身逆映射中心localScale选择mip及原CPU采样区域限制，空间倍率不同可使用不同level，不用全局det；warpRaster只是抽出原计算步骤为warpSampleContext，正式1024分区、插值、量化及运算顺序保持。
+
+按同帧可见集合准备所需层级，既有prepareAffine缓存持有各mip的稳定源；新增保守完整源0..8层级atlas容量核验，仍最多256源tile包围矩形、简单根像素层组合≤3。层级切换可首次上传对应mip，不把每次参数更新当源变化。完整负坐标/画布外源不裁切；合法GPU能力/容量失效进入同参数、有界CPU preview，非法/总预算拒绝不安装新的GPU或CPU采样closure，保留上一完整代际并显示可调整/取消状态。资格校验和准备几何冻结为该代际副本，避免后续quad输入改变准备中的参数；沿用6ms单位间预算、latest下一代及完整Map交换，没有process(Infinity)。
+
+阶段新增projectivePreview **9项真实GPU测试**：两种controller修饰键路径、上下层遮挡、负坐标/画布外非均匀透明源、zoom1/2、空间变化mip、相同源不重复上传、持续参数更新完整代际推进、非法quad零新GPU/CPU采样、容量和设备回退。GPU与CPU bilinear preview在这些小夹具的max误差<4/255；正式结果仍用独立CPU bicubic/原字节参考，不能把preview误差界当正式误差许可。
+
+自查修正与回归：共同容量补计live authority、冻结preview及Worker/CPU私有源三份可能共存的mip；单通道CPU扩展RGBA32与浮选区完整cur/from Float32写回缓冲也计入，不沿用C探针旧估计。总预算仍768MiB，不扩大。首次窗口精确比对发现组合键透视仅一tile不等：geometry预检用乘倒数，而原warpLayerRaster用除法，ceil使宽度4576变4577。已严格改回原除法顺序，补对称透视边界精确回归。另补无位移确认零Worker/零历史、CPU回退也持有owner保护、macro重放安全预检回归。当前定向 **5文件93/93通过**（task33、projective9加既有51），P-TYPE及P-BUILD通过。
+
+完整native开发窗口最终有效组为before-transparent-transform-all.json与final2-transform-all.json，均预热+3正式/三种路径，各12份，环境JSON字段完全相同；每份60个coalesced点，无额外鼠标输入。affine/Ctrl/组合透视每类各9组同参数交叉配对最终tile SHA与坐标精确相同，全部undo/redo恢复相同，停手pending=false。final2为新的独立profile但同prefs/viewport/runtime；先前final组出现一份零输入及窗口失活/RAF准备超时，已排除并重启；脚本已增加完整输入/quad前置验证。afterD组的旧透视像素差异也已明确废弃，不拿它当最终像素通过；所有原件保留。
+
+| 预览路径 | 前态三次RAF p95/ms | final2三次RAF p95/ms | 后态完整代际数 | 后态最长发布间隔/ms |
+| --- | --- | --- | --- | --- |
+| 仿射对照 |18.1/18.2/18.2|18.1/18.1/18.1|60/58/58|36.1/35.6/54.1|
+| Ctrl拖角 |36.0/36.0/36.0|18.2/18.1/18.1|56/56/57|107.3/52.7/88.5|
+| Ctrl+Alt+Shift |36.0/35.6/35.8|18.1/18.1/18.1|54/53/56|88.4/106.5/71.5|
+
+两类透视p95中位数约下降49.7%/49.4%。前态透视本已一致帧，但持续拖动仅4–5完整代际、最长约357–406ms；本轮**前后混合代际均0**，不冒称从混杂修成一致。透视每次首次层级变化新增64个mip tile上传，最长间隔对应这段准备的4–7个RAF、单次process约6.2–6.6ms；源上传达到稳态后增量0。该计数仅raw8 atlas上传，不统计旧CPU override的临时Float32上传，不用“旧计数0”暗示旧路径无需传数据。首次切换仍约107ms，未宣称所有画面反馈≤100ms。
+
+生产production-D.json：真实app://窗口正常组合键拖角，override.projective=true；通过保留原生Worker构造、只记录URL的观察器确认加载 `app://celenne/assets/transformWorker-CckuvPAs.js`，非mock。Enter返回11.8ms、progress/Cancel约16.1ms出现，任务期canEdit=false，完成一次历史，undo/redo逐tile一致。与开发测试分别记录；没有把script窗口证明当Owner/物理设备验收。
+
+D阶段实现、以上定向回归及开发/生产路径证据完成后本地提交，整体回归和最终上下文继续。

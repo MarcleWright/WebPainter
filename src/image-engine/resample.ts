@@ -58,13 +58,8 @@ function localScale(h: Homography, x: number, y: number): number {
   return Math.sqrt(Math.abs(ax * by - ay * bx));
 }
 
-/**
- * Warps a raster into `dst` (document px) using `inv` (document → source-local mapping).
- * `srcBounds` limits sampling to the source content. Returns straight RGBA floats.
- */
-export function warpRaster(src: TiledRaster, srcBounds: Rect, inv: Homography, dst: Rect, interp: Interpolation = 'bicubic', shouldCancel?: () => boolean): Float32Array {
-  const out = new Float32Array(dst.w * dst.h * 4);
-  if (dst.w <= 0 || dst.h <= 0 || srcBounds.w <= 0 || srcBounds.h <= 0) return out;
+/** Shared preview sampling context; authority retains its original logical destination region. */
+export function warpSampleContext(srcBounds:Rect,inv:Homography,dst:Rect):{level:number;region:Rect}|null {
   // Source pixels per destination pixel.
   const cx = dst.x + dst.w / 2, cy = dst.y + dst.h / 2;
   const scale = localScale(inv, cx, cy);
@@ -76,8 +71,21 @@ export function warpRaster(src: TiledRaster, srcBounds: Rect, inv: Homography, d
   let x1 = Math.ceil(Math.max(...corners.map((c) => c.x))) + 3, y1 = Math.ceil(Math.max(...corners.map((c) => c.y))) + 3;
   x0 = Math.max(x0, srcBounds.x - 2); y0 = Math.max(y0, srcBounds.y - 2);
   x1 = Math.min(x1, srcBounds.x + srcBounds.w + 2); y1 = Math.min(y1, srcBounds.y + srcBounds.h + 2);
-  if (x1 <= x0 || y1 <= y0) return out;
+  if (x1 <= x0 || y1 <= y0) return null;
   const lr = { x: Math.floor(x0 / ls), y: Math.floor(y0 / ls), w: Math.ceil(x1 / ls) - Math.floor(x0 / ls), h: Math.ceil(y1 / ls) - Math.floor(y0 / ls) };
+  return {level,region:lr};
+}
+
+/**
+ * Warps a raster into `dst` (document px) using `inv` (document → source-local mapping).
+ * `srcBounds` limits sampling to the source content. Returns straight RGBA floats.
+ */
+export function warpRaster(src: TiledRaster, srcBounds: Rect, inv: Homography, dst: Rect, interp: Interpolation = 'bicubic', shouldCancel?: () => boolean): Float32Array {
+  const out = new Float32Array(dst.w * dst.h * 4);
+  if (dst.w <= 0 || dst.h <= 0 || srcBounds.w <= 0 || srcBounds.h <= 0) return out;
+  const context=warpSampleContext(srcBounds,inv,dst);
+  if(!context)return out;
+  const {level,region:lr}=context,ls=1<<level;
   // Guard against pathological (near-singular) transforms.
   if (lr.w * lr.h > 400e6) throw new Error('Transform is too extreme to render');
   const buf = src.readFloat(lr, level);
