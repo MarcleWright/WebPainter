@@ -1,6 +1,6 @@
 # 当前上下文
 
-2026-11-11 [大笔刷与Ctrl+T任务](tasks/2026-11-11_01_large-brush-and-transform-preview.md)已获Owner授权，阶段0诊断及A实现完成：限定RGBA8普通画笔/eraser同步批处理，97项定向回归/构建通过，300px brush p95中位数约改善49.8%；eraser像素CPU减少但帧尾改善有限。低频逐tile SHA一致；B一致帧/稳定源/失败交接继续实施，最终交ADA集成-REV。既存启动dirty保留，不推送或推进embedded/ADA。
+2026-11-11 [大笔刷与Ctrl+T任务](tasks/2026-11-11_01_large-brush-and-transform-preview.md)四阶段实现/验证完成，待ADA集成-REV独立复审：253项整体回归、强化非均匀夹具后19项复验及构建通过。同尺寸重采：300px eraser p95约改善33.2%，brush帧尾未改善（撤销初测49.8%结论）；Ctrl+T p95约改善49.7%，混合revision为0，CPU Enter仍约6–12秒且交接有长尾。低频精确像素一致；支持/回退及人工未验收见任务，不判整体Go。既存启动dirty保留，不推送或推进embedded/ADA。
 
 2026-11-10 [图块级内容边界缓存任务](tasks/2026-11-10_02_tile-content-bounds-cache.md)两阶段已完成：局部精确缓存及132项定向测试、构建通过；同配方完整native开发窗口D的RAF p95中位数改善88.7%/90.8%，低频逐tile像素SHA及边界一致。待 ADA集成-REV 统一独立review；真实手绘笔/物理呈现/Owner原作品及生产dist性能仍Pending。只交付 main 两次本地提交，既存启动dirty保留，不推进embedded/ADA或推送发布。
 

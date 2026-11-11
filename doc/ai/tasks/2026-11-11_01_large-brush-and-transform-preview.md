@@ -1,6 +1,6 @@
 # 大笔刷处理与 Ctrl+T 预览优化设计
 
-日期：2026-11-11。状态：**Owner 已授权阶段0→A→B→整体回归连续实施及分阶段本地提交，执行中；不授权推送、embedded/ADA更新或发布。**
+日期：2026-11-11。状态：**Owner 已授权阶段0→A→B→整体回归连续实施及分阶段本地提交，实现与规定自动/开发窗口验证执行完毕，待ADA集成-REV独立复审与人工验收；画笔帧尾收益未证实，不判整体性能验收通过。不授权推送、embedded/ADA更新或发布。**
 
 ## 1. 目标与证据边界
 
@@ -142,7 +142,7 @@ Reviewer非阻断澄清（2026-11-11）：阶段0的B落点记录必须逐项说
 
 ## 7. 执行与授权边界
 
-本次只提交给reviewer审查设计；planner修改任务后仍须Owner明确授权实施。建议未来按“阶段0归因/落点→A实现验证→B实现验证→整体回归review”执行，A/B可各形成独立本地提交，但当前不授权任何代码修改或Git提交。stage0结果与假设不符时先修订方案，不要求为了完成表格实施两条错误路线。
+本节保留计划审查时的边界；Owner于2026-11-11已明确授权本任务四阶段连续执行，见开头状态和执行记录。原设计阶段只提交给reviewer审查设计，后续实现以Owner明确授权为准。建议未来按“阶段0归因/落点→A实现验证→B实现验证→整体回归review”执行，A/B可各形成独立本地提交，但当前不授权任何代码修改或Git提交。stage0结果与假设不符时先修订方案，不要求为了完成表格实施两条错误路线。
 
 交审内容：阶段0证据、最终支持/回退表、源码落点与复用能力、A逐印迹等价性说明、B版本/资源交接规则、前后性能、测试及未测项。Reviewer重点审查语义兼容、有限范围是否可执行、回退正确性，以及是否存在未计入的大重构。
 
@@ -153,7 +153,7 @@ Context Delta：新增两项残余性能/显示问题的设计及PhotoCraft固�
 
 ## 8. 阶段0执行记录（2026-11-11）
 
-main实际HEAD为e168f36661a682a872c7dfc2f9c2f2f55a146207。保留最初AI_CONTEXT/DEV_LOG/DEV_SETUP、start-current.mjs与start-dev.bat dirty。忽略目录 `doc/material/local/2026-11-11/brush-transform/run-01/` 在修改产品源码前保存baseline-state.json、baseline.diff及完整tracked源码baseline-source.tar；不通过切分支/覆盖dirty取得前态。沿用前任务非均匀RGBA8 4096方形图层，将测试文档画布设为4096方形；隔离profile/temp，完整native/Vite窗口1450×1000、zoom.2、独立16062/16462，不动用户作品/进程。
+main实际HEAD为e168f36661a682a872c7dfc2f9c2f2f55a146207。保留最初AI_CONTEXT/DEV_LOG/DEV_SETUP、start-current.mjs与start-dev.bat dirty。忽略目录 `doc/material/local/2026-11-11/brush-transform/run-01/` 在修改产品源码前保存baseline-state.json、baseline.diff及完整tracked源码baseline-source.tar；不通过切分支/覆盖dirty取得前态。沿用前任务非均匀RGBA8 4096方形图层，将测试文档画布设为4096方形；隔离profile/temp，完整native/Vite窗口（初态曾恢复为1920×1137，最终严格配对重采固定1450×1000，见第11节）、zoom.2、独立16062/16462，不动用户作品/进程。
 
 ### A：热点与落点
 
@@ -186,22 +186,22 @@ B还需覆盖源revision/颜色设置/GPU生命周期与当前viewport；不以�
 
 验证：batchedPaint含真实变化压力/flow/opacity、30/300px重叠与自交、矩形空隙、低flow/opacity、擦空、逐批旧PaintOp对照；真实工具资格/回退/取消、history undo/redo/native重开。10个重叠dab的普通画笔原图读/目标写由10次降到1次，eraser的原RGBA float读/写由10次降到0（由有界原生alpha写取代），无endBatch遗留工作。新增与core/tile bounds/native/Move/output共6文件 **97/97通过**，P-BUILD通过；已有Vite URL/模块外置警告未扩大修理。
 
-性能为同完整native/Vite窗口正常CDP输入，不是生产dist或真实笔尖延迟。下表为三次正式RAF p95/ms，保持全部60个coalesced样本、spacing.1；低频另核对精确输出。
+最终性能使用第11节纠正后的同尺寸/同宿主before-measure与after-measure完整native/Vite窗口正常CDP输入，不是生产dist或真实笔尖延迟。下表为三次正式RAF p95/ms，保持全部60个coalesced样本、spacing.1；低频另核对精确输出。
 
-| 工具/尺寸 | 前态 | 最终A实现(afterA2) |
+| 工具/尺寸 | 同尺寸前态 | 同尺寸最终实现 |
 | --- | --- | --- |
-| brush30 |16.9 / 33.3 / 16.8|16.9 / 16.8 / 16.8|
-| brush100 |33.4 / 33.4 / 16.8|16.8 / 16.9 / 33.4|
-| brush300 |66.7 / 66.7 / 50.0|33.5 / 33.6 / 33.4|
-| eraser30 |16.8 / 16.8 / 16.8|16.8 / 16.8 / 16.8|
-| eraser100 |33.3 / 16.8 / 33.3|16.9 / 16.9 / 16.9|
-| eraser300 |33.5 / 50.1 / 33.5|33.4 / 33.3 / 16.9|
+| brush30 |16.9 / 16.8 / 33.2|16.8 / 16.8 / 16.8|
+| brush100 |16.9 / 33.2 / 17.0|33.4 / 16.8 / 16.8|
+| brush300 |50.1 / 50.0 / 49.9|66.7 / 50.1 / 50.0|
+| eraser30 |16.9 / 16.8 / 16.9|16.8 / 16.8 / 16.8|
+| eraser100 |16.9 / 33.3 / 16.9|16.8 / 16.8 / 33.4|
+| eraser300 |50.1 / 50.0 / 50.0|33.4 / 33.3 / 33.4|
 
-brush300的p95中位数下降约49.8%；eraser300的p95中位数仅约0.6%变化，不能称显著帧尾改善，仍有33ms帧。额外采样profile：eraser applyDabs包含由约501.8降到312.9ms，像素op包含约404.9→192.1ms；brush约574.5→514.8ms，像素op约474.1→416.0ms。profile每工具各一份，不代替三次无hook数据；downsample/开发UI成本仍在，不扩大为GPU笔刷。
+最终eraser300的p95中位数下降约33.2%；brush300由50.0→50.1ms，未改善，且一轮66.7ms，**画笔帧尾目标未证实，不记为通过**。同宿主额外单份CPU profile每工具各一份：像素op inclusive union（旧dab，对新dab/flush去重计祖先）brush约512.4→399.8ms、eraser426.1→167.7ms，约减少22.0%/60.6%；这不是三轮绝对CPU计时，不代替正常输入帧数据。热点工作量减少成立，但不能据此宣称brush跟手改善。downsample/开发UI残余仍在，不扩展GPU笔刷或其它架构。初测afterA2曾给出49.8%笔刷p95收益，因最终核对发现窗口尺寸不一致撤销该收益结论，原始数据保留。
 
 低频300px brush/eraser各前3后3有效正式结果的256个tile SHA均一致。前态eraser一份up结算为0且末段像素异于同输入其它重复，按提前终止/来源未定异常排除；前态brush重试仍混入实体鼠标，也排除。用修改前保全的baseline-source.tar创建只读用途的独立源码副本，复用同一未改Electron host、runtime/夹具/隔离配置补采每工具一份，凑足各3份；没有覆盖main dirty或切分支。所有异常/首轮A实现afterA和最终afterA2原件均保留，最终结论仅使用有效样本。初版大数组结构比较测试耗时过长已中断，改用原始字节SHA；一次node环境缺document产生未处理错误后改用jsdom重跑，不将这些尝试记为通过。
 
-A实现及以上证据提交后继续B；未声称Owner/真实手绘笔/ADA新包已验收。
+A实现阶段提交后继续B；以上性能表已由最终同尺寸重采纠正。未声称Owner/真实手绘笔/ADA新包已验收。
 
 
 ## 10. B实现与阶段验证
@@ -216,12 +216,54 @@ Enter的CPU准备、写入及history成功前不清状态；工具内COW root/se
 
 ### 完整native开发窗口证据
 
-正式文件为before-transform.json（只计move/scale）、before-transform-rotate.json及afterB2-transform.json。每种操作预热1次+交错正式3次，源/viewport/runtime/隔离偏好同配方，正常CDP输入60点；不是物理呈现延迟或生产dist。新实现三种正式结果RAF p95分别均为16.8–16.9ms；前态move为33.4/33.5/33.3，scale为33.5/33.4/33.4，真实rotate为33.5/33.5/50.1ms。前态每次拖动混合revision约31–59帧，新实现全部为0。正式拖动持续发布57–61份完整代际，最长发布间隔33.5–50.2ms，未以停手才收敛换取一致性；首次从begin至可见完整预览502.8–680.2ms（含调度/准备，不宣称纯GPU时间）。稳态源atlas上传增量全部0。
+以下为初轮文件before-transform.json（只计move/scale）、before-transform-rotate.json及afterB2-transform.json的记录；窗口尺寸最终发现不一致，性能对比由第11节同尺寸重采替代，不再用本段初轮收益作最终验收。每种操作预热1次+交错正式3次，源/viewport/runtime/隔离偏好同配方，正常CDP输入60点；不是物理呈现延迟或生产dist。新实现三种正式结果RAF p95分别均为16.8–16.9ms；前态move为33.4/33.5/33.3，scale为33.5/33.4/33.4，真实rotate为33.5/33.5/50.1ms。前态每次拖动混合revision约31–59帧，新实现全部为0。正式拖动持续发布57–61份完整代际，最长发布间隔33.5–50.2ms，未以停手才收敛换取一致性；首次从begin至可见完整预览502.8–680.2ms（含调度/准备，不宣称纯GPU时间）。稳态源atlas上传增量全部0。
 
 CPU Enter仍为6767–12402ms，保留为未优化长阻塞。重启后的afterB-handoff-valid补采三种Enter：最后完整预览保留到authority，Enter后引擎收敛137–257ms；可观察交接帧无混合revision、无缺失可见tile。单次CPU fallback慢速平移补采afterB-cpu-valid：340个拖动观察帧、21份呈现代际、混合0，停手pending=false；Enter约9831ms、收敛321ms，旧preview到authority完整切换。这是回退正确性探针，不充作三轮性能收益。
 
-所有正式B结果undo/redo的层坐标及逐tile SHA恢复一致（byteSize可因mip缓存驻留不同，不作像素字段比较）。同矩阵前后结果逐tile精确相同：move有3组、scale/rotate各9组配对；前态少数move漏结算最后点而矩阵不同的样本不强行当等量像素比较。A另有低频等量前3后3核验；B低频完整窗口只采CPU fallback单次，B三轮低频独立对照未执行，不标记通过；自动四类affine精确提交参考覆盖保留。
+所有正式B结果undo/redo的层坐标及逐tile SHA恢复一致（byteSize可因mip缓存驻留不同，不作像素字段比较）。同矩阵前后结果逐tile精确相同：move有3组、scale/rotate各9组配对；前态少数move漏结算最后点而矩阵不同的样本不强行当等量像素比较。A另有低频等量前3后3核验；初轮B低频完整窗口只采CPU fallback单次；第11节已追加完整GPU路径预热+三轮低频前后对照，最终以该节为准。自动四类affine精确提交参考覆盖保留。
 
 原始早期afterB rep3出现1Hz/无代际推进，按窗口活跃性异常排除；重启隔离profile后用最终afterB2整组替代。曾尝试系统窗口截图恢复，FrameArrived超时且检测到用户输入，未继续操作用户窗口；后续仅关闭并重启自有隔离测试窗口。追加源码热更新后工具模块状态重置使afterB-handoff/afterB-cpu没有有效变换矩阵，均排除，afterB-handoff-valid及afterB-cpu-valid为重启后的有效补采。未把排除样本或错误旋转分类算通过。故障重试最后修正仅影响异常分支，之后51项/构建及有效交接探针已重验；正常三轮矩阵无需因文档变更重跑。
 
 B阶段实现已完成，整体回归及最终自查继续；Owner原作、真实笔、物理显示、真实设备丢失/内存压力、生产dist性能仍未验收。没有执行PhotoCraft产品同机对照、全部模式/组合笛卡尔积或ADA集成验证。
+
+
+## 11. 整体回归、性能证据修正及最终交付
+
+### 同尺寸最终证据（替代初轮性能对比）
+
+最终自查发现before-environment为1920×1137，afterA2/afterB2为1450×1000；源画布虽然均为4K、zoom.2，窗口/viewport未完全相同。初轮数据保留作归因/像素证据，撤销“brush p95改善49.8%”和初轮帧尾收益推断。用实施前保全的e168f36源码归档在独立目录重新启动，不切main/覆盖dirty。首次before-fixed重采受实体鼠标及窗口遮挡影响，含异常输入/RAF约1Hz，整组不作最终收益证据；afterB-slow rep2也有实体鼠标导致不同矩阵，整组由最终低频重采替代。
+
+最终before-measure/after-measure使用完全相同隔离宿主：1450×1000，Canvas viewport1075.125×866、DPR1，4K非均匀源、zoom.2、同prefs/runtime/adapter记录（Electron44.4.5、Chrome152、WebGPU合成；adapter查询为NVIDIA Ampere，非逐提交设备证明）。测试窗固定可见并忽略实体鼠标；正常输入仍是CDP Input→CanvasView。此设置仅在忽略材料的测试宿主，不改产品。两态环境JSON所有字段相同，全部60个coalesced点保留，无额外buttons=0移动。每工具/尺寸、每变换条件预热1次+正式3次，条件顺序交错；性能期间不并行构建/自动测试。最终文件：
+
+- `before-measure-brush.json` / `after-measure-brush.json`：各24份，A最终p95表见第9节。
+- `before-measure-transform-all.json` / `after-measure-transform-all.json`：各12份，三种操作预热+三次正式；停手均pending=false，正式undo/redo坐标及逐tile SHA一致。
+- `before-measure-slow-transform-move.json` / `after-measure-slow-transform-move.json`：各4份，100ms等量平移，正式三轮同矩阵交叉9组最终逐tile精确相同；全部60点，无额外输入，undo/redo一致。正常move/scale/rotate也各9组同矩阵最终精确配对。
+- `before-measure-{brush,eraser}.cpuprofile` / `after-measure-{brush,eraser}.cpuprofile`：各工具单份采样归因，不当作三轮计时。
+
+| B操作 | 前态三次RAF p95/ms | 后态三次RAF p95/ms | 拖动完整代际数（后态） | 最长发布间隔/ms（后态） |
+| --- | --- | --- | --- | --- |
+| 平移 |33.4 /33.4 /33.4|16.8 /16.8 /16.8|61 /60 /60|33.6 /50.1 /33.6|
+| 缩放 |33.5 /33.4 /33.4|16.8 /16.8 /16.8|60 /60 /58|33.5 /33.4 /33.6|
+| 旋转 |33.4 /33.4 /33.4|16.8 /16.8 /16.9|59 /61 /60|50.1 /49.9 /33.5|
+
+B各操作p95中位数约减少49.7%。前态正式每次拖动混合revision为57–64帧，后态全部0，稳态源atlas上传增量全部0；首次完整预览420.0–659.4ms（包括调度）。后态正式Enter为6192–11930ms，**最终CPU重采样阻塞未优化**。Enter后引擎收敛多数116–173ms，一次scale rep3为1950ms；该样本未排除，前态也有一次2602ms长交接。后态所有可观察commit帧无缺失可见tile、无混合revision，保留完整preview至authority；帧计数/RAF不能证明物理显示扫描或完全消除主线程长帧。正式交接日志可见单tile process超过6ms，所以预算是可分单位之间的预算，不是硬6ms上限。
+
+A结论有明确差异：eraser300帧尾改善可重复；brush300仅证实目标读写/分配及像素op CPU采样成本减少，严格配对帧尾收益没有成立。保留有限实现交独立review，不为追求表格通过继续改GPU笔刷、downsample、历史或宿主架构。**A画笔性能目标部分未满足；不能把实现完成/测试通过视为整体体验Go。**
+
+原始材料均在 `doc/material/local/2026-11-11/brush-transform/run-01/`，保持忽略。`final-manifest.json`记录前态HEAD、后态产品HEAD f2f8be5及源码/最终数据SHA；最终提交仅补测试/文档，产品源码相同。复现入口为launch-baseline-measure.mjs + baseline-final-measure.mjs（profile由brush.mjs before-measure profile追加），后态launch-main-measure.mjs + after-final-measure.mjs；汇总为summarize-final.py。初始baseline-state.json/diff/tar及所有异常样本均保留。测试完成已关闭自有隔离窗口。
+
+### 最终检查与支持边界
+
+- 整体回归 **16文件253/253通过**：engine下batchedPaint/core/regressions/native/modes/inkModes/cmyk/features/moveSelection/moveSelectionReference/tileContentBounds；gpu下transformPreview/compositor/preview/floatingSelection/moveOutput。覆盖原Move GPU、边界缓存、常用色彩/位深、历史与native，不扩大到全格式/全工具组合。
+- 之后仅加强transformPreview源为非均匀、含透明像素图案，**19/19重验通过**；产品代码未再变化。包含半透明预览采样、负坐标及各类affine、独立CPU权威逐字节/历史/native参考。未将重复19项累加成新增唯一测试数。
+- P-BUILD通过，既有Vite警告保留；最终文档UTF-8无BOM、相对文件链接及git diff --check通过。保留DEV_SETUP/start-current/start-dev.bat原SHA；AI_CONTEXT/DEV_LOG仅提交本任务段，启动相关dirty保留。不提交原始材料，不修改embedded/ADA。
+
+| 路径 | 本次支持 | 回退/限制 |
+| --- | --- | --- |
+| A同步批处理 | RGB/RGBA8普通Normal brush/brush-mode eraser，round单笔尖≤512，资格见第9节 | selection、mask/lockAlpha、其它工具/模式/位深/复杂笔尖等原路；不跨帧排队，不丢输入 |
+| B稳定GPU源 | 单个简单RGB8像素层affine平移/缩放/旋转/翻转，最多3个简单根像素层及完整源容量合格 | Warp/透视/shear/多层/组/其它色彩位深/复杂效果显示/完整源超预算均CPU；CPU也使用一致帧交接 |
+| 正式提交/失败 | 原CPU插值、一次历史；有限工具内COW恢复，重试/Escape与故障回归 | CPU提交仍长阻塞，authority交接仍有长尾；没有GPU权威像素或通用历史框架 |
+
+本次阶段提交：阶段0 `5b5f23d`；A `78f96a0`；B `f2f8be5`；整体回归/证据纠正为本节所在后续提交。验证状态为实现与规定自动/开发窗口工作完成、有限性能收益有证据、画笔帧尾目标未证实；待ADA集成-REV统一独立review，不自行改判Go。
+
+未验收/未执行：真实手绘笔/压力设备及物理呈现、Owner原作品、真实GPU设备丢失/内存压力（本轮为程序化失效/容量/异常注入）、生产dist窗口性能/安装包、全组合矩阵、PhotoCraft产品同机基准及ADA消费端验收。上述继续Pending/Inconclusive；没有推送、embedded合入、ADA固定包更新或发布。交审后暂停，不推进下游。

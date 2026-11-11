@@ -21,7 +21,22 @@ beforeAll(async()=>{const d=await testDevice();if(!d)throw Error('GPU required')
 afterEach(()=>{vi.restoreAllMocks();cancelTransform();for(const s of [...editor.sessions])editor.removeSession(s.id);setGpuCompositor(gpu);});
 afterAll(()=>{setGpuCompositor(null);gpu.dispose();});
 const hash=(r:TiledRaster)=>createHash('sha256').update(new Uint8Array(r.readPixels({x:-64,y:-64,w:320,h:256}).buffer)).digest('hex');
-function fixture(stack=false){const d=newDoc(128,96);if(stack)add(d,solidLayer(d,'under',0,0,128,96,[.1,.5,.2,1]));const l=solidLayer(d,'source',-24,-12,80,70,[.7,.2,.8,.7]);add(d,l);if(stack)add(d,solidLayer(d,'above',20,16,30,22,[.2,.8,.1,.9]));const s=editor.addDocument(d);s.setActive(l.id);const h:ToolHost={editor,session:s,redraw(){},setCursor(){},viewportSize:()=>({w:800,h:600})};editor.hostFactory=()=>h;s.engine.lastVisible={level:0,tiles:[[0,0]]};return{d,l,s,h};}
+function fixture(stack=false){
+ const d=newDoc(128,96);
+ if(stack)add(d,solidLayer(d,'under',0,0,128,96,[.1,.5,.2,1]));
+ const l=solidLayer(d,'source',-24,-12,80,70,[.7,.2,.8,.7]);
+ // Nonuniform transparent pixels expose mapping and premultiplied sampling errors.
+ const pixels=new Uint8ClampedArray(80*70*4);
+ for(let y=0;y<70;y++)for(let x=0;x<80;x++){
+  const i=(y*80+x)*4;
+  pixels.set([(x*13+y*7)%256,(x*3+y*17)%256,(x*19+y*5)%256,(x+y)%9===0?0:80+(x*11+y*3)%176],i);
+ }
+ l.raster.writePixels({x:0,y:0,w:80,h:70},pixels);add(d,l);
+ if(stack)add(d,solidLayer(d,'above',20,16,30,22,[.2,.8,.1,.9]));
+ const s=editor.addDocument(d);s.setActive(l.id);
+ const h:ToolHost={editor,session:s,redraw(){},setCursor(){},viewportSize:()=>({w:800,h:600})};
+ editor.hostFactory=()=>h;s.engine.lastVisible={level:0,tiles:[[0,0]]};return{d,l,s,h};
+}
 const point=(x:number,y:number):ToolPointer=>({x,y,sx:x,sy:y,pressure:1,tiltX:0,tiltY:0,twist:0,button:0,buttons:1,alt:false,shift:false,mod:false,time:0,pointerType:'mouse',clickCount:1});
 function setMatrix(M:Affine){const s=transformState()!;transformController.down({} as ToolHost,point(s.base.x+10,s.base.y+20));(s as any).M=M;transformController.move({redraw(){}} as ToolHost,point(s.base.x+10,s.base.y+20));}
 // Use the real controller's move handle to request a translation without a copied preview implementation.
