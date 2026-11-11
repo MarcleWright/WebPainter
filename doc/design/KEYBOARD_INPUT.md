@@ -1,6 +1,6 @@
 # 键盘输入约定
 
-2026-11-11 实现交接。自动与生产 smoke 已验证的范围见[任务记录](../ai/tasks/2026-11-10_01_shortcut-unification.md)；独立实现审查、Windows 人工/中文 IME 和 Owner 验收仍 Pending。
+2026-11-11 实现交接。自动与生产 smoke 已验证的范围见[任务记录](../ai/tasks/2026-11-10_01_shortcut-unification.md)；原实现审查为 Changes Requested；限定 R1–R3 已本地修复，待独立复审，R4 明确延期。Windows 人工/中文 IME 和 Owner 验收仍 Pending。
 
 ## 绑定与显示
 
@@ -13,11 +13,12 @@
 ## 输入归属与生命周期
 
 - 文本控件拥有文字、剪贴板、全选、文字撤销、箭头与删除。composition/Process/Dead/keyCode229 优先于局部 Enter/Esc 和全局派发。文本焦点仅有效 `file.save` 可跨过控件的 stopPropagation，仍走原保存入口；对话框/菜单不放行文件命令。
-- Modal/菜单优先处理局部导航和确认/取消，Modal 仅转发缩放/适配视图白名单。曲线画布可聚焦并选择控制点；裸 Delete/Backspace 删除选中的中间点，保留端点，不穿透清空图层，组合输入和保护期间拒绝。
+- Modal/菜单优先处理局部导航和确认/取消。Modal 仅对非文本且未被控件局部键认领/消费的事件转发缩放/适配视图白名单；重绑的字母和编辑组合键不抢文字，Tab、控件激活以及多行 Enter/repeat 保持本地归属。曲线画布可聚焦并选择控制点；裸 Delete/Backspace 删除选中的中间点，保留端点，不穿透清空图层，组合输入和保护期间拒绝。
 - 工具仅认领明确修饰键组合的局部确认/取消/删点/箭头。busy 期间不插入全局 undo；Move pointer 中不插入箭头历史。一个事件只消费一次，一次触发型命令抑制 repeat；箭头和笔刷步进可重复。
 - 保存/关闭请求与目标 canEdit/access 都参与输入保护。已禁用工具的保留实例只用于判断是否有待结束交互，不重新授予输入；保护期间不通过工具切换、deactivate 或局部 Esc 丢掉文字、路径、变换等编辑。
 - Space 的 held pan 是视图覆盖，不调用普通 setTool/deactivate。笔画/拖动中不接管 pointer；平移已开始后松键仍由平移接收 pointer up，之后退出。失焦、切文档、进入文字/Modal/菜单及显式换工具使旧 held 状态失效，清理临时平移捕获，不提交/取消底下作品编辑。现有 Alt 取色不变，本轮不新增临时 zoom。
-- 数字延后 350ms，绑定原 session/doc/layer 对象、mode、mask/channel、tool 和参数类型。切层/工具/文档/文本焦点/Modal 后取消缓存，执行时再次验权。动态 transform 入口和 Modal 延迟确认也验证原身份，目标改变不作用于新的 active 文档。
+- 数字延后 350ms，绑定原 session/doc/layer 对象、mode、mask/channel、tool 和参数类型。切层/工具/文档/文本焦点/Modal 后取消缓存；Canvas pointer 交互开始立即取消旧 timer 与两位数缓存，即使短拖动已经结束也不再应用。执行时再检查 pointer 身份/busy、原目标、canEdit、outputPending/closePending 和相关 access。Modal 延迟确认仍验证原实例/目标身份。
+- 快速旋转/翻转的异步入口固定原 session/doc、完整选中图层对象与选择集合、mode/工具及必要编辑身份；选择或交互变化后恢复也不复活旧请求，继续前重查最终 Action enabled/access 和目标编辑/保存关闭状态。不改变既有变换算法、Action/宏及历史。
 
 ## 首批兼容操作
 
@@ -36,3 +37,7 @@
 首次读取旧配置若包含 duplicate/viaCopy 覆盖（包括空数组），或 Ctrl+J 已被用户占用，则持久化新入口无绑定。显式 copyContext 覆盖优先；Reset All 可主动恢复新默认，重启不重新迁移或复活移除的键。
 
 源码 owner：[有效绑定](../../src/app/shortcuts.ts)、[分发](../../src/app/inputDispatch.ts)、[焦点与 IME](../../src/app/inputContext.ts)、[held pan](../../src/app/heldPan.ts)、[Action](../../src/app/actions.ts)。验证命令见 [TESTING](../engineering/TESTING.md)。
+
+## 已知限制
+
+R4 按 Owner 决定延期：AdjustmentDialog 取消仍复用提交 permit。打开调整对话框后，若程序切层/切文档、删除目标或改变 access 使目标失效，Esc/Cancel/关闭按钮可能无法退出。本轮未分离提交准入与取消清理，也未标记该问题已修复。限定修复与独立复审边界见[任务文末](../ai/tasks/2026-11-10_01_shortcut-unification.md)。

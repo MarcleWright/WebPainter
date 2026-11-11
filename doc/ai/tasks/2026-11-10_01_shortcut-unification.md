@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented / 实现审查 Changes Requested，限定修复待 coder 执行。2026-11-10 方案 Approved 后按授权完成 P1–P5 本地实施；2026-11-11 实现审查复现四项问题，Owner 选择本轮修复 R1（P1）及 R2/R3（P2），R4（P2）明确延期。具体范围与补测见文末「限定修复授权与验收」。此处 R1 的 P1 是缺陷优先级，不是原实施阶段 P1。本轮文档交接不执行业务修复；未推送、合并或发布，人工/Owner 验收仍 Pending，不能标记整体实现验收通过。
+Implemented / 原实现审查 Changes Requested；Owner 限定的 R1、R2、R3 已按顺序分别本地修复并补回归，待独立复审。R4 明确延期，未修复。2026-11-10 方案 Approved 与 P1–P5 历史交接证据保留，当前修复范围、hash、检查及限制见文末「限定修复授权与验收」。R1 的 P1 为缺陷优先级，不是原实施阶段 P1。未推送、合并或发布，G5 人工/真实 Windows/中文 IME/Owner 验收仍 Pending，不据三项修复宣称整体实现验收通过。
 
 工作目录 `D:/00_Projects_WSY/AI/Codex_Projects/WebPainter_Dev`, 分支 `codex/dev`, 核对基线 `59f81b5`。实施前检查实际 HEAD/工作区; 不修改 main_native、embedded 或相邻 ADA, 不带入其他工作区未提交的启动脚本。
 
@@ -333,7 +333,7 @@ Owner 决定：仅授权 coder 修复 R1、R2、R3 并补回归测试；R4 延�
 | --- | --- | --- |
 | R1：原目标快速变换 | 本地修复/定向检查通过，待独立复审 | `5a4e59f`；R1 6 tests Passed，P-TYPE Passed；人工/Owner Pending |
 | R2：数字延迟与新交互 | 本地修复/定向检查通过，待独立复审 | `beff81e`；R2 及既有失效检查 13 tests Passed，P-TYPE Passed；人工/Owner Pending |
-| R3：Modal 文本归属 | 本地修复/定向检查通过，待独立复审 | 本项提交 hash 在最终交接补记；监听 suite 59/59、P-TYPE Passed；人工/Owner Pending |
+| R3：Modal 文本归属 | 本地修复/定向检查通过，待独立复审 | `f8e94b8`；监听 suite 59/59、P-TYPE Passed；人工/Owner Pending |
 | R4：失效调整取消 | Owner 明确延期 | 已知限制，未修复 |
 | 修复后复审 | Pending | R1–R3 单独复核；R4、G5 人工/Owner 验收另列 |
 
@@ -362,8 +362,26 @@ R1 commit：5a4e59f。修复前真实 App/Canvas 下按 5 后分别开始长拖�
 
 R2 commit：beff81e。修复前把 view.zoomIn 绑定 A，真实 Modal 的 input、textarea、contenteditable 三项均 Failed：文字事件被 preventDefault。回归扩展字母及 Ctrl+A/Z/Backspace；jsdom 不执行原生文字插入，所以只记录控件本地 handler、消费状态、视图和历史，不声称实际打字或剪贴板人工验收。
 
-修复只调整 Modal 输入归属：defaultPrevented/IME 先返回；局部 Escape/Enter、文字及 native/role 控件的编辑/导航/激活、Tab 焦点导航均先于视图白名单。多行 textarea/contenteditable 的 Enter 和 repeat 留给编辑区域；普通单行 Enter 的既有模态提交保留。未被认领的非文本/非控件区域仍通过有效绑定缩放一次。没有放行保存或其他文档命令，也未修改非模态文本的 file.save 入口。
+修复只调整 Modal 输入归属：defaultPrevented/IME 先返回；局部 Escape/Enter、文字及 native/role 控件的编辑/导航/激活、Tab 焦点导航均先于视图白名单。多行 textarea/contenteditable 的 Enter 和 repeat 留给编辑区域；普通单行 Enter 的既有模态提交保留。未被认领的非文本区域仍通过有效绑定缩放一次，按钮上未被认领的 Ctrl+= 同样可缩放；控件局部激活/导航键不转发。没有放行保存或其他文档命令，也未修改非模态文本的 file.save 入口。
 
 验证 `npm exec -- vitest run tests/input/listeners.test.tsx`：59/59 Passed（本轮新增 R3 9 项，其余覆盖原监听及 R1/R2）；`npm run typecheck`、diff --check Passed。新增断言覆盖三个编辑目标的四个重绑组合、NumberField 真实箭头步进、select 导航/Enter、button 激活与 Tab、不吞多行 Enter/repeat、composition/局部确认取消优先、局部已消费键、非文本 view.zoomStep 一次，以及模态保存/清图层/新建隔离；既有非模态保存/文字/IME 用例也复跑通过。
 
 R4 保持延期：AdjustmentDialog 仍以提交 permit 限制取消；活动图层/文档、目标删除或 access 变化导致目标失效时，Esc/Cancel/关闭按钮可能无法退出。本轮没有修改该 onClose 或预览取消清理。真实 Windows/中文 IME/生产人工、Owner 和独立修复复审仍 Pending。
+
+
+### 限定修复最终检查与独立复审交接（2026-11-11）
+
+| 项目 | 最终证据 |
+| --- | --- |
+| R1 | `5a4e59f`：快速旋转/翻转固定完整原目标和交互身份，失效不可复活；定向 6 项 Passed |
+| R2 | `beff81e`：新 pointer 交互取消旧数字 timer/缓存，执行前重查 busy/pending/access；定向及原失效场景 13 项 Passed |
+| R3 | `f8e94b8`：Modal 文字、控件局部键、IME 和已消费事件先于视图白名单；包含按钮上未认领 Ctrl+= 仍可缩放；监听 suite 59/59 Passed |
+| P-INPUT | **Passed：8 files / 102 tests**（原 75 + 新增 R1 6 / R2 12 / R3 9）；最终重跑包含实际 App/Canvas/Modal、真实工具与业务状态/像素/历史，未 mock dispatcher/run/工具 |
+| P-BUILD | **Passed**：typecheck、renderer、Electron 构建；保留既有 WASM/Node browser externalization 和 URL build-time 解析警告；更新/错误上报目标仍为关闭/本地 |
+| P-DOC | **Passed**：11 个改动文件 UTF-8 无 BOM、69 个相对链接有效；审查材料受 Git 忽略，上游 docs/根 README/CHANGELOG/NOTES 无改动，diff --check 无错误 |
+| R4 | **Owner 明确延期，未修复**；`src/ui/dialogs/EditingDialogs.tsx` 相对本轮 e997029 基线无改动，调整目标失效仍可能无法正常取消 |
+| 人工 / Owner / 独立复审 | **Pending**。本轮没有重新执行真实 Windows/中文 IME/生产人工或生产 smoke；原 P5 的生产证据只属于历史构建，不替代本轮验收 |
+
+独立复审代码范围：`e997029310789082ca09e0684e599aac74b8b7de..f8e94b8dae167ab1a1b6d4c98258c03f8c23ecc5`。后续文档提交只补 hash、检查结果与稳定规则，不含业务修复。原 task 的限定授权、审查说明与历史阶段记录均保留，无相邻 ADA/main_native/embedded 修改，无推送/合并/发布。
+
+复审建议按 R1→R2→R3 检查三个独立提交及文末新增回归：特别复核同文档/多选与变化恢复的永久取消、最终 Action/pending 准入、长/短交互后旧数字不落下、模态文字与控件事件不被吞掉，同时非文本未认领 view 键仍执行一次。使用 P-INPUT/P-BUILD/P-DOC 重验；允许 R1–R3 单独复核，不把 R4/G5 人工/Owner Pending 抹掉。本交接不是复审 Approved。

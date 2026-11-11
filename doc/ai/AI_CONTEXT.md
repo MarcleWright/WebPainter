@@ -1,6 +1,6 @@
 # 当前上下文
 
-2026-11-11 当前工作目录为 WebPainter_Dev、分支 codex/dev；快捷键任务从 59f81b5 按 P1–P5 串行实施并分别本地提交。[任务记录](tasks/2026-11-10_01_shortcut-unification.md) 含提交/验证/人工矩阵与独立实现审查交接；[输入规则](../design/KEYBOARD_INPUT.md) 是稳定约定。复用原 Action/keymap/工具和历史，已完成 75 项定向自动检查与生产构建、隔离生产 smoke/重启配置检查；Windows 人工/中文 IME、Owner 和独立实现审查 Pending，不能标记用户验收完成。未推送/合并/发布，未修改 main_native、embedded 或相邻 ADA；下方保留原历史时点。
+2026-11-11 当前工作目录 WebPainter_Dev、分支 codex/dev；P1–P5 原实现已交接（原定向 75 项/构建/隔离 smoke 证据保留）。后续实现审查为 Changes Requested；Owner 限定 R1→R2→R3 修复现已分别本地提交，待独立复审，R4 调整目标失效无法取消明确延期。当前验证和提交 hash 见[任务文末](tasks/2026-11-10_01_shortcut-unification.md)，稳定规则见[输入约定](../design/KEYBOARD_INPUT.md)。Windows 人工/中文 IME、G5 和 Owner 验收仍 Pending，不能标记整体实现验收通过。未推送/合并/发布，未修改 main_native、embedded 或相邻 ADA；下方保留历史时点。
 
 2026-11-06 03B：main独立worktree通用native v1已实施，待后续统一review。初始main ef3eea8；75项首次组合检查、追加后native18项/类型及构建通过，6层4K codec与tile往返有记录。格式/拒绝边界见 [native格式](../engineering/NATIVE_FORMAT.md)，[执行证据](tasks/2026-11-06_03B_native-codec.md)。只由main单向合入embedded供ADA固定包使用，不引入ADA/embedded依赖；未推送/发布，人工/Photoshop未验收。
 
