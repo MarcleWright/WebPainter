@@ -94,6 +94,7 @@ function DocTabs() {
 }
 
 interface AntsCache {
+  mask: NonNullable<typeof editor.active>['doc']['selection']['mask'];
   key: string;
   polys: number[][];
   scale: number;
@@ -433,20 +434,24 @@ export function CanvasView() {
     const v = s.view;
     const level = Math.max(0, Math.min(10, v.level(12)));
     const sc = 1 << level;
-    const b = doc.selection.bounds(doc.bounds);
+    const preview = doc.selection.previewOutline;
+    const mask = preview?.mask ?? doc.selection.mask;
+    const b = preview?.bounds ?? doc.selection.bounds(doc.bounds);
     if (!b) return;
     const lr = { x: Math.floor(b.x / sc), y: Math.floor(b.y / sc), w: Math.ceil((b.x + b.w) / sc) - Math.floor(b.x / sc), h: Math.ceil((b.y + b.h) / sc) - Math.floor(b.y / sc) };
-    const key = `${doc.selection.version}:${level}:${lr.x},${lr.y},${lr.w},${lr.h}`;
+    const key = `${mask.version}:${level}:${lr.x},${lr.y},${lr.w},${lr.h}`;
     // Selected pixels being moved: the same outline, shifted (no re-tracing while dragging).
-    const moved = doc.selection.movedOutline();
-    let odx = 0, ody = 0;
-    if (moved && ants.current && ants.current.base === moved.baseVersion && ants.current.level === level) {
+    const moved = preview ? null : doc.selection.movedOutline();
+    let odx = preview?.dx ?? 0, ody = preview?.dy ?? 0;
+    if (moved && ants.current && ants.current.mask === mask && ants.current.base === moved.baseVersion && ants.current.level === level) {
       odx = moved.dx - ants.current.bdx;
       ody = moved.dy - ants.current.bdy;
-    } else if (!ants.current || ants.current.key !== key) {
+    } else if (!ants.current || ants.current.mask !== mask || ants.current.key !== key) {
       if (lr.w * lr.h > 16e6) return;
-      const m = doc.selection.mask.readFloat(lr, level);
-      ants.current = { key, polys: traceContours(m, lr.w, lr.h), scale: sc, ox: lr.x, oy: lr.y, level, base: moved ? moved.baseVersion : doc.selection.version, bdx: moved?.mdx ?? 0, bdy: moved?.mdy ?? 0 };
+      const m = mask.readFloat(lr, level);
+      // Entirely low-alpha fragments still need a visible outline, including transparent holes.
+      const threshold = m.some(a => a >= .5) ? .5 : Number.MIN_VALUE;
+      ants.current = { mask, key, polys: traceContours(m, lr.w, lr.h, threshold), scale: sc, ox: lr.x, oy: lr.y, level, base: moved ? moved.baseVersion : doc.selection.version, bdx: moved?.mdx ?? 0, bdy: moved?.mdy ?? 0 };
     }
     const a = ants.current;
     g.save();

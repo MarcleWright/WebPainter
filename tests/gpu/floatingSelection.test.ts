@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
-import { createHash } from 'node:crypto';
 import { testDevice, maxDiff } from '../helpers/gpu';
 import { GpuCompositor } from '../../src/gpu/compositor';
 import { setGpuCompositor } from '../../src/rendering/renderEngine';
@@ -78,25 +77,24 @@ it('composes float on GPU before layer effects and preserves formal pixels durin
   editor.removeSession(session.id);
 });
 
-it('C2 experimental commit matches the pre-change raster and selection oracle', () => {
+it('C2 GPU and forced CPU commit agree on paired min-alpha and fragment contour', () => {
   if (!gpu) throw new Error('GPU unavailable');
-  setGpuCompositor(gpu);
-  const w=24,h=16,doc=newDoc(w,h),pixels=new Uint8ClampedArray(w*h*4);
-  for(let y=0;y<h;y++) for(let x=0;x<w;x++) { const i=(y*w+x)*4; pixels[i]=(x*37+y*11)%256; pixels[i+1]=(x*7+y*29)%256; pixels[i+2]=(x*13+y*19)%256; pixels[i+3]=[0,64,128,255][(x+y)%4]; }
-  const layer=createPixelLayer('C2',8,TiledRaster.fromPixels(w,h,4,8,pixels)); add(doc,layer);
-  const session=editor.addDocument(doc);session.setActive(layer.id);
-  const hst: ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
-  const cov=new Float32Array(48); for(let y=0;y<6;y++)for(let x=0;x<8;x++)cov[y*8+x]=x===0||y===0||x===7||y===5?.5:1;
-  doc.selection.combine({x:2,y:2,w:8,h:6},cov,'replace');
-  const t=new MoveTool();t.down(hst,pt(4,4));t.move(hst,pt(10,7));
-  expect(session.engine.getOverride(layer.id)?.gpu?.floating).toBeTruthy(); t.up(hst);
-  const hash=(bytes: ArrayBufferView)=>createHash('sha256').update(new Uint8Array(bytes.buffer,bytes.byteOffset,bytes.byteLength)).digest('hex');
-  const r={x:0,y:0,w,h};
-  expect([hash(layer.raster.readPixels(r)),hash(doc.selection.mask.readPixels(r)),hash(compositeRegion(doc,r,{level:0}))]).toEqual([
-    '2b25e8a12a305e931b99d7b8cf73ff9cad4fea5570a3deb6562aa3f910256c85',
-    'bcb886f547c4855c500d0c01f1c94fcc58d361bd860fae4a091f116b3bdcd0da',
-    '55d7d6b246aa6247c6f83c61d7ac286871039063f72698c65ba1e10339ba559a']);
-  editor.removeSession(session.id);
+  const run = (backend: GpuCompositor | null) => {
+    setGpuCompositor(backend);
+    const doc=newDoc(24,16),pixels=new Uint8ClampedArray(24*16*4);
+    for(let i=0;i<24*16;i++){pixels[i*4]=i%251;pixels[i*4+1]=70;pixels[i*4+3]=[0,64,128,255][i%4];}
+    const layer=createPixelLayer('C2',8,TiledRaster.fromPixels(24,16,4,8,pixels));add(doc,layer);
+    const session=editor.addDocument(doc);session.setActive(layer.id);
+    doc.selection.combine({x:2,y:2,w:8,h:6},Float32Array.from({length:48},(_,i)=>i%5===0?.5:1),'replace');
+    const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+    const t=new MoveTool();t.down(host,pt(20,12));t.move(host,pt(26,15));
+    const ov=session.engine.getOverride(layer.id)!;expect(!!ov.gpu?.floating).toBe(!!backend);
+    const preview=ov.read!({x:0,y:0,w:24,h:16},0);
+    t.up(host);const result={preview,pixels:layer.raster.readPixels({x:0,y:0,w:24,h:16}),mask:doc.selection.read({x:0,y:0,w:24,h:16})};
+    editor.removeSession(session.id);return result;
+  };
+  const hardware=run(gpu),cpu=run(null);expect(hardware).toEqual(cpu);
+  expect(gpu.floatingAtlasResidentTiles).toBe(0);setGpuCompositor(gpu);
 });
 
 it('C1 GPU preview retains mask, multiply, opacity, and curves at 25 percent', async () => {
@@ -167,7 +165,7 @@ it('unsupported 16-bit documents use the existing path', () => {
   const session=editor.addDocument(doc);session.setActive(l.id);doc.selection.combine({x:4,y:4,w:8,h:8},new Float32Array(64).fill(1),'replace');
   const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
   const t=new MoveTool(),version=l.raster.version;t.down(host,pt(6,6));t.move(host,pt(12,10));
-  expect(session.engine.getOverride(l.id)).toBeUndefined();expect(l.raster.version).toBeGreaterThan(version);t.cancel(host);
+  expect(session.engine.getOverride(l.id)?.gpu).toBeUndefined();expect(session.engine.getOverride(l.id)?.read).toBeTruthy();expect(l.raster.version).toBe(version);t.cancel(host);expect(session.engine.getOverride(l.id)).toBeUndefined();
   editor.removeSession(session.id);
 });
 
@@ -215,4 +213,15 @@ it('preserves redo on write failure and keeps the committed move on history noti
   t.down(host,pt(6,6));t.move(host,pt(16,6));t.up(host);
   expect(session.history.canRedo).toBe(false);const count=session.history.entries.length;t.up(host);expect(session.history.entries.length).toBe(count);
   editor.removeSession(session.id);
+});
+
+import {checkFragmentOwnership} from '../helpers/selectionMove';
+it('B5 real GPU invalidation releases tiles and preserves external raster/mask/selection/owner replacements',async()=>{
+  if(!gpu)throw new Error('GPU unavailable');setGpuCompositor(gpu);
+  await checkFragmentOwnership(async({doc,layer,session})=>{
+    const ov=session.engine.getOverride(layer.id)!;expect(ov.gpu?.floating).toBeTruthy();
+    await gpu!.compositeRead(doc,{x:0,y:0,w:64,h:24},{level:0,overrides:new Map([[layer.id,ov]])});
+    expect(gpu!.floatingAtlasResidentTiles).toBeGreaterThan(0);
+  });
+  expect(gpu.floatingAtlasResidentTiles).toBe(0);
 });

@@ -11,6 +11,8 @@ export type SelectionOp = 'replace' | 'add' | 'subtract' | 'intersect';
 
 export class Selection {
   mask = new TiledRaster(1, 8, 0);
+  /** Private Move display mask; never part of the authoritative selection or history. */
+  previewOutline: {mask:TiledRaster; bounds:Rect; dx:number; dy:number} | null = null;
   private cachedBounds: { version: number; canvas: string; value: Rect | null } | null = null;
   /**
    * Set while selected pixels are being moved: the outline is the outline the mask had at

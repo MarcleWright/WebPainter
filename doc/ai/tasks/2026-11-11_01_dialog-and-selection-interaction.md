@@ -72,7 +72,7 @@
 | 阶段 | 输出与检查 | 状态 |
 | --- | --- | --- |
 | P1 公共弹窗 | 透明背景、位置记忆及输入边界；完成导航与已有取色入口清单、实际事件传播验证 | 自动验证通过，人工 Pending |
-| P2 选区移动 | 片段覆盖率/轮廓、选区优先命中、提取与挖空、GPU/CPU 交接、版本所有权及单次历史配套实现 | Pending |
+| P2 选区移动 | 片段覆盖率/轮廓、选区优先命中、提取与挖空、GPU/CPU 交接、版本所有权及单次历史配套实现 | 自动验证通过，窗口/Owner Pending |
 | P3 集成验收 | 运行关联回归、构建及当前源码独立窗口检查；记录人工未覆盖项，更新 owner 文档 | Pending |
 
 按本轮 Owner 授权 P1→P2→P3 串行执行并分别本地提交。发现范围外缺陷记录并隔离，不以修补全编辑器为任务前置。
@@ -121,4 +121,16 @@ Owner 已选择公共透明模态背景及受控画布交互；移动轮廓来�
 - 导航清单：暴露的实际 .viewport 上滚轮遵循 Canvas 的平移/缩放；中键直接操作绑定 session 的 view，不聚焦 Canvas、不 blur 参数、不分发工具。非文本/非组合输入的有效 held 绑定可发起左键平移；按下必须来自 backdrop 的画布区域，标题/控件不能转移归属。popup/menu 阻断导航。失焦/顶层变更/切 session/关闭清理；Canvas 普通入口额外阻断背景编辑。
 - 取色清单：审计 DialogHost 49 类及 ColorPicker/ColorRange；现有 SV/hue 是弹窗内部控件，ColorRange 读取前景色但没有明确的主画布取色 owner API。当前无符合“已有显式主画布取色入口”的公共能力，因此未放行工具透传或新增业务入口。五类预览仍由各对话框原 owner 管理。
 - 验证：实际 App/Canvas/Modal listeners 62/62（新增 3 场景，覆盖参数焦点/组合输入下滚轮中键、Space/popup/失焦/双层栈、位置记忆与 resize）；typecheck 通过。完整 P-INPUT 8 文件 105/105 通过（本地原始日志 doc/material/local/dialog-selection-2026-11-11/p1-input.log）；原生窗口/视觉、真实 IME/Owner 体验 Pending，自动 DOM 输入不替代人工。
-- P1 提交：本节所在阶段提交（hash 在 P2 记录回填，避免自引用）。
+- P1 提交：`4c99632`（公共弹窗及已批准方案文档）。
+
+### P2 实施记录（2026-11-11）
+
+- down 与 hover/lift 共同使用单个像素层+像素选区资格，保留自动选层/变换手柄优先级；不再读取起点覆盖阈值。空片段/锁定拒绝后不落入整层移动；mask/channel/Quick Mask 不套用新片段资格。
+- 提取为 `f=min(sourceAlpha,coverage)`，非 Alt 原位剩余为 `(sourceAlpha-f)/(1-f)`（f=1 时为 0），配套现有 straight-alpha source-over。片段轮廓覆盖率用 f，保留洞、原选区约束和图层偏移；不加载整层透明度、不烘焙图层效果。8/16 位按原生编码量化，32 位浮点；测试容差原生 Alpha 1/max、选区 1/255，32 位 1e-6。
+- 临时轮廓是 Selection 上私有显示引用，一次建立后只平移；不在 pointermove 创建整图快照、重读整层 Alpha 或改正式选区。Canvas 缓存包含 mask 对象身份，避免沿用原宽松轮廓。通常显示 0.5 等值线；全低 Alpha 无 0.5 边时显示非零边界，保证低 Alpha 环/洞可见；不改正式覆盖数值。
+- GPU 能力边界不扩大。CPU 回退也使用私有 cut+LayerOverride.read，保持原生位深，拖动中正式像素/选区均不写。并发已有 preview 时拒绝开始，避免覆盖其他 owner。一次 up 准备两份结果、同一 Composite Move 提交；无位移/返回起点/取消不改正式状态、不新增历史。
+- 局部 guard 记录 session/doc/layer、位置、selection/raster/mask 对象与版本、目标模式和 override 身份；失效清理本次引用/资源并丢缓存。提交前再查；提交失败按资源最后自有版本分别回滚，外部已接管的像素/选区保留。浮动缓存补 mask/layer/位置身份，低 Alpha 重拖不依赖缓存。
+- 补测：8/16/32 Alpha×coverage 0/.25/.5/1 + .37 羽化数值；偏移低 Alpha 环和洞、原选区外起点、全低 Alpha 缓存失效后重拖、hover 不 lift、两步撤销；Alt/取消/空片段/锁定/零位移/返回起点；真实 GPU 与强制 CPU 预览/落定对照；双后端 8 种接管×3 种迟到尾事件（含 raster/mask/selection 对象、图层移除、override 和切 session）；CPU 提交失败后分别保留外部像素/选区。原 GPU 取消、提交失败、保存/输出交接仍保留。
+- 验证：Move+独立新语义 reference+真实 WebGPU floatingSelection 3 文件 22/22；追加低 Alpha 轮廓后 Move+moveOutput 2 文件 36/36；typecheck 通过。扩展回归最初 175/176 通过，唯一失败是 moveOutput 旧 CPU“必须写正式 raster”断言；按私有预览契约更新并在上述 36/36 中通过。未隐藏失败，P3 统一重跑最终关联集。原始日志在本地 `doc/material/local/dialog-selection-2026-11-11/`，不提交。
+- 旧 C2 乘法固定 hash 已随获批产品语义作废，engine reference 用独立字节数组计算重叠放置、羽化、剩余与轮廓，不用重新抄当前输出 hash；GPU C2 比较同 fixture 的硬件/强制 CPU。真实 GPU 测试使用可用 WebGPU adapter，不是 mock；仍不代表真实窗口/4K/设备或 Owner 验收。
+- P2 提交：本节所在阶段提交，hash 在 P3 回填。独立实现审查及 A1–A4/C1 人工 Pending；旧快捷键任务 R4 调整目标失效后取消限制仍保留，本任务未修复。

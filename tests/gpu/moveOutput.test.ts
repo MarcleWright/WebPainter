@@ -65,7 +65,7 @@ it('autosave skips the target during Move including after yield, then saves afte
 it('automatically falls back for low zoom, groups and unavailable GPU',()=>{
  for(const mode of ['zoom','group','backend']){
  const {s,doc,l,t,h}=fixture();if(mode==='zoom')s.view.zoom=.125;if(mode==='group')doc.insertLayer(createGroupLayer('unsupported'));if(mode==='backend')setGpuCompositor(null);
- const version=l.raster.version;t.down(h,pt(3,3));t.move(h,pt(9,3));expect(s.engine.getOverride(l.id)).toBeUndefined();expect(l.raster.version).toBeGreaterThan(version);t.cancel(h);setGpuCompositor(gpu);
+ const version=l.raster.version;t.down(h,pt(3,3));t.move(h,pt(9,3));expect(s.engine.getOverride(l.id)?.gpu).toBeUndefined();expect(s.engine.getOverride(l.id)?.read).toBeTruthy();expect(l.raster.version).toBe(version);t.cancel(h);expect(s.engine.getOverride(l.id)).toBeUndefined();setGpuCompositor(gpu);
  }
 });
 it('backend loss before submission cancels output; backend loss after commit preserves history',async()=>{
