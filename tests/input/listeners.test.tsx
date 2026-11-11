@@ -322,3 +322,57 @@ it.each(['rotate90cw','flipH'])('R1: stable %s affects only the original selecte
  await act(async()=>key(window,'z',{ctrlKey:true}));expect(quickLayerState(session)).toEqual(before);
  await act(async()=>key(window,'z',{ctrlKey:true,shiftKey:true}));expect(quickLayerState(session)).toEqual(after);
 });
+
+it.each([['long',false],['short',true]] as const)('R2: old digit cannot modify Move during/after a new %s drag',async(_label,short)=>{
+ const {session}=await mount();const layer=paintFixture(session), canvas=container.querySelector('.viewport')!;
+ await act(async()=>editor.setTool('move'));const before=quickLayerState(session),index=session.history.index;
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
+ try {
+  await act(async()=>{key(canvas,'5');pointer(canvas,'pointerdown',1,1);pointer(canvas,'pointermove',13,1);if(short)pointer(canvas,'pointerup',13,1);});
+  await act(async()=>vi.advanceTimersByTimeAsync(400));
+  expect(session.activeLayer()!.opacity).toBe(1);expect(session.history.index).toBe(index+(short?1:0));
+  if(!short)await act(async()=>pointer(canvas,'pointerup',13,1));
+  expect(session.history.index).toBe(index+1);await act(async()=>key(canvas,'z',{ctrlKey:true}));expect(quickLayerState(session)).toEqual(before);
+ } finally {await act(async()=>pointer(canvas,'pointerup',13,1));vi.useRealTimers();}
+});
+
+it('R2: stroke start discards old flow digit and two-digit cache without breaking one-stroke undo',async()=>{
+ const {session}=await mount();paintFixture(session);const canvas=container.querySelector('.viewport')!;
+ await act(async()=>{editor.setTool('brush');ui.setBrush({size:2,opacity:.8,flow:.6});});const before=quickLayerState(session),index=session.history.index;
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
+ try {
+  await act(async()=>{key(canvas,'5',{shiftKey:true});pointer(canvas,'pointerdown',2,2);pointer(canvas,'pointermove',8,2);});
+  await act(async()=>vi.advanceTimersByTimeAsync(400));expect(useApp.getState().brush.flow).toBe(.6);expect(session.history.index).toBe(index);
+  await act(async()=>pointer(canvas,'pointerup',8,2));expect(session.history.index).toBe(index+1);
+  await act(async()=>{key(canvas,'4',{shiftKey:true});await vi.advanceTimersByTimeAsync(350);});expect(useApp.getState().brush.flow).toBe(.4);expect(session.history.index).toBe(index+1);
+  await act(async()=>key(canvas,'z',{ctrlKey:true}));expect(quickLayerState(session)).toEqual(before);
+ } finally {await act(async()=>pointer(canvas,'pointerup',8,2));vi.useRealTimers();}
+});
+it.each(['output','close','canEdit','layerAccess','brushAccess'])('R2: deferred parameter rejects %s without history and clears its digit cache',async(reason)=>{
+ const {session}=await mount();paintFixture(session);const brush=reason==='brushAccess';
+ await act(async()=>{editor.setTool(brush?'brush':'move');ui.setBrush({opacity:1});});const canvas=container.querySelector('.viewport')!,index=session.history.index;
+ let restore:(()=>void)|undefined;vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
+ try {
+  await act(async()=>key(canvas,'5'));
+  if(reason==='output'){session.outputPending=Promise.resolve(true);expect(session.canEdit()).toBe(true);}
+  if(reason==='close'){session.closePending=Promise.resolve(true);expect(session.canEdit()).toBe(true);}
+  if(reason==='canEdit')session.editProtected=true;
+  if(reason==='layerAccess'||brush)restore=installAccessPolicy(id=>({visible:true,enabled:id!==(brush?'tool:brush':'action:layer.setOpacity')}));
+  await act(async()=>vi.advanceTimersByTimeAsync(400));expect(brush?useApp.getState().brush.opacity:session.activeLayer()!.opacity).toBe(1);expect(session.history.index).toBe(index);
+  session.outputPending=null;session.closePending=null;session.editProtected=false;restore?.();restore=undefined;
+  await act(async()=>{key(canvas,'9');await vi.advanceTimersByTimeAsync(350);});expect(brush?useApp.getState().brush.opacity:session.activeLayer()!.opacity).toBe(.9);
+ } finally {session.outputPending=null;session.closePending=null;session.editProtected=false;restore?.();vi.useRealTimers();}
+});
+it.each(['brushOpacity','flow','layerOpacity','fillOpacity'])('R2: normal %s combines two digits and applies a single digit exactly once',async(parameter)=>{
+ const {session}=await mount();paintFixture(session);const brush=parameter==='brushOpacity'||parameter==='flow',shift=parameter==='flow'||parameter==='fillOpacity';
+ await act(async()=>{editor.setTool(brush?'brush':'move');ui.setBrush({opacity:1,flow:1});});
+ const changes=vi.spyOn(ui,'setBrush'),pushes=vi.spyOn(session.history,'push'),canvas=container.querySelector('.viewport')!;
+ const value=()=>brush?(shift?useApp.getState().brush.flow:useApp.getState().brush.opacity):(shift?session.activeLayer()!.fillOpacity:session.activeLayer()!.opacity);
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
+ try {
+  await act(async()=>{key(canvas,'2',{shiftKey:shift});await vi.advanceTimersByTimeAsync(100);key(canvas,'5',{shiftKey:shift});});expect(value()).toBe(.25);
+  await act(async()=>vi.advanceTimersByTimeAsync(700));expect(brush?changes:pushes).toHaveBeenCalledTimes(1);
+  await act(async()=>{key(canvas,'7',{shiftKey:shift});await vi.advanceTimersByTimeAsync(349);});expect(value()).toBe(.25);
+  await act(async()=>vi.advanceTimersByTimeAsync(1));expect(value()).toBe(.7);await act(async()=>vi.advanceTimersByTimeAsync(700));expect(brush?changes:pushes).toHaveBeenCalledTimes(2);
+ } finally {vi.useRealTimers();}
+});

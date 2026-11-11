@@ -5,7 +5,7 @@ import {access} from './access';
 import {useApp, ui} from './store';
 import {chordFromEvent, keymap} from './shortcuts';
 import {isComposing,isTextTarget,inputBlocked,installInputContext} from './inputContext';
-import {beginPan,releasePan,invalidatePan} from './heldPan';
+import {beginPan,releasePan,invalidatePan,inputPointerRevision,inputPointerBusy,onInputPointerStart} from './heldPan';
 import type {ToolId} from '../tools/toolTypes';
 const BRUSH_TOOLS = new Set<ToolId>(['brush','pencil','eraser','bgEraser','cloneStamp','patternStamp','healing','spotHealing','remove','colorReplace','mixerBrush','blur','sharpen','smudge','dodge','burn','sponge','quickSelect']);
 let pending: {digits: string; flow: boolean; timer: ReturnType<typeof setTimeout>; cancelSession: () => void} | null = null;
@@ -17,13 +17,20 @@ function handleDigit(digit: string, flow: boolean) {
   const digits = (pending?.digits ?? '') + digit;
   cancelDigits();
   const doc = s.doc, target = s.activeLayer(), mode = s.mode, layer = s.activeLayerId, mask = s.editMask, channel = s.activeChannelId, tool = editor.currentToolId;
-  const valid = () => editor.active === s && s.doc === doc && s.mode === mode && s.activeLayer() === target && s.activeLayerId === layer && s.editMask === mask && s.activeChannelId === channel && editor.currentToolId === tool && !useApp.getState().dialogs.length && !isTextTarget(document.activeElement) && s.canEdit() && access(`tool:${tool}`).enabled;
+  const interaction = inputPointerRevision(), brush = BRUSH_TOOLS.has(tool);
+  const parameter = flow ? 'layer.setFillOpacity' : 'layer.setOpacity';
+  const valid = () => editor.active === s && s.doc === doc && s.mode === mode && s.activeLayer() === target
+    && s.activeLayerId === layer && s.editMask === mask && s.activeChannelId === channel && editor.currentToolId === tool
+    && inputPointerRevision() === interaction && !inputPointerBusy() && !editor.currentTool?.busy?.()
+    && !useApp.getState().dialogs.length && !isTextTarget(document.activeElement)
+    && s.canEdit() && !s.outputPending && !s.closePending && access(`tool:${tool}`).enabled
+    && (brush || action(parameter)?.enabled?.() !== false);
   const apply = () => {
     cancelDigits();
     if (!valid()) return;
     const value = digits.length >= 2 ? Number(digits.slice(0,2))/100 || 1 : digits === '0' ? 1 : Number(digits)/10;
-    if (BRUSH_TOOLS.has(tool)) ui.setBrush(flow ? {flow: value} : {opacity: value});
-    else void run(flow ? 'layer.setFillOpacity' : 'layer.setOpacity', {value});
+    if (brush) ui.setBrush(flow ? {flow: value} : {opacity: value});
+    else void run(parameter, {value});
   };
   if (digits.length >= 2) apply();
   else pending = {digits, flow, timer: setTimeout(apply,350), cancelSession: s.on(() => {if (!valid()) cancelDigits();})};
@@ -90,6 +97,7 @@ function up(e: KeyboardEvent) {
 }
 export function installInputDispatch(): () => void {
   const removeContext = installInputContext();
+  const offPointer = onInputPointerStart(cancelDigits);
   const invalidate = () => {cancelDigits();invalidatePan();};
   const focus = (e: FocusEvent) => {if (isTextTarget(e.target) || e.target instanceof HTMLElement && e.target.closest('[role="dialog"],[role="menu"]')) invalidate();};
   const unsub = useApp.subscribe((state,prev) => {
@@ -101,7 +109,7 @@ export function installInputDispatch(): () => void {
   window.addEventListener('focusin',focus,true);
   window.addEventListener('compositionstart',invalidate,true);
   return () => {
-    removeContext();unsub();invalidate();
+    removeContext();offPointer();unsub();invalidate();
     window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);
     window.removeEventListener('blur',invalidate);window.removeEventListener('focusin',focus,true);window.removeEventListener('compositionstart',invalidate,true);
   };

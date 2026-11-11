@@ -5,7 +5,17 @@ import type {ToolId} from '../tools/toolTypes';
 import {useApp} from './store';
 let held: {session: DocumentSession; doc: object; tool: ToolId; key: string} | null = null;
 let pointerBusy = false;
-export function setInputPointerBusy(value: boolean) {pointerBusy = value;}
+let pointerRevision = 0;
+const pointerStarts = new Set<() => void>();
+export function inputPointerRevision() {return pointerRevision;}
+export function inputPointerBusy() {return pointerBusy;}
+export function onInputPointerStart(listener: () => void): () => void {
+  pointerStarts.add(listener);return () => {pointerStarts.delete(listener);};
+}
+export function setInputPointerBusy(value: boolean) {
+  pointerBusy = value;
+  if (value) {pointerRevision++;for (const listener of pointerStarts) listener();}
+}
 export function panHeld(s: DocumentSession): boolean {return !!held && held.session === s && held.doc === s.doc && held.tool === useApp.getState().tool;}
 export function beginPan(e: KeyboardEvent): void {
   if (held || e.repeat || pointerBusy || editor.currentTool?.busy?.() || !editor.active) return;

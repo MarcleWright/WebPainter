@@ -569,6 +569,7 @@ export function CanvasView() {
       if (gid) {
         const gd = s.doc.guideById(gid)!;
         guideDrag.current = { id: gid, orientation: gd.orientation, start: gd.position };
+        setInputPointerBusy(true);
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         return;
       }
@@ -650,6 +651,7 @@ export function CanvasView() {
     if (guideDrag.current && s) {
       const gd = guideDrag.current;
       guideDrag.current = null;
+      setInputPointerBusy(false);
       const p = toPointer(e);
       if (gd.id && p) {
         const g = s.doc.guideById(gd.id);
@@ -833,10 +835,10 @@ export function CanvasView() {
       <DocTabs />
       <div className={`canvas-wrap${rulers ? '' : ' no-rulers'}`}>
         <div className="ruler corner" style={{ display: rulers ? undefined : 'none' }} />
-        <div className="ruler h" style={{ display: rulers ? undefined : 'none' }} onPointerDown={(e) => { if (editor.active) { guideDrag.current = { id: null, orientation: 'horizontal', start: 0 }; viewRef.current?.setPointerCapture?.(e.pointerId); } }}>
+        <div className="ruler h" style={{ display: rulers ? undefined : 'none' }} onPointerDown={(e) => { if (editor.active) { guideDrag.current = { id: null, orientation: 'horizontal', start: 0 }; setInputPointerBusy(true); viewRef.current?.setPointerCapture?.(e.pointerId); } }}>
           <canvas ref={rulerH} />
         </div>
-        <div className="ruler v" style={{ display: rulers ? undefined : 'none' }} onPointerDown={(e) => { if (editor.active) { guideDrag.current = { id: null, orientation: 'vertical', start: 0 }; viewRef.current?.setPointerCapture?.(e.pointerId); } }}>
+        <div className="ruler v" style={{ display: rulers ? undefined : 'none' }} onPointerDown={(e) => { if (editor.active) { guideDrag.current = { id: null, orientation: 'vertical', start: 0 }; setInputPointerBusy(true); viewRef.current?.setPointerCapture?.(e.pointerId); } }}>
           <canvas ref={rulerV} />
         </div>
         <div

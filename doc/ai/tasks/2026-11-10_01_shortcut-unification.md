@@ -331,8 +331,8 @@ Owner 决定：仅授权 coder 修复 R1、R2、R3 并补回归测试；R4 延�
 
 | 项目 | 状态 | Commit / 补测 / 边界 |
 | --- | --- | --- |
-| R1：原目标快速变换 | 本地修复/定向检查通过，待独立复审 | 本项提交 hash 在下一项补记；R1 6 tests Passed，P-TYPE Passed；人工/Owner Pending |
-| R2：数字延迟与新交互 | 已授权，待执行 | 待 coder 记录 |
+| R1：原目标快速变换 | 本地修复/定向检查通过，待独立复审 | `5a4e59f`；R1 6 tests Passed，P-TYPE Passed；人工/Owner Pending |
+| R2：数字延迟与新交互 | 本地修复/定向检查通过，待独立复审 | 本项提交 hash 在下一项补记；R2 及既有失效检查 13 tests Passed，P-TYPE Passed；人工/Owner Pending |
 | R3：Modal 文本归属 | 已授权，待执行 | 待 coder 记录 |
 | R4：失效调整取消 | Owner 明确延期 | 已知限制，未修复 |
 | 修复后复审 | Pending | R1–R3 单独复核；R4、G5 人工/Owner 验收另列 |
@@ -347,3 +347,12 @@ Owner 决定：仅授权 coder 修复 R1、R2、R3 并补回归测试；R4 延�
 修复仅收紧 quickTransform 入口：固定 session/doc、全部选择 ID 与图层对象、active/mask/channel、工具/mode 和历史身份；使用本次请求范围内的 session/store 通知及 pointerdown 使失效不可逆，选择变化后恢复也不复活；import 继续后核对目标、最终 Action enabled/access、canEdit、outputPending/closePending、busy 和 Modal，finally 清理观察者。保留原旋转/翻转算法、Action 和宏记录，没有通用队列。
 
 验证 `npm exec -- vitest run tests/input/listeners.test.tsx -t 'R1:'`：6 tests Passed（其余原 32 项未在本次定向运行），其中 rotate90cw/flipH 各测 15 种失效变化，以及稳定多选成功路径、一条历史、undo/redo、未选图层不变；同文档切层的两个独立复现也保留为回归。`npm run typecheck`、diff --check Passed。修复前隔离运行曾出现已有 jsdom 色彩 WASM 路径警告；修复后定向运行无失败。真实 Windows/中文 IME/生产人工、Owner 及独立实现复审仍 Pending。
+
+
+### 限定修复执行记录：R2（2026-11-11）
+
+R1 commit：5a4e59f。修复前真实 App/Canvas 下按 5 后分别开始长拖动、350ms 内结束的短拖动，两项均 Failed：原层透明度由 1 变 0.5，旧参数在新交互中或收尾后落下。回归同时断言 Move 自身收尾一条历史及 undo；fixture 的移动距离超过默认吸附回原位阈值，避免把无实际位移误判为缺少历史。没有改变 Move 算法或吸附设置。
+
+修复复用 Canvas 已调用的 setInputPointerBusy：开始时递增有限 pointer 身份并通知数字处理器立即取消 timer 和两位数缓存，长短拖动都永久失效；补齐同一 Canvas guide/ruler pointer 入口的忙状态通知。数字处理器执行前再检查 pointer 身份/忙、工具 busy、原目标/mode/工具、canEdit、outputPending/closePending 与工具/最终层参数 Action enabled/access；不引入队列或改历史内核。
+
+验证 `npm exec -- vitest run tests/input/listeners.test.tsx -t 'R2:|delayed numeric'`：13 tests Passed，含两种 Move 拖动、画笔笔画开始与一次撤销、旧 flow 数字及两位缓存丢弃、输出/关闭 pending（canEdit 仍 true）、canEdit/工具 access/层参数 access 拒绝，以及 opacity/flow/层透明度/填充透明度四类正常两位数与单数字应用次数；复跑既有切层/工具/文档/焦点/Modal 失效用例。`npm run typecheck`、diff --check Passed。真实 Windows/中文 IME/生产人工、Owner、独立复审仍 Pending；R4 未修改。
