@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved / 方案通过, 待 coder 执行。2026-11-10 初审 Changes Requested 后已按受控输入层重构边界修订并完成方案级复核, 保留现有架构和 P1–P5。用户已授权 coder 按本任务串行实施、验证并各阶段分别本地提交; 未授权推送、合并或发布。本轮仅更新方案与交接提示, 尚未开始业务实现。方案 Approved 不等于实现独立审查或用户验收通过。
+Implemented / 本地实现与自动验证交接，独立实现审查及人工/Owner 验收 Pending。2026-11-10 方案 Approved 后，按 Owner 授权在 codex/dev 串行执行 P1–P5 并分别本地提交；2026-11-11 完成 P5 自动收口。阶段提交与证据见 Execution Report；未推送、合并或发布。方案 Approved 不代表实现独立审查或用户验收通过，P5 人工门槛尚未完成。
 
 工作目录 `D:/00_Projects_WSY/AI/Codex_Projects/WebPainter_Dev`, 分支 `codex/dev`, 核对基线 `59f81b5`。实施前检查实际 HEAD/工作区; 不修改 main_native、embedded 或相邻 ADA, 不带入其他工作区未提交的启动脚本。
 
@@ -162,15 +162,15 @@ P1 可列出其他缺少的 Photoshop 默认键, 但不据此自动加入本轮;
 
 ## Execution Report
 
-尚未实施。初稿已创建规格与入口索引; 本次仅更新方案 Approved 状态和 coder 执行授权, 保留其他文档已有改动。执行者按阶段在此补充实际证据, 不据已有 PhotoCraft 源码测试声明 Rust 运行验收。
+已按 P1→P5 串行实施并完成对应自动门槛；人工矩阵仍 Pending，不能标记整体人工验收完成。初始三个索引文件的任务相关改动已保留并更新为实现交接状态，没有夹带其他工作区修改。PhotoCraft 仅保留既有源码参考，本轮没有 Rust 运行验收。
 
 | 阶段 | 状态 | Commit / 自动检查 / 人工边界 |
 | --- | --- | --- |
-| P1 | Gate Passed | 清单/fixture 已建立；baseline 1/1、P-TYPE、diff --check 通过；人工 Pending |
-| P2 | Gate Passed | 输入定向 9/9、P-TYPE 通过；事件链与原子配置证据见下；人工 Pending |
-| P3 | Gate Passed | 定向 51/51、P-TYPE/P-MOVE 通过；人工 Pending |
-| P4 | Gate Passed | 三类业务均覆盖；定向 64/64、P-TYPE 通过；人工 Pending |
-| P5 | Planned | 待 P4 |
+| P1 | 自动门槛 Passed | `ff6c0a1`； 清单/fixture 已建立；baseline 1/1、P-TYPE、diff --check 通过；人工 Pending |
+| P2 | 自动门槛 Passed | `d8afe72`； 输入定向 9/9、P-TYPE 通过；事件链与原子配置证据见下；人工 Pending |
+| P3 | 自动门槛 Passed | `ee51a5f`； 定向 51/51、P-TYPE/P-MOVE 通过；人工 Pending |
+| P4 | 自动门槛 Passed | `d62c999`； 三类业务均覆盖；定向 64/64、P-TYPE 通过；人工 Pending |
+| P5 | 自动收口；人工 Pending | 本阶段本地提交 hash 在最终交接记录补记；P-INPUT 75/75、P-BUILD/生产 smoke/P-DOC 通过；不宣称 G5 人工通过 |
 
 ## Review Result
 
@@ -234,3 +234,53 @@ G4 验证中落实任务已有边界：Fill 旧入口未检查像素/all 锁，�
 验证：`npm exec -- vitest run tests/input tests/engine/moveSelection.test.ts tests/gpu/moveOutput.test.ts tests/engine/access.test.ts`：6 files / 64 tests Passed；P-TYPE、diff --check Passed。四个真实调整对话框逐一验证正确标题、实际参数预览、取消无像素/历史、确认一条 image.adjust 历史和 undo/redo；另测半覆盖选区和背后未选像素。前景/背景四个填充主/备用键、三个 Fill 打开键各自验证真实结果/一次历史、mask 目标和像素锁。Copy/Cut 验证源像素/柔边 alpha、undo/redo、单层无选区/非像素/多层、画布外选区无结果、final access 拒绝不回退、F6 改绑/旧键释放、真实菜单提示与调用、直接旧 Duplicate 宏仍复制整层。旧覆盖/空数组/占键的导入和重建、存储 quota 失败保持旧 map 通过。
 
 G4/P-TYPE 通过，三类业务均有独立像素与历史证据，未用其中一类替代另一类。生产窗口人工与 Owner 验收、独立实现复审仍 Pending。
+
+
+### P5 evidence and implementation handoff (2026-11-11)
+
+P4 commit: d62c999。P5 处理集成验证发现的输入缺口：access 禁用后普通 tool 查询返回 null，新增仅检查保留 owner 的 pending 判断，不恢复其输入权限；保护未提交 Pen/透视裁切/模式编辑，工具切换和局部按键不丢编辑。禁用的点编辑工具仍认领 Delete，不回退清空图层；禁用 transform action 不可借切工具或 Enter/Esc 丢模式；纵向文字控件按自身 typeVertical access 保护，不误用横向工具权限。Toolbar D/X 按钮改用相同 Action，D/X/Q 和搜索提示随有效绑定实时更新，移除绑定不再显示旧键；Modal 尊重 defaultPrevented。
+
+P2 曾核对曲线只有拖出删点，并暂未增加键盘行为；P5 对照完整规格补上本地裸 Delete/Backspace：可聚焦并选择中间控制点，删除点只更新当前对话框参数预览，端点保留，正式历史仍在确认时产生；IME/保护不删点、不穿透清图层。此处是对 P2 的实现补齐，不再把该项留为规格例外，也未新建像素算法。四类实际调整和曲线删点的定向测试均通过。
+
+最终自动检查：
+
+| 检查 | 实际结果 / 限制 |
+| --- | --- |
+| P-INPUT：tests/input + moveSelection + gpu/moveOutput + access + layerAccessUI | **Passed：8 files / 75 tests**。生产 App/Canvas/控件/Modal 和真实工具/业务命令，隔离图形 renderer、布局/无关面板及受控 IO；非窗口人工验收 |
+| P-TYPE / P-BUILD | **Passed**：npm run build 包含类型、renderer 和 Electron；有既有 WASM/Node externalization、URL 解析及构建计时警告，没有据此声明全部格式兼容 |
+| 正常生产入口 P-SMOKE | **Passed**：当前 worktree build 的 main/preload/app://celenne/index.html，native bridge=true、nodeExposed=false、21 个工具按钮、15 个面板，WebGPU GPU compositing，无 smoke errors |
+| 生产 profile 重启 | **Passed（自动）**：隔离 profile 写入 copyContext:[F6]、pencil:[F7]、duplicate:[] 后退出并重启；F6 有效、Ctrl+J 释放，F7 精确 Pencil，提示含 F7，空数组保留；配置由正常 keymap 构造器重新读取，非设置窗口人工验收 |
+| 生产实际 DOM 监听 + 业务结果 | **Passed（自动）**：64×48 RGB8 fixture，四个调整打开/取消、Ctrl+] 不改 size、Alt+Delete 实际黑色 RGBA、Shift+Delete Fill、F6 柔边 Copy alpha≈0.5/undo、transform Enter/Esc；实际生产图形窗口截图已查看 |
+| P-DOC | **Passed**：20 个改动文件 UTF-8 无 BOM，75 个相对链接存在，材料受 Git 忽略，上游文档无改动，git diff --check 无错误 |
+| P-FULL / packaged installer / Rust / macOS / 特殊布局 | **未运行**；不是本轮阶段门槛，不冒充 Passed |
+
+生产脚本使用原有 CELENNE_SMOKE_EVAL 入口和当前 build 的模块 facade，未打开 dev server 或添加业务测试桥。窗口截图/日志/host/eval/profile 在本地忽略的 `doc/material/local/shortcuts-2026-11-10/`（seed.log、verify.log、verify.png 等），未提交。npm ci 缺失 Electron dist 时，按既有 DEV_SETUP 从本机已核对版本 **44.4.5** 的运行时独立复制到本 worktree；来源只读，没有链接业务源码。源/目标 electron.exe SHA256 均为 `BD14928E0728366FD3F41499CB398FF3F4304DAB259A3E605077899A6F8C748E`。
+
+#### 有限人工矩阵（不得用上表替代）
+
+执行者尝试使用 computer-use 对独立 profile 生产窗口操作：已观察完整主界面和 New Document 对话框；曾遇 FrameArrived timeout，恢复后可读 accessibility，但点击返回 coordinate input geometry is unavailable。此前实体 Esc 为 Owner 误触，Owner 已明确继续；没有据此标记人工项目通过。生产 smoke 是独立的自动集成证据。
+
+| 人工项目 | 执行者结果 | Owner 结果 |
+| --- | --- | --- |
+| 像素层 Ctrl+U/M/L/B、预览/确认/取消 | Pending（已有自动结果） | Pending |
+| 前景/背景填充及 Fill 别名 | Pending（已有自动结果） | Pending |
+| 画笔 Ctrl+]、真实图层前移与 size | Pending（已有自动结果） | Pending |
+| 实际选区 Ctrl+J/undo 与柔边 | Pending（已有自动结果） | Pending |
+| 文字/数值焦点和有效 file.save | Pending（已有挂载监听/受控输出结果） | Pending |
+| 文字中文候选 Enter/Esc | Pending：未完成真实中文 IME | Pending |
+| Modal 中文候选 Enter/Esc | Pending：未完成真实中文 IME | Pending |
+| 变换 Enter/Esc | Pending（已有自动结果） | Pending |
+| Space 拖动中松键、失焦、迟到事件 | Pending（已有挂载 pointer/键生命周期结果） | Pending |
+| 设置窗口重绑并实际重启试用 | Pending（已有 profile 重启自动结果） | Pending |
+
+P5 的自动门槛通过；人工可按任务授权缺项交接，**G5 完整人工门槛不标为 Passed**。独立实现审查未执行，不创建独立 reviewer 记录，不把自查记成独立批准。
+
+#### 给独立实现审查者
+
+- 审查基线 `59f81b51fa2db6f6ea0e7d31094d8015549c6ec8`，范围为本任务的各阶段本地提交；排除 doc/material、构建产物、profile 和运行时副本。相邻 ADA/main_native/embedded 均未修改。
+- 先按 [KEYBOARD_INPUT](../../design/KEYBOARD_INPUT.md) 核对稳定契约，再检查 shortcuts 的来源/优先级/重分配/导入事务与兼容初始化、inputContext/inputDispatch 的 IME/文本 save 与局部消费、Canvas/heldPan 的 pointer owner 与失效、editor 保留 owner 的 access 检查、真实 Modal 延迟身份。
+- 重点复核 image.adjust 四个对话框的原目标/预览清理、Fill 目标/锁定准入、copyContext 最终分支/access/宏、viaCopy 非空画布外选区拒绝和旧覆盖空数组持久化。保留原最终命令 ID 与历史语义，没有 dispatcher 物理 J 特判。
+- 重跑 P-INPUT/P-BUILD/P-DOC。自动 suite 的图形/布局/IO 隔离与生产 smoke 的合成输入有明确局限；手工复测上表，尤其真实中文候选、原生焦点、Space 释放/失焦和重绑重启。
+- 本交接只请求实现审查，不授权推送、合并或发布；Owner 人工完成前不宣称完整 Photoshop 兼容。
+
+稳定规则已归 [KEYBOARD_INPUT](../../design/KEYBOARD_INPUT.md)，验证入口归 [TESTING](../../engineering/TESTING.md)；README、AI_CONTEXT、DEV_LOG 只更新本任务状态和索引。

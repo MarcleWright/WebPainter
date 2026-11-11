@@ -4,6 +4,13 @@
 
 ## Recent
 
+### 2026-11-11 快捷键统一实现交接
+
+Status: P1–P5 本地实施与自动验证收口；独立实现审查/人工/Owner Pending，未推送。
+
+- [任务 P1-P5](tasks/2026-11-10_01_shortcut-unification.md) 记录固定 PhotoCraft 源码参考、输入优先级、工具重绑定、常用绑定及验收; codex/dev 独立实施。
+- 复用 Action/keymap/工具与历史；有效绑定、分发/焦点/IME、held pan、上下文复制及首批绑定已接入。75 项定向检查、生产构建与隔离生产 smoke 通过；未完成项见任务矩阵。
+
 ### 2026-11-06 保存与关闭可靠性实现
 
 Status: 局部实现及定向自动验证完成, 待独立 reviewer 复审和人工验收。

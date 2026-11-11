@@ -32,7 +32,7 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
   }, []);
   const onKey = (e: React.KeyboardEvent) => {
     e.stopPropagation();
-    if (isComposing(e)) return;
+    if (e.defaultPrevented || isComposing(e)) return;
     if (e.repeat && ['Enter','Escape'].includes(e.key)) {e.preventDefault();return;}
     const bound = keymap.lookup(chordFromEvent(e.nativeEvent));
     if (bound && MODAL_VIEW.has(bound)) {e.preventDefault(); void run(bound); return;}

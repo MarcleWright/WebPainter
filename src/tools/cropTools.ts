@@ -197,6 +197,7 @@ export class CropTool implements Tool {
 }
 
 export class PerspectiveCropTool implements Tool {
+  hasPendingEdit() {return !!this.quad;}
   id = 'perspectiveCrop' as const;
   private quad: Quad | null = null;
   private dragIdx = -1;

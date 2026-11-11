@@ -9,6 +9,7 @@ import { GradientPreview } from '../OptionsBar';
 import { gradientPresets } from '../../tools/fillSampleTools';
 import { platform } from '../../app/platform/platform';
 import { editor } from '../../app/editor';
+import {inputBlocked,isComposing} from '../../app/inputContext';
 import { compositeRegion } from '../../rendering/compositor';
 
 /** Luminance / channel histogram of the current composite (coarse level for speed). */
@@ -58,6 +59,7 @@ export function Histogram({ data, color = '#9b9ea8' }: { data: Uint32Array | nul
 export function CurveEditor({ points, onChange, histogram }: { points: CurvePoint[]; onChange: (p: CurvePoint[]) => void; histogram?: Uint32Array | null }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const drag = useRef<number>(-1);
+  const [selected, setSelected] = useState(-1);
   const S = 240;
   useEffect(() => {
     const c = ref.current;
@@ -85,8 +87,8 @@ export function CurveEditor({ points, onChange, histogram }: { points: CurvePoin
     }
     g.stroke();
     g.fillStyle = '#fff';
-    for (const p of points) g.fillRect((p.x / 255) * S - 3, S - (p.y / 255) * S - 3, 6, 6);
-  }, [points, histogram]);
+    points.forEach((p,i) => {g.fillStyle=selected===i ? '#3d8bfd' : '#fff';g.fillRect((p.x / 255) * S - 3, S - (p.y / 255) * S - 3, 6, 6);});
+  }, [points, histogram, selected]);
   const toPt = (e: React.PointerEvent) => {
     const r = ref.current!.getBoundingClientRect();
     return { x: Math.max(0, Math.min(255, ((e.clientX - r.left) / r.width) * 255)), y: Math.max(0, Math.min(255, (1 - (e.clientY - r.top) / r.height) * 255)) };
@@ -95,10 +97,19 @@ export function CurveEditor({ points, onChange, histogram }: { points: CurvePoin
     <canvas
       ref={ref}
       className="curve-editor"
+      tabIndex={0}
+      aria-label="Curve points"
+      onKeyDown={(e) => {
+        if (e.defaultPrevented || isComposing(e) || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !['Delete','Backspace'].includes(e.key)) return;
+        e.preventDefault();e.stopPropagation();
+        if (inputBlocked() || selected <= 0 || selected >= points.length-1) return;
+        onChange(points.filter((_,i) => i !== selected));setSelected(-1);drag.current=-1;
+      }}
       width={S}
       height={S}
       style={{ width: S, height: S }}
       onPointerDown={(e) => {
+        e.currentTarget.focus();
         const p = toPt(e);
         let idx = points.findIndex((q) => Math.hypot(q.x - p.x, q.y - p.y) < 10);
         const pts = points.map((q) => ({ ...q }));
@@ -109,6 +120,7 @@ export function CurveEditor({ points, onChange, histogram }: { points: CurvePoin
           onChange(pts);
         }
         drag.current = idx;
+        setSelected(idx);
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
       }}
       onPointerMove={(e) => {
@@ -122,6 +134,7 @@ export function CurveEditor({ points, onChange, histogram }: { points: CurvePoin
         if (outside && pts.length > 2 && i > 0 && i < pts.length - 1) {
           pts.splice(i, 1);
           drag.current = -1;
+          setSelected(-1);
           onChange(pts);
           return;
         }

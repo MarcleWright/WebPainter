@@ -28,7 +28,8 @@ interface EditState {
 }
 
 function editable(s: DocumentSession): boolean {
-  if (editor.session(s.id) === s && s.canEdit() && access('tool:type').enabled) return true;
+  const tool = editor.currentToolId === 'typeVertical' ? 'typeVertical' : 'type';
+  if (editor.session(s.id) === s && s.canEdit() && access('tool:'+tool).enabled) return true;
   ui.toast('info', 'This document is busy saving or closing.');
   return false;
 }

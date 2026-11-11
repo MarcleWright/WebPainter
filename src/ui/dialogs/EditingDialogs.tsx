@@ -220,7 +220,7 @@ export function AdjustmentDialog({ close, type }: { close: () => void; type: Adj
     <Modal title={ADJUSTMENT_LABELS[type]} onClose={() => { if (!permit()) return; s.engine.setOverride(layer.id, null, null); close(); }} onOk={() => { if (!permit()) return; s.engine.setOverride(layer.id, null, null); close(); applyPixelAdjustment(adj); }} width={380}
       footerLeft={<Check label="Preview" checked={preview} onChange={setPreview} />}>
       <div className="faint">Applies directly to the pixels of “{layer.name}”. For a non-destructive version use Layer › New Adjustment Layer.</div>
-      <AdjustmentEditor adj={adj} onChange={setAdj} />
+      <AdjustmentEditor adj={adj} onChange={(next) => {if (permit()) setAdj(next);}} />
     </Modal>
   );
 }

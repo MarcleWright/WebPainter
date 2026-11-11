@@ -30,7 +30,7 @@ function handleDigit(digit: string, flow: boolean) {
 }
 function localChord(e: KeyboardEvent): boolean {
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
-  const id = editor.currentTool?.id, mode = editor.active?.mode.kind;
+  const id = editor.currentTool?.id ?? editor.currentToolId, mode = editor.active?.mode.kind;
   if (mode === 'transform') return !e.shiftKey && ['Enter','Escape'].includes(e.key);
   if (id === 'move') return /^Arrow(Left|Right|Up|Down)$/.test(e.key);
   if (e.shiftKey) return false;
@@ -38,12 +38,15 @@ function localChord(e: KeyboardEvent): boolean {
   return ['polyLasso','magneticLasso','pathSelect','directSelect','slice'].includes(id ?? '') && ['Delete','Backspace'].includes(e.key);
 }
 function toolAllowed(): boolean {
-  return access(`tool:${editor.currentToolId}`).enabled && (editor.active?.mode.kind !== 'transform' || access('action:edit.freeTransform').enabled);
+  const allowed = access(`tool:${editor.currentToolId}`).enabled && (editor.active?.mode.kind !== 'transform' || access('action:edit.freeTransform').enabled);
+  if (!allowed) ui.toast('info','The current tool is unavailable for this target.');
+  return allowed;
 }
 function down(e: KeyboardEvent) {
   if (e.defaultPrevented || isComposing(e) || isTextTarget(e.target)) return;
   if (useApp.getState().dialogs.length || document.querySelector('[role="dialog"],[role="menu"]')) return;
   const host = editor.hostFactory?.();
+  if (editor.hasPendingToolInteraction() && !toolAllowed()) {e.preventDefault();return;}
   const busy = !!editor.currentTool?.busy?.();
   // Local confirmation/cancellation and point removal retain ownership even while busy.
   // Move arrows wait until the active pointer transaction ends.
@@ -81,6 +84,7 @@ function down(e: KeyboardEvent) {
 function up(e: KeyboardEvent) {
   releasePan(e);
   if (e.defaultPrevented || isComposing(e) || isTextTarget(e.target) || useApp.getState().dialogs.length) return;
+  if (!editor.currentTool?.keyUp) return;
   const h = editor.hostFactory?.();
   if (h && h.session.canEdit() && toolAllowed()) editor.currentTool?.keyUp?.(h,e);
 }

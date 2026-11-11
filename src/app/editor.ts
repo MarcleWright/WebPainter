@@ -214,6 +214,13 @@ export class Editor {
     this.modeControllers.set(kind, controller);
   }
 
+  /** Inspect retained ownership without admitting a disabled tool to input. */
+  hasPendingToolInteraction(): boolean {
+    const mode = this.active?.mode.kind;
+    const owner = (mode && mode !== 'none' ? this.modeControllers.get(mode) : undefined) ?? this.toolInstances.get(this.currentToolId);
+    return !!(owner?.busy?.() || owner?.hasPendingEdit?.() || this.active && mode !== 'none');
+  }
+
   setTool(id: ToolId): void {
     if (this.active && !this.active.canEdit()) {ui.toast('info', 'This document is busy saving or closing.'); return;}
     if(!access('tool:'+id).enabled)return;
@@ -224,6 +231,13 @@ export class Editor {
     }
     const prev = useApp.getState().tool;
     if (prev === id) return;
+    // Admission hides disabled tools from normal input. Inspect only an already retained owner
+    // here: asking currentTool would hide precisely the pending edit we must preserve.
+    const mode = this.active?.mode.kind;
+    const admitted = access('tool:'+this.currentToolId).enabled && (mode !== 'transform' || access('action:edit.freeTransform').enabled);
+    if (!admitted && this.hasPendingToolInteraction()) {
+      ui.toast('info', 'The current tool is unavailable; its pending edit has been preserved.');return;
+    }
     this.cancelTool();
     const host = this.hostFactory?.();
     if (host) this.tool(prev)?.deactivate?.(host);

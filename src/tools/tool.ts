@@ -59,4 +59,6 @@ export interface Tool {
   drawOverlay?(h: ToolHost, g: CanvasRenderingContext2D): void;
   /** True while the tool is dragging/drawing (blocks tool switching side effects). */
   busy?(): boolean;
+  /** Uncommitted local edit between pointer sequences (e.g. pen points). */
+  hasPendingEdit?(): boolean;
 }

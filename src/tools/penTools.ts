@@ -145,6 +145,7 @@ function drawPath(h: ToolHost, g: CanvasRenderingContext2D, path: VectorPath | n
 // Pen
 // ---------------------------------------------------------------------------------------------
 export class PenTool implements Tool {
+  hasPendingEdit() {return !!this.edit;}
   id = 'pen' as const;
   private edit: PathEdit | null = null;
   private spIndex = -1;

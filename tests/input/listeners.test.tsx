@@ -59,7 +59,7 @@ it('production Canvas text editor owns composition and clipboard/delete/undo; no
  await act(async()=>{input.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));key(input,'Escape');});expect(textEditState()).toBeNull();cancelTextEdit();
 });
 import {createPixelLayer} from '../../src/document/layerFactory';
-import {installAccessPolicy} from '../../src/app/access';
+import {installAccessPolicy,access} from '../../src/app/access';
 function pointer(target:EventTarget,type:string,x:number,y:number) {
  const event=new MouseEvent(type,{bubbles:true,cancelable:true,clientX:x,clientY:y,button:0,buttons:type==='pointerup'?0:1});
  Object.defineProperty(event,'pointerId',{value:1});target.dispatchEvent(event);
@@ -224,4 +224,40 @@ it('adjustment selection coverage changes only selected pixels and undo/redo res
  await act(async()=>key(window,'u',{ctrlKey:true}));await modifyAdjustment('hueSaturation');await act(async()=>container.querySelector<HTMLButtonElement>('[role=dialog] button.primary')!.click());const adjusted=pixels(layer);
  expect(layer.raster.readFloat({x:0,y:0,w:1,h:1})).toEqual(original.slice(0,4));expect(layer.raster.readFloat({x:1,y:1,w:1,h:1})[0]).not.toBe(original[0]);expect(session.doc.selection.read({x:1,y:1,w:1,h:1})[0]).toBeCloseTo(.5,2);
  await act(async()=>key(window,'z',{ctrlKey:true}));expect(pixels(layer)).toEqual(original);await act(async()=>key(window,'z',{ctrlKey:true,shiftKey:true}));expect(pixels(layer)).toEqual(adjusted);
+});
+it('access-disabled pending pen edit cannot be discarded by tool switching or local Escape',async()=>{
+ const {session}=await mount();const canvas=container.querySelector('.viewport')!;await act(async()=>{editor.setTool('pen');pointer(canvas,'pointerdown',1,1);pointer(canvas,'pointerup',1,1);pointer(canvas,'pointerdown',10,6);pointer(canvas,'pointerup',10,6);});
+ expect(editor.currentToolId).toBe('pen');expect(editor.currentTool?.hasPendingEdit?.()).toBe(true);
+ const restore=installAccessPolicy(id=>({visible:true,enabled:id!=='tool:pen'}));const history=session.history.current.id,path=JSON.stringify(session.doc.paths);
+ expect(access('tool:pen').enabled).toBe(false);expect(editor.currentTool).toBeNull();
+ await act(async()=>{editor.setTool('brush');});expect(useApp.getState().tool).toBe('pen');
+ await act(async()=>{key(canvas,'b');key(canvas,'Escape');});expect(useApp.getState().tool).toBe('pen');expect(session.history.current.id).toBe(history);expect(JSON.stringify(session.doc.paths)).toBe(path);restore();await act(async()=>key(canvas,'Enter'));
+});
+it('disabled point-edit owner consumes Delete instead of falling back to global layer Clear',async()=>{
+ const {session}=await mount();const layer=paintFixture(session), before=pixels(layer), canvas=container.querySelector('.viewport')!;
+ await act(async()=>editor.setTool('directSelect'));
+ const restore=installAccessPolicy(id=>({visible:true,enabled:id!=='tool:directSelect'}));const entry=session.history.current.id;
+ try {await act(async()=>key(canvas,'Delete'));expect(session.history.current.id).toBe(entry);expect(pixels(layer)).toEqual(before);}finally{restore();}
+});
+it('disabled transform ownership rejects tool switching and local confirmation without discarding the mode',async()=>{
+ const {session}=await mount();paintFixture(session);await act(async()=>key(window,'t',{ctrlKey:true}));expect(session.mode.kind).toBe('transform');
+ const restore=installAccessPolicy(id=>({visible:true,enabled:id!=='action:edit.freeTransform'}));
+ try {await act(async()=>{key(window,'b');key(window,'Enter');key(window,'Escape');});expect(session.mode.kind).toBe('transform');expect(useApp.getState().tool).toBe('move');}finally{restore();}
+ await act(async()=>key(window,'Escape'));
+});
+it('real curve point Delete belongs to the dialog, respects IME/protection, and never clears layer pixels',async()=>{
+ const {session}=await mount();const layer=paintFixture(session), before=pixels(layer), entry=session.history.current.id;
+ await act(async()=>key(window,'m',{ctrlKey:true}));await modifyAdjustment('curves');const canvas=container.querySelector('.curve-editor')!;
+ const added=session.engine.getOverride(layer.id)!.gpu!.adjustment as any;expect(added.rgb.length).toBe(3);
+ await act(async()=>{canvas.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));key(canvas,'Delete');});expect((session.engine.getOverride(layer.id)!.gpu!.adjustment as any).rgb.length).toBe(3);
+ await act(async()=>canvas.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));session.editProtected=true;await act(async()=>key(canvas,'Delete'));expect((session.engine.getOverride(layer.id)!.gpu!.adjustment as any).rgb.length).toBe(3);
+ session.editProtected=false;await act(async()=>key(canvas,'Delete'));expect((session.engine.getOverride(layer.id)!.gpu!.adjustment as any).rgb.length).toBe(2);expect(pixels(layer)).toEqual(before);expect(session.history.current.id).toBe(entry);
+ await act(async()=>key(container.querySelector('[role=dialog]')!,'Escape'));
+});
+it('vertical text owner retains its session when its own tool access is disabled',async()=>{
+ const {session}=await mount();const layer=createTextLayer('Vertical',8,0,0);session.doc.insertLayer(layer);
+ await act(async()=>{editor.setTool('typeVertical');startTextEdit(session,layer.id,false);});const input=container.querySelector('textarea.text-editor')!;
+ const restore=installAccessPolicy(id=>({visible:true,enabled:id!=='tool:typeVertical'}));
+ try {await act(async()=>{key(input,'Escape');key(input,'Enter',{ctrlKey:true});});expect(textEditState()?.layerId).toBe(layer.id);}finally{restore();}
+ await act(async()=>key(input,'Escape'));expect(textEditState()).toBeNull();
 });

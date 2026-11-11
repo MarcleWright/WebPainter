@@ -131,6 +131,8 @@ export function ContextMenuHost() {
 }
 
 export function MenuBar() {
+  const [, refreshBindings] = useState(0);
+  useEffect(() => keymap.on(() => refreshBindings(n => n+1)), []);
   const [open, setOpen] = useState<{ id: string; x: number; y: number } | null>(null);
   useApp((s) => s.docRev);
   useApp((s) => s.historyRev);
@@ -172,7 +174,7 @@ export function MenuBar() {
         </div>
       ))}
       <div className="spacer" />
-      <div className="search" onMouseDown={(e) => { e.stopPropagation(); run('edit.commandPalette'); }} title="Search commands (Ctrl+F)">
+      <div className="search" onMouseDown={(e) => { e.stopPropagation(); run('edit.commandPalette'); }} title={`Search commands${keymap.bindingsFor('edit.commandPalette')[0] ? ` (${keymap.bindingsFor('edit.commandPalette')[0]})` : ''}`}>
         ⌕ Search commands
       </div>
       {menu && open && createPortal(<PopupMenu key={menu.id} items={resolve(menu.items)} x={open.x} y={open.y} onClose={() => setOpen(null)} />, document.body)}

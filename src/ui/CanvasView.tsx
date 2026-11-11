@@ -869,7 +869,7 @@ export function CanvasView() {
               onKeyDown={(e) => {
                 e.stopPropagation();
                 if (isComposing(e)) return;
-                if (inputBlocked() || !access('tool:type').enabled) { e.preventDefault(); return; }
+                if (inputBlocked() || !access('tool:'+(editor.currentToolId === 'typeVertical' ? 'typeVertical' : 'type')).enabled) { e.preventDefault(); return; }
                 if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); commitTextEdit(); return; }
                 const l = editedText();
                 if (l && caretKey(e, e.currentTarget, l)) overlayDirty.current = true;
