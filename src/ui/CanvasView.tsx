@@ -627,7 +627,10 @@ export function CanvasView() {
     publishCursor(p.x, p.y, p.x >= 0 && p.y >= 0 && p.x < s.doc.width && p.y < s.doc.height);
     const t = pointerDown.current ? activeTool.current : spring() ?? currentTool();
     if (pointerDown.current && t?.move) {
-      for (const ev of events.length > 1 ? events : [e.nativeEvent]) {
+      if (t.moveBatch) {
+        const points = (events.length > 1 ? events : [e.nativeEvent]).map(ev => toPointer(ev as PointerEvent)).filter((p): p is ToolPointer => !!p);
+        t.moveBatch(h, points);
+      } else for (const ev of events.length > 1 ? events : [e.nativeEvent]) {
         const pp = toPointer(ev as PointerEvent);
         if (pp) t.move(h, pp);
       }

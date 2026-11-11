@@ -176,3 +176,29 @@ B还需覆盖源revision/颜色设置/GPU生命周期与当前viewport；不以�
 ### 基线有效性与验证边界
 
 原始JSON、profile、脚本与图片在上述忽略目录。低频100ms 300px brush/eraser等量回放另采；其中brush前态预热和rep1混入实体鼠标buttons=0移动，排除并在修改前补采rep1，未将污染样本记为通过。普通无hook矩阵不受影响。正式量化前后结果在后续阶段回填；阶段0不称优化实现通过。PhotoCraft只复用任务给出的固定源码事实，未运行其产品或基准。
+
+
+## 9. A实现与验证
+
+新增BatchedPaintOp，仅接入brush/brush模式eraser、RGB RGBA8普通Normal像素层、Normal笔刷、round单笔尖、无selection/mask/vectorMask/lockAlpha/scatter/texture/airbrush，笔刷尺寸≤512、无size jitter/velocity扩张。其它条件保留原PaintOp/原工具。CanvasView仅对实现moveBatch的工具交付同一coalesced输入批；其它工具仍逐次转换坐标调用move。动态opacity不禁用：opacity改变即同步flush分段；保留每印迹Float32覆盖舍入，union触及mask避免错误重算空隙。每批同步完成写回后才通知，无跨帧补算。
+
+工作缓冲按stroke持有、最多1M像素一段、最多128个矩形；结束/取消释放。大于支持尺寸的笔刷在进入时走原路，不在画到一半抛弃输入。RGBA8 eraser直接经writableTile/COW写alpha，使用旧U8_TO_FLOAT与Math.fround保留旧Float32→RGBA8量化；RGB不变，减少无关RGBA拷贝。每个新写入口仍先writableTile，不绕过tile.rev/version；边界缓存保留。
+
+验证：batchedPaint含真实变化压力/flow/opacity、30/300px重叠与自交、矩形空隙、低flow/opacity、擦空、逐批旧PaintOp对照；真实工具资格/回退/取消、history undo/redo/native重开。10个重叠dab的普通画笔原图读/目标写由10次降到1次，eraser的原RGBA float读/写由10次降到0（由有界原生alpha写取代），无endBatch遗留工作。新增与core/tile bounds/native/Move/output共6文件 **97/97通过**，P-BUILD通过；已有Vite URL/模块外置警告未扩大修理。
+
+性能为同完整native/Vite窗口正常CDP输入，不是生产dist或真实笔尖延迟。下表为三次正式RAF p95/ms，保持全部60个coalesced样本、spacing.1；低频另核对精确输出。
+
+| 工具/尺寸 | 前态 | 最终A实现(afterA2) |
+| --- | --- | --- |
+| brush30 |16.9 / 33.3 / 16.8|16.9 / 16.8 / 16.8|
+| brush100 |33.4 / 33.4 / 16.8|16.8 / 16.9 / 33.4|
+| brush300 |66.7 / 66.7 / 50.0|33.5 / 33.6 / 33.4|
+| eraser30 |16.8 / 16.8 / 16.8|16.8 / 16.8 / 16.8|
+| eraser100 |33.3 / 16.8 / 33.3|16.9 / 16.9 / 16.9|
+| eraser300 |33.5 / 50.1 / 33.5|33.4 / 33.3 / 16.9|
+
+brush300的p95中位数下降约49.8%；eraser300的p95中位数仅约0.6%变化，不能称显著帧尾改善，仍有33ms帧。额外采样profile：eraser applyDabs包含由约501.8降到312.9ms，像素op包含约404.9→192.1ms；brush约574.5→514.8ms，像素op约474.1→416.0ms。profile每工具各一份，不代替三次无hook数据；downsample/开发UI成本仍在，不扩大为GPU笔刷。
+
+低频300px brush/eraser各前3后3有效正式结果的256个tile SHA均一致。前态eraser一份up结算为0且末段像素异于同输入其它重复，按提前终止/来源未定异常排除；前态brush重试仍混入实体鼠标，也排除。用修改前保全的baseline-source.tar创建只读用途的独立源码副本，复用同一未改Electron host、runtime/夹具/隔离配置补采每工具一份，凑足各3份；没有覆盖main dirty或切分支。所有异常/首轮A实现afterA和最终afterA2原件均保留，最终结论仅使用有效样本。初版大数组结构比较测试耗时过长已中断，改用原始字节SHA；一次node环境缺document产生未处理错误后改用jsdom重跑，不将这些尝试记为通过。
+
+A实现及以上证据提交后继续B；未声称Owner/真实手绘笔/ADA新包已验收。

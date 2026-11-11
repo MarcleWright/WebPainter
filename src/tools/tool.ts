@@ -44,6 +44,8 @@ export interface Tool {
   deactivate?(h: ToolHost): void;
   down?(h: ToolHost, p: ToolPointer): void;
   move?(h: ToolHost, p: ToolPointer): void;
+  /** One synchronous input delivery; every sample is retained in order. */
+  moveBatch?(h: ToolHost, points: ToolPointer[]): void;
   up?(h: ToolHost, p: ToolPointer): void;
   /** Pointer moves with no button pressed. */
   hover?(h: ToolHost, p: ToolPointer): void;
