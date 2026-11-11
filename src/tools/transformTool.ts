@@ -1,3 +1,5 @@
+import { planTransforms, type TransformInput, type TransformPlan } from '../image-engine/transformPlan';
+import { startTransformTask, TransformWorkerUnavailable, type TransformTask, type TransformMetrics } from './transformTask';
 import { gpuCompositor } from '../rendering/renderEngine';
 import type { GpuCompositor } from '../gpu/compositor';
 import { affinePreviewLevel, type LayerOverride } from '../rendering/compositor';
@@ -57,6 +59,7 @@ interface FloatState {
 
 interface State {
   session: DocumentSession;
+  job?: { id:string; task:TransformTask; token:symbol };
   sourceKeys?: Map<LayerId, {raster: TiledRaster; version: number; rev: number}>;
   gpuDisabled?: boolean;
   gpuSources?: Map<TiledRaster, GpuCompositor>;
@@ -75,6 +78,9 @@ interface State {
 }
 
 let st: State | null = null;
+let operationCounter=0;
+let lastTransformMetrics:TransformMetrics|null=null;
+export function transformDiagnostics():TransformMetrics|null{return lastTransformMetrics;}
 
 export function transformState(): Readonly<State> | null {
   return st;
@@ -255,7 +261,7 @@ function clearPreview(s: State): void {
 
 export function beginTransform(kind: TransformKind = 'free'): void {
   const s = editor.active;
-  if (!s) return;
+  if (!s || !s.canEdit() || s.outputPending || s.closePending) return;
   if (st) {
     if (kind === 'warp' && !st.warp) setWarpMode();
     return;
@@ -341,6 +347,7 @@ export function beginTransformSelection(): void {
 
 /** Switches the running transform to warp mode (the current transform becomes the envelope). */
 export function setWarpMode(): void {
+  if(st?.job)return;
   if(!access('feature:warp').enabled)return;
   const s = st;
   if (!s || s.warp) return;
@@ -355,6 +362,7 @@ export function setWarpMode(): void {
 
 /** Applies a warp preset (options bar) to the running warp. */
 export function setWarpPreset(p: WarpPreset): void {
+  if(st?.job)return;
   const s = st;
   if (!s || !s.warp) return;
   s.warp = { grid: p.style === 'none' ? rectGrid(s.base) : presetGrid(p, s.base), preset: p };
@@ -369,6 +377,7 @@ export function warpState(): { preset: WarpPreset | null } | null {
 export function cancelTransform(): void {
   const s = st;
   if (!s) return;
+  s.job?.task.cancel();
   clearPreview(s);
   if (s.float) {
     const l = s.session.doc.getLayer(s.float.layerId) as Layer & { raster: TiledRaster } | null;
@@ -391,24 +400,104 @@ function transformMask(s: State, mask: TiledRaster, mesh: Float64Array | null, H
   return out;
 }
 
-export function commitTransform(): void {
-  const s=st;if(!s || editor.session(s.session.id)!==s.session || !s.session.canEdit())return;
-  const doc=s.session.doc, root=cloneLayer(doc.root), selection=doc.selection.snapshot(), entry=s.session.history.current.id;
-  try { applyTransform(s); }
-  catch(error) {
-    // do()/CPU failures precede history insertion. Observer failures after insertion have committed.
-    if(s.session.history.current.id===entry) {
-      doc.root=root;doc.selection.restore(selection);
-      doc.emit({type:'structure'},{type:'selection'});
-      updatePreview(s);s.session.notify();
-      ui.toast('error','Transform failed; retry or press Escape.',String(error));return;
-    }
-    ui.toast('warning','Transform committed, but a notification failed.',String(error));
+function commitInputs(s:State):TransformPlan[]{
+  if(s.warp)throw Error('Envelope transform capacity cannot be verified by this bounded path');
+  const inputs:TransformInput[]=[];
+  const add=(r:TiledRaster,x:number,y:number)=>{
+    const bounds=rasterContentBounds(r)??(r.channels===1?r.tileBounds():null);
+    if(!bounds)return;
+    if(r.fill!==0)throw Error('Unbounded fill cannot be admitted for this transform');
+    inputs.push({bounds,x,y,channels:r.channels,depth:r.depth,bytes:r.tiles.size*r.tileLength*r.depth/8});
+    if(r.companion)add(r.companion,x,y);
+  };
+  if(s.selOnly)add(s.selOnly.mask,0,0);
+  else if(s.float){add(s.float.float,0,0);const l=s.session.doc.getLayer(s.float.layerId);if(l&&hasRaster(l))add(l.raster,l.x,l.y);const sel=new TiledRaster(1,8);sel.restore(s.float.selBefore);add(sel,0,0);}
+  else for(const id of s.ids){
+    const root=s.originals.get(id)!;
+    if(root.kind!=='pixel'&&root.kind!=='group'&&root.kind!=='video')throw Error('Dynamic appearance capacity cannot be verified for this transform');
+    for(const l of rasterLayers(root))if(hasRaster(l)){if(l.kind!=='pixel'&&l.kind!=='video')throw Error('Dynamic appearance capacity cannot be verified');add(l.raster,l.x,l.y);if(l.mask)add(l.mask.raster,l.mask.x,l.mask.y);}
   }
-  clearPreview(s);s.session.mode={kind:'none'};st=null;s.session.notify();ui.bump('viewRev');
+  return planTransforms(homography(s),inputs,s.quad);
+}
+function backgroundSource(s:State):(Layer&{raster:TiledRaster;x:number;y:number})|null{
+  if(s.float||s.selOnly||s.warp||s.ids.length!==1||s.session.doc.canvas.colorMode!=='rgb'||s.session.doc.canvas.bitDepth!==8)return null;
+  const l=s.originals.get(s.ids[0]);
+  return l?.kind==='pixel'&&s.session.doc.getLayer(l.id)?.parent?.id==='root'&&l.raster.depth===8&&!l.raster.companion&&l.raster.fill===0&&!l.mask&&!l.vectorMask&&!l.clipping&&!hasEnabledEffect(l.effects)&&l.blendMode==='normal'&&l.opacity===1&&l.fillOpacity===1&&!blendIfActive(l.advanced.blendIf)&&l.advanced.channels.every(Boolean)&&l.advanced.knockout==='none'?l:null;
+}
+function finishTransform(s:State):void{
+  s.session.mode={kind:'none'};if(st===s)st=null;
+  try{clearPreview(s);s.session.notify();ui.bump('viewRev');}catch(error){releaseSources(s);ui.toast('warning','Transform completed; a display notification failed.',String(error));}
+}
+function restoreFailedCommit(s:State,root:ReturnType<typeof cloneLayer>,selection:RasterSnapshot,entry:string,error:unknown):boolean{
+  if(s.session.history.current.id!==entry){ui.toast('warning','Transform committed, but a notification failed.',String(error));return true;}
+  s.session.doc.root=root as typeof s.session.doc.root;s.session.doc.selection.restore(selection);
+  s.session.doc.emit({type:'structure'},{type:'selection'});updatePreview(s);s.session.notify();
+  ui.toast('error','Transform failed; retry or press Escape.',String(error));return false;
+}
+export function commitTransform(): void {
+  const s=st;if(!s||s.job||editor.session(s.session.id)!==s.session||!s.session.canEdit()||s.session.outputPending||s.session.closePending)return;
+  if(sourceChanged(s))updatePreview(s);
+  const admitStart=performance.now();
+  let plans:TransformPlan[];
+  try{plans=commitInputs(s);}catch(error){ui.toast('error','Transform cannot be confirmed.',String(error));return;}
+  const admitMs=performance.now()-admitStart;
+  const source=backgroundSource(s);
+  if(!source||typeof Worker==='undefined'){
+    ui.toast('info','Using the bounded CPU transform path.');
+    const doc=s.session.doc,root=cloneLayer(doc.root),selection=doc.selection.snapshot(),entry=s.session.history.current.id;
+    try{applyTransform(s);}catch(error){if(!restoreFailedCommit(s,root,selection,entry,error))return;}
+    finishTransform(s);return;
+  }
+  const session=s.session,doc=session.doc,revision=doc.rev,H=homography(s),entry=session.history.current.id;
+  const snapshotStart=performance.now();
+  const root=cloneLayer(doc.root),selection=doc.selection.snapshot(),token=session.acquireEditProtection('transform'),id=`transform-${++operationCounter}`;
+  const live=doc.getLayer(source.id);if(!live||!hasRaster(live)){session.releaseEditProtection(token);return;}
+  const sourceRaster=live.raster,sourceVersion=live.raster.version,sourceRev=live.rev;
+  const p=ui.progress('Preparing transform…',()=>s.job?.task.cancel(),true);
+  const task=startTransformTask(source.raster,plans[0],id,f=>p.update(f,`Applying transform… ${Math.round(f*100)}%`));
+  task.metrics.snapshotMs=performance.now()-snapshotStart;task.metrics.admitMs=admitMs;
+  const job={id,task,token};s.job=job;
+  const cancel=()=>{if(st===s)cancelTransform();else task.cancel();};session.cancelTransformTask=cancel;
+  let pending!:Promise<boolean>;
+  pending=(async()=>{
+    let committed=false;
+    try{
+      let result:TiledRaster;
+      try{result=await task.promise;}
+      catch(error){
+        if(error instanceof TransformWorkerUnavailable&&st===s&&s.job===job){
+          ui.toast('warning','Background transform unavailable; using the bounded CPU path.',String(error));
+          try{applyTransform(s,token);}catch(failure){if(!restoreFailedCommit(s,root,selection,entry,failure))return false;}
+          committed=true;finishTransform(s);return true;
+        }
+        throw error;
+      }
+      const current=doc.getLayer(source.id);
+      if(st!==s||s.job!==job||editor.session(session.id)!==session||editor.active!==session||doc.rev!==revision||!current||!hasRaster(current)||current.raster!==sourceRaster||current.raster.version!==sourceVersion||current.rev!==sourceRev)throw Error('Transform source changed; result discarded');
+      const start=performance.now(),after=cloneLayer(source);
+      after.raster=result;after.x=plans[0].output.x;after.y=plans[0].output.y;after.rev++;
+      try{
+        session.pushProtected(new CompositeCommand('Free Transform',[new TransformLayerCommand('Free Transform',source,after)],{action:'edit.freeTransformApply',args:{matrix:Array.from(H),affine:!s.quad||isAffineQuad(s.quad)}}),token);
+      }catch(error){if(!restoreFailedCommit(s,root,selection,entry,error))return false;}
+      task.metrics.installMs=performance.now()-start;committed=true;finishTransform(s);return true;
+    }catch(error){
+      if(st===s){updatePreview(s);ui.toast(task.metrics.cancelled?'info':'error',task.metrics.cancelled?'Transform cancelled; preview retained.':'Transform failed; retry or press Escape.',String(error));}
+      return false;
+    }finally{
+      lastTransformMetrics={...task.metrics};
+      if(s.job===job)s.job=undefined;
+      session.releaseEditProtection(token);
+      if(session.transformPending===pending)session.transformPending=null;
+      if(session.cancelTransformTask===cancel)session.cancelTransformTask=null;
+      p.done();if(editor.session(session.id)===session){try{session.notify();}catch(error){ui.toast('warning','Transform ended; a notification failed.',String(error));}}
+      if(!committed&&st===s)ui.bump('viewRev');
+    }
+  })();
+  session.transformPending=pending;session.notify();ui.bump('viewRev');
 }
 
-function applyTransform(s: State): void {
+function applyTransform(s: State,token?:symbol): void {
+  const push=(cmd:Parameters<DocumentSession['push']>[0],alreadyApplied=false)=>token?s.session.pushProtected(cmd,token,alreadyApplied):s.session.push(cmd,alreadyApplied);
   const doc = s.session.doc;
   const H = homography(s);
   const mesh = s.warp && !isIdentityGrid(s.warp.grid, s.base) ? sampleMesh(warpMap(s)) : null;
@@ -428,7 +517,7 @@ function applyTransform(s: State): void {
   }
   if (s.selOnly) {
     doc.selection.restore(transformMask(s, s.selOnly.mask, mesh, H).snapshot());
-    s.session.push(new RasterEditCommand(label, { kind: 'selection' }, s.selOnly.before, doc.selection.snapshot(), null), true);
+    push(new RasterEditCommand(label, { kind: 'selection' }, s.selOnly.before, doc.selection.snapshot(), null), true);
     doc.emit({ type: 'selection' });
     s.session.notify();
     ui.bump('viewRev');
@@ -455,7 +544,7 @@ function applyTransform(s: State): void {
     selMask.restore(s.float.selBefore);
     doc.selection.restore(transformMask(s, selMask, mesh, H).snapshot());
     const selAfter = doc.selection.snapshot();
-    s.session.push(new CompositeCommand(label, [new RasterEditCommand(label, { kind: 'layer', layerId: l.id }, s.float.before, after, null), new RasterEditCommand(label, { kind: 'selection' }, s.float.selBefore, selAfter, null)]), true);
+    push(new CompositeCommand(label, [new RasterEditCommand(label, { kind: 'layer', layerId: l.id }, s.float.before, after, null), new RasterEditCommand(label, { kind: 'selection' }, s.float.selBefore, selAfter, null)]), true);
     doc.emit({ type: 'structure' }, { type: 'selection' });
     return;
   }
@@ -470,7 +559,7 @@ function applyTransform(s: State): void {
       cmds.push(new TransformLayerCommand(label, before, after));
     }
     if (skipped.size) ui.toast('info', `${[...skipped].join(', ')} ${skipped.size === 1 ? 'was' : 'were'} not warped. Use Type ▸ Warp Text… for text, or convert the layer to a smart object first.`);
-    s.session.push(new CompositeCommand(label, cmds));
+    push(new CompositeCommand(label, cmds));
     s.session.notify();
     return;
   }
@@ -486,7 +575,7 @@ function applyTransform(s: State): void {
     cmds.push(new TransformLayerCommand('Free Transform', before, after));
   }
   const cmd = new CompositeCommand('Free Transform', cmds, { action: 'edit.freeTransformApply', args: { matrix: Array.from(H), affine: isAffine } });
-  s.session.push(cmd);
+  push(cmd);
   s.session.notify();
 }
 
@@ -547,6 +636,17 @@ function applyWarp(s: DocumentSession, l: Layer, base: Rect, grid: WarpGrid, mes
 /** Applies a document-space homography to layers as one history step (macro replay). */
 export function transformLayersByMatrix(session: DocumentSession, ids: LayerId[], H: Homography, affine: boolean): boolean {
   if (!session.canEdit()) return false;
+  try{
+    const inputs:TransformInput[]=[];
+    for(const id of ids){const l=session.doc.getLayer(id);if(!l)continue;
+      if(l.kind!=='pixel'&&l.kind!=='video'&&l.kind!=='group')throw Error('Dynamic transform capacity cannot be verified');
+      for(const r of rasterLayers(l))if(hasRaster(r))for(const part of [{raster:r.raster,x:r.x,y:r.y},...(r.mask?[r.mask]:[])]){
+        if(part.raster.fill!==0||part.raster.companion)throw Error('Transform source capacity cannot be verified');
+        const bounds=rasterContentBounds(part.raster);if(bounds)inputs.push({bounds,x:part.x,y:part.y,channels:part.raster.channels,depth:part.raster.depth,bytes:part.raster.tiles.size*part.raster.tileLength*part.raster.depth/8});
+      }
+    }
+    planTransforms(H,inputs);
+  }catch(error){ui.toast('error','Transform cannot be confirmed.',String(error));return false;}
   const cmds: ReplaceLayerCommand[] = [];
   for (const id of ids) {
     const live = session.doc.getLayer(id);
@@ -716,7 +816,7 @@ export class TransformController implements Tool {
   }
 
   down(_h: ToolHost, p: ToolPointer) {
-    if (!st) return;
+    if (!st || st.job) return;
     const hdl = handleAt(st, p.sx, p.sy, p.x, p.y);
     if (!hdl) return;
     this.drag = { h: hdl, start: p, M: [...st.M] as Affine, quad: st.quad ? (st.quad.map((q) => ({ ...q })) as Quad) : null, ref: { ...st.ref }, grid: st.warp ? st.warp.grid.map((q) => ({ ...q })) : null };
@@ -725,7 +825,7 @@ export class TransformController implements Tool {
   move(h: ToolHost, p: ToolPointer) {
     const d = this.drag;
     const s = st;
-    if (!d || !s) return;
+    if (!d || !s || s.job) return;
     const dx = p.x - d.start.x, dy = p.y - d.start.y;
     if (s.warp && d.grid && (d.h.kind === 'warpPoint' || d.h.kind === 'surface')) {
       const g0 = d.grid;
@@ -916,7 +1016,7 @@ export function transformNumbers(): { x: number; y: number; w: number; h: number
 /** Sets numeric transform values (from the options bar). */
 export function setTransformNumbers(v: { x?: number; y?: number; w?: number; h?: number; angle?: number; skew?: number }): void {
   const s = st;
-  if (!s || s.quad || s.warp) return;
+  if (!s || s.job || s.quad || s.warp) return;
   const cur = transformNumbers()!;
   const cx = s.base.x + s.base.w / 2, cy = s.base.y + s.base.h / 2;
   const nx = v.x ?? cur.x, ny = v.y ?? cur.y;

@@ -48,7 +48,7 @@ export interface HistorySnapshot {
 export type HistoryListener = () => void;
 
 export class History {
-  canMutate: () => boolean = () => true;
+  canMutate: (owner?: symbol) => boolean = () => true;
   entries: HistoryEntry[];
   /** Index of the current state in `entries`. */
   index = 0;
@@ -89,8 +89,8 @@ export class History {
    * Adds a command. When `alreadyApplied` is false the command is executed first.
    * Redo branch is discarded (standard linear history).
    */
-  push(cmd: Command, alreadyApplied = false): void {
-    if (!this.canMutate()) return;
+  push(cmd: Command, alreadyApplied = false, owner?: symbol): void {
+    if (!this.canMutate(owner)) return;
     if (!alreadyApplied) this.doc.batch(() => cmd.do(this.doc));
     // Discard redo branch.
     for (const e of this.entries.splice(this.index + 1)) e.command?.dispose?.();

@@ -215,6 +215,7 @@ export class Editor {
   }
 
   setTool(id: ToolId): void {
+    if(this.active?.transformPending)return;
     if(!access('tool:'+id).enabled)return;
     const info = toolInfo(id);
     if (info.comingSoon) {

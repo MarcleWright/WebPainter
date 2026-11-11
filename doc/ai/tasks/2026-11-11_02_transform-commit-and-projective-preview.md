@@ -108,3 +108,22 @@
 在既有override/atlas affine采样内加入齐次除法，不新增renderer。共同几何/容量判定用于预览，非法状态保留最后完整预览并允许参数调整/Escape，不转CPU。对合法projective在每个显示逻辑tile中心求原localScale，复用warpRaster相同bilinear/mip选择及其逻辑源采样范围；准备同帧所需层级集合，参数不改变层级/内容则不重复上传。层级因空间变化使用逐tile选择，不沿用全局determinant。沿用6ms单位间预算、冻结准备代际/latest下一代、完整Map交换与完整负坐标源。
 
 阶段0路线与源码/基线一致，按有限落点继续C；Worker实际加载需开发及生产窗口，自动注入不代替窗口验收。原始基线不纳入Git。
+
+
+## 9. C实现及阶段验收
+
+实现transformPlan共同finite/凸quad/正反分母/输出坐标、总像素和保守768MiB容量预检；范围或总预算拒绝在Worker/同步CPU之前，参数保留。加入专用transformWorker和单在途ACK协议，源仅transfer私有256KiB副本；原1024目标逻辑区域、原warpRaster bicubic/mip/量化保持不变，结果量化/compact后按256私有图块转移，主线程直接安装到未公开raster。macro矩阵重放也经过同一安全预检，仍明确为同步路径，不宣称它消除冻结。
+
+首版后台资格为单个根RGB8普通Normal像素层、无selection/mask/vectorMask/效果/clipping/高级混合且opacity/fillOpacity为1；合法quad与affine均支持。其它可保守确认的栅格组合在共同预检后保留明确CPU提交；动态appearance、非零fill或Warp等不能证明容量时拒绝确认，不以能力不足绕过拒绝。Worker不存在/启动加载失败可在已通过共同预检后明确CPU回退，运行中错误不自动重做。cancel终止Worker并settle promise，进度取消保留可恢复preview，Escape/切文档/直接移除取消并退出；操作id+session+doc/source身份/version在交换前重验。
+
+Session保护按token/owner持有；兼容legacy布尔仅操作自己的legacy保护，不能解除token。本任务history push携带私有token，在canEdit仍false时只允许持有者且无其它owner的受控提交；外部history/undo/redo/共享编辑入口不获临时解锁。output/close仅释放各自token，文件请求等待transformPending；失败/取消明确返回未保存/未关闭，下一请求仍须确认/取消保留的preview。autosave等待稳定结果并跳过未确认preview。COW root/selection恢复点覆盖部分swap，history已插入的通知异常按成功处理，防止双提交；结果完成前旧完整预览保持，权威帧沿既有整体交换。
+
+定向 **4文件79/79通过**：新增transformTask28项，transformPreview19、Move/output及tile bounds。包括五种几何与负坐标/画布外源、透明数据、原1024跨mip透视精确参考（错误256重采样会产生不同SHA）、原buffer不detach、每次≤256KiB在途、完整history/native、外部编辑与自己history共存、容量/非有限/近奇异/自交/投影horizon拒绝、Worker不存在与加载/运行失败、重复Enter、中途取消/切换/移除、过期源/坏回执、保存/关闭/自动保存等待、保护owner、部分交换及通知故障。初轮FakeWorker跨realm typed array模拟有误与若干测试断言/夹具错误已修正后重跑，失败尝试不计通过。P-BUILD通过，既有Vite警告保留。
+
+真实开发窗口afterC-probe（透明夹具，单次仿射能力探针）：Enter返回7.6ms，快照约1ms、预检1.1ms、私有copy累计37.4ms（单单位最大0.3ms）、source ACK等待23.1ms、内核+量化6960.7ms、Worker含ACK7033.3ms、结果就绪7139.7ms、组装3.4ms、交换/历史3.8ms；峰值在途262144 bytes，保守估算674758656 bytes。这是单份阶段探针，不代替最终三轮比较。主线程authority仍有102/125ms长任务，未宣称无长帧。实际Cancel按钮预热+3正式响应5.8/5.9/6.9ms，像素/历史不变、参数保留，可重新确认。
+
+生产真实app://窗口production-C/production-C-immediate已加载构建的专用Worker资源并完成一次历史，不依赖DEV模块hook或mock；记录独立Worker target、持续RAF、异步pending保护及最终undo/redo逐tile一致。首次观察通用进度UI延迟250ms，已仅给变换任务加入immediate进度选项并复验：Enter返回8.1ms、可见progress/Cancel约6.2ms，pending时canEdit=false；生产authority仍有最高225ms长任务，人工体验未验收。开发/生产证明的是本机加载和路径可用，不等于打包分发/Owner体验通过。
+
+夹具纠正：首次before来自继承的全不透明源，最初透明注入表达式因索引含小数没有生效，整组不得充作本轮合格性能对比。核验后统一使用全透明/半透明非均匀4K夹具，before-transparent在实施前保全的a2fac7d源码副本重采12份；不切main或覆盖dirty，环境相同，正式Enter最长主线程任务8063–8840ms。原始错误夹具和两组证据全部保留。C最终三轮及D性能在整体阶段继续。
+
+C阶段代码和以上证据本地提交后进入D；不涉及大笔刷、embedded/ADA或通用任务框架。

@@ -29,7 +29,20 @@ export class DocumentSession {
   readonly history: History;
   outputPending: Promise<boolean> | null = null;
   closePending: Promise<boolean> | null = null;
-  editProtected = false;
+  private legacyProtection = false;
+  private editOwners = new Map<symbol,string>();
+  get editProtected():boolean { return this.legacyProtection || this.editOwners.size>0; }
+  set editProtected(value:boolean) { this.legacyProtection=value; }
+  /** A transform's completion is a stable authority boundary for file requests. */
+  transformPending: Promise<boolean> | null = null;
+  cancelTransformTask: (()=>void) | null = null;
+  acquireEditProtection(owner:string):symbol { const token=Symbol(owner);this.editOwners.set(token,owner);return token; }
+  releaseEditProtection(token:symbol):void { this.editOwners.delete(token); }
+  pushProtected(cmd:Command,token:symbol,alreadyApplied=false):void {
+    if(!this.ownsCommit(token))throw Error('Transform no longer owns document protection');
+    this.history.push(cmd,alreadyApplied,token);
+  }
+  private ownsCommit(token:symbol):boolean { return !this.disposed&&!this.legacyProtection&&this.editOwners.size===1&&this.editOwners.get(token)==='transform'; }
   private disposed = false;
   canEdit(): boolean { return !this.editProtected && !this.disposed; }
 
@@ -56,7 +69,7 @@ export class DocumentSession {
     initialLabel = 'Open',
   ) {
     this.history = new History(doc, initialLabel);
-    this.history.canMutate = () => this.canEdit();
+    this.history.canMutate = owner => this.canEdit() || !!owner && this.ownsCommit(owner);
     doc.editingAllowed = () => this.canEdit();
     this.engine = new RenderEngine(doc);
     this.savedEntryId = this.history.current.id;
@@ -183,6 +196,7 @@ export class DocumentSession {
   }
 
   dispose(): void {
+    this.cancelTransformTask?.();
     this.disposed = true;
     if (this.offloadTimer) clearTimeout(this.offloadTimer);
     this.unsub.forEach((u) => u());

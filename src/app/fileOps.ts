@@ -26,6 +26,7 @@ import { builtinProfileName, BuiltinProfileId } from '../color/icc';
 /** Finish only this target's Move/text; recheck after every asynchronous dialog/yield. */
 export function prepareMoveOutput(s: DocumentSession): boolean {
   if (editor.session(s.id) !== s) return false;
+  if(s.mode.kind==='transform'){ui.toast('info','Confirm or cancel the transform before saving.');return false;}
   const tool = editor.currentTool;
   if (editor.active === s && tool?.id !== 'move' && tool?.id !== 'type' && tool?.busy?.()) { ui.toast('info', 'Finish the current tool before saving.'); return false; }
   const result = editor.finishMove(s);
@@ -54,10 +55,15 @@ function claimPath(s: DocumentSession, path: string): boolean {
 async function outputRequest(s: DocumentSession | null, run: (s: DocumentSession) => Promise<boolean>): Promise<boolean> {
   if (!s || editor.session(s.id) !== s) return false;
   if (s.outputPending || s.closePending) { ui.toast('info', 'This document is busy saving or closing.'); return false; }
-  const pending = Promise.resolve().then(() => run(s)).catch(error => { ui.toast('error', 'File operation failed', errMsg(error)); return false; });
+  const pending = Promise.resolve().then(async () => {
+    const transform=s.transformPending;
+    if(transform && !(await transform)){ui.toast('warning','Transform was not committed; nothing was saved.','Confirm or cancel the retained preview, then save again.');return false;}
+    if(editor.session(s.id)!==s)return false;
+    return run(s);
+  }).catch(error => { ui.toast('error', 'File operation failed', errMsg(error)); return false; });
   s.outputPending = pending;
   try { return await pending; }
-  finally { s.editProtected = false; s.outputPending = null; if (editor.session(s.id) === s) s.notify(); }
+  finally { s.outputPending = null; if (editor.session(s.id) === s) s.notify(); }
 }
 export function save(s: DocumentSession | null = editor.active): Promise<boolean> { return outputRequest(s, saveImpl); }
 export function saveAs(s: DocumentSession | null = editor.active, asCopy = false): Promise<boolean> { return outputRequest(s, target => saveAsImpl(target, asCopy)); }
@@ -255,10 +261,11 @@ async function writeDocument(s: DocumentSession, path: string, asCopy: boolean):
   }
   if (!claimPath(s, path)) return false;
   const p = ui.progress(`Saving ${basename(path)}…`);
+  let protection:symbol|undefined;
   try {
     await new Promise((r) => setTimeout(r, 16));
     if (!prepareMoveOutput(s)) return false;
-    s.editProtected = true; s.notify();
+    protection=s.acquireEditProtection('output'); s.notify();
     const checkpoint = snapshotDocument(s.doc), entry = s.history.current.id, revision = s.doc.rev;
     const bytes = await exporter.export(checkpoint, { maximizeCompatibility: true, psb, selectedLayerIds: s.selectedLayers().map((l) => l.id), onProgress: (f, label) => p.update(f, `Saving ${basename(path)} — ${label}`) });
     await platform().writePath(path, bytes);
@@ -283,6 +290,7 @@ async function writeDocument(s: DocumentSession, path: string, asCopy: boolean):
     return false;
   } finally {
     writingPaths.delete(pathKey(path));
+    if(protection)s.releaseEditProtection(protection);
     p.done();
   }
 }
@@ -336,11 +344,12 @@ async function exportAsImpl(s: DocumentSession | null = editor.active, formatId?
   if (!path) return false;
   if (!claimPath(s, path)) return false;
   const p = ui.progress(`Exporting ${basename(path)}…`);
+  let protection:symbol|undefined;
   try {
     await new Promise((r) => setTimeout(r, 16));
     if (s.doc.canvas.bitDepth > 8 && !exp.supports16) ui.toast('info', `${exp.label} is 8-bit only; the export is converted from ${s.doc.canvas.bitDepth}-bit. Your document keeps its bit depth.`);
     if (!prepareMoveOutput(s)) return false;
-    s.editProtected = true; s.notify();
+    protection=s.acquireEditProtection('output'); s.notify();
     const bytes = await exp.export(snapshotDocument(s.doc), opts);
     await platform().writePath(path, bytes);
     if (editor.session(s.id) !== s) return true;
@@ -351,6 +360,7 @@ async function exportAsImpl(s: DocumentSession | null = editor.active, formatId?
     return false;
   } finally {
     writingPaths.delete(pathKey(path));
+    if(protection)s.releaseEditProtection(protection);
     p.done();
   }
 }
@@ -361,12 +371,15 @@ async function exportAsImpl(s: DocumentSession | null = editor.active, formatId?
 export async function closeSession(s: DocumentSession | null = editor.active, force = false): Promise<boolean> {
   if (!s) return true;
   if (s.closePending) return s.closePending;
+  let protection:symbol|undefined;
   const closing = Promise.resolve().then(async () => {
+    const transform=s.transformPending;
+    if(transform && !(await transform)){ui.toast('warning','Transform was not committed; document remains open.');return false;}
     if (s.outputPending && !(await s.outputPending)) return false;
     if (editor.session(s.id) !== s) return true;
     editor.finishMove(s, false);
     if (textEditState()?.sessionId === s.id) commitTextEdit();
-    s.editProtected = true; s.notify();
+    protection=s.acquireEditProtection('close'); s.notify();
     if (s.modified && !force) {
       editor.activate(s.id);
       const r = await platform().confirm(`Save changes to "${s.doc.name}" before closing?`, 'Your changes will be lost if you don’t save them.', ['Save', 'Don’t Save', 'Cancel']);
@@ -382,7 +395,7 @@ export async function closeSession(s: DocumentSession | null = editor.active, fo
   }).catch(error => { ui.toast('error', 'Could not close document', errMsg(error)); return false; });
   s.closePending = closing;
   try { return await closing; }
-  finally { s.closePending = null; s.editProtected = false; if (editor.session(s.id) === s) s.notify(); }
+  finally { s.closePending = null; if(protection)s.releaseEditProtection(protection); if (editor.session(s.id) === s) s.notify(); }
 }
 
 export async function closeAll(except?: string): Promise<boolean> {

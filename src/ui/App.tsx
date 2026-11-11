@@ -232,7 +232,7 @@ function ProgressHost() {
     const t = setTimeout(() => setVisible(true), 250);
     return () => clearTimeout(t);
   }, [items.length]);
-  if (!visible || !items.length) return null;
+  if ((!visible && !items.some(p=>p.immediate)) || !items.length) return null;
   return (
     <div className="progress-host" aria-live="polite">
       {items.map((p) => (
