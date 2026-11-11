@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented / 本地实现与自动验证交接，独立实现审查及人工/Owner 验收 Pending。2026-11-10 方案 Approved 后，按 Owner 授权在 codex/dev 串行执行 P1–P5 并分别本地提交；2026-11-11 完成 P5 自动收口。阶段提交与证据见 Execution Report；未推送、合并或发布。方案 Approved 不代表实现独立审查或用户验收通过，P5 人工门槛尚未完成。
+Implemented / 实现审查 Changes Requested，限定修复待 coder 执行。2026-11-10 方案 Approved 后按授权完成 P1–P5 本地实施；2026-11-11 实现审查复现四项问题，Owner 选择本轮修复 R1（P1）及 R2/R3（P2），R4（P2）明确延期。具体范围与补测见文末「限定修复授权与验收」。此处 R1 的 P1 是缺陷优先级，不是原实施阶段 P1。本轮文档交接不执行业务修复；未推送、合并或发布，人工/Owner 验收仍 Pending，不能标记整体实现验收通过。
 
 工作目录 `D:/00_Projects_WSY/AI/Codex_Projects/WebPainter_Dev`, 分支 `codex/dev`, 核对基线 `59f81b5`。实施前检查实际 HEAD/工作区; 不修改 main_native、embedded 或相邻 ADA, 不带入其他工作区未提交的启动脚本。
 
@@ -291,3 +291,59 @@ P5 的自动门槛通过；人工可按任务授权缺项交接，**G5 完整人
 P1 `ff6c0a1` → P2 `d8afe72` → P3 `ee51a5f` → P4 `d62c999` → P5 `03ccd307726d01266c4669a7f1a417d2cfff191e`。本次额外文档提交仅补记 P5 hash，按 Ordered Phases 允许的最终交接记录收口，不包含业务改动。
 
 独立实现审查代码范围：`59f81b51fa2db6f6ea0e7d31094d8015549c6ec8..03ccd307726d01266c4669a7f1a417d2cfff191e`。P1–P5 的实现与自动验证已交付；G5 人工、独立实现审查和 Owner 验收仍 Pending，无推送/合并/发布。
+
+## 限定修复授权与验收（2026-11-11）
+
+本节更新上方历史交接的“独立实现审查 Pending”状态，不改写原阶段证据。审查 HEAD 为 `e997029`，业务范围 `59f81b5..03ccd30`；审查开始时工作区干净。复跑原 P-INPUT 合计 75/75 通过，P-BUILD 与 diff --check 通过；追加生产监听/真实会话用例复现以下四项，结论 **Changes Requested**。未做新一轮生产窗口人工或中文 IME 验收。
+
+Owner 决定：仅授权 coder 修复 R1、R2、R3 并补回归测试；R4 延期作为已知问题。保留原架构及 P1–P5 交付，不重跑新的五阶段设计，不引入通用异步框架或重写历史内核。按 R1→R2→R3 推进，各项分别本地提交并记录 hash/证据；无需逐项重复请求许可。保留本次任务文档改动和无关改动，不推送、合并或发布，不修改相邻 ADA/main_native/embedded。常规实现细节自行决定，超出本节产品范围再交 Owner 决定。
+
+### R1 / P1：快速变换必须固定原目标（本轮修复）
+
+- 源码依据：`src/app/actions.ts` 的 `quickTransform`（审查时 190–194 行）仅捕获 session/doc，await 动态导入后 `quickTransformLayer` 重新读取当前 selectedLayers。给快速旋转绑定 F6，在 A 按下后、异步继续前切到同文档 B，会旋转 B 并新增历史；现有跨文档检查不能拦截。
+- 修改：入口捕获完整目标图层集合及必要交互身份，继续执行前核对 session/doc、图层对象/选择集合和交互状态，并重查最终 Action access/enabled、canEdit、outputPending/closePending。目标变化或不可用则取消，不改新目标、不产生历史。选择集合变化后又恢复的旧请求也不得复活，可使用有限的请求失效标记或现有状态通知，不建立通用队列。保持旋转/翻转算法和原 Action/宏语义。
+- 补测：经实际有效绑定与分发触发，控制异步边界；覆盖同文档 A→B、多选集合增减、切文档、目标删除/替换、权限撤销和保存/关闭 pending，断言原目标/新目标像素或几何及历史均不被旧动作修改。补目标稳定的成功路径，确认只修改原选中集合、一次历史且 undo/redo 正确。覆盖快速旋转与翻转共用入口，不只测 Ctrl+T。
+
+### R2 / P2：新交互使数字延迟输入失效（本轮修复）
+
+- 源码依据：`src/app/inputDispatch.ts` 的 `handleDigit/valid/apply`（审查时 13–29 行）未验证新 pointer 交互或 busy。Move 下按 5，在 350ms 内开始拖动并保持按住，计时器仍修改透明度；松手前历史从 1 条增为 2 条。
+- 修改：作品交互开始时取消待应用数字与两位数缓存；即使拖动已在计时器到期前结束，旧数字也不再应用。延迟执行前仍检查原目标身份、交互身份/busy、canEdit、outputPending/closePending 和相关 access。优先复用已有 pointer/交互通知，不能只在定时器里检查“此刻是否 busy”。不影响原有两位数、透明度/流量/填充透明度的正常规则。
+- 补测：挂载实际 App/Canvas 监听，覆盖数字后长拖动、350ms 内结束的短拖动、画笔笔画开始、已有切层/切工具/焦点失效以及保存/关闭 pending。检查忙期间及收尾后均无旧参数修改或额外历史；Move/笔画自身正常收尾且一次撤销。正向验证不插入交互时两位数正确合并、单数字按期应用一次。
+
+### R3 / P2：Modal 视图白名单不得抢文字与控件输入（本轮修复）
+
+- 源码依据：`src/ui/dialogs/Modal.tsx`（审查时 37–38 行）在检查文本/控件归属前执行 MODAL_VIEW。将 view.zoomIn 改绑 A，在 Modal 输入框键入 a，事件被 preventDefault 并进入缩放分支。
+- 修改：文本编辑及控件本地导航/激活优先于视图白名单。文本焦点不转发画布缩放；继续遵守 composition、defaultPrevented 和消费一次规则。非文本且未被控件认领的白名单键仍能缩放；不得放宽其他文档命令穿透，也不影响非模态文本的 file.save 白名单。
+- 补测：挂载真实 Modal 及 input/textarea/contenteditable，给视图命令绑定字母、编辑组合键，断言文字事件未被全局吞掉、视图不变。覆盖数值/选择控件导航、IME、局部已消费事件；非文本区域有效缩放一次，模态内保存/文档修改仍被隔离。jsdom KeyboardEvent 不会自动完成浏览器文字插入，须以消费/命令次数/视图及控件处理证据验证，不能伪称人工打字验收。
+
+### R4 / P2：调整目标失效后无法取消（Owner 明确延期）
+
+- 源码依据：`src/ui/dialogs/EditingDialogs.tsx` 的 AdjustmentDialog.onClose（审查时 220 行）复用提交 permit。打开 Curves 后由程序入口切换活动图层，Esc、Cancel、关闭按钮均无法正常退出；目标删除或 access 失效也会触发。通常需程序/插件或状态变化导致目标失效，不等同正常模态操作必现。
+- 本轮不修改此行为、不将其标记为已修复。后续将提交准入与取消清理分开，只清理本对话框拥有的预览，允许安全关闭且不修改新目标；届时单独补测。
+- R1–R3 修复复审可以单独通过，但交接必须列出 R4 已知限制，以及 G5 人工和 Owner 验收 Pending；不据三项修复宣称所有发现或整体实现验收完成。
+
+### 执行、补测与交接门槛
+
+1. 先核对实际 HEAD/分支/status，阅读入口及本任务。将各问题复现收敛为可维护测试，确认修复前失败原因与对应业务断言一致；不得靠 mock dispatcher/run/工具跳过生产路径。
+2. 每项完成其补测后分别提交；最终运行 P-INPUT、P-BUILD（含 typecheck）和 P-DOC，记录实际数量、结果、警告及证据边界。没有新增失败或改动时不为形式反复执行完整套件。修改的稳定规则仅按需同步 owner 文档，不改变已延期范围。
+3. 审查临时用例本地存于 `doc/material/local/shortcuts-review-2026-11-11/review-repro.test.tsx`，原相对导入按 `tests/input/` 编写；仅作复现参考，不能直接从材料路径运行，也不把复制的整份旧测试作为新回归提交。材料受 Git 忽略，无此材料也可按上文重建用例。
+4. 在下表补各项 commit、实现范围、补测结果与未验收项，再交独立复审。真实 Windows 输入/中文 IME/生产人工没有完成仍记 Pending；本轮不要求为通过修复门槛伪补人工结果。
+
+| 项目 | 状态 | Commit / 补测 / 边界 |
+| --- | --- | --- |
+| R1：原目标快速变换 | 本地修复/定向检查通过，待独立复审 | 本项提交 hash 在下一项补记；R1 6 tests Passed，P-TYPE Passed；人工/Owner Pending |
+| R2：数字延迟与新交互 | 已授权，待执行 | 待 coder 记录 |
+| R3：Modal 文本归属 | 已授权，待执行 | 待 coder 记录 |
+| R4：失效调整取消 | Owner 明确延期 | 已知限制，未修复 |
+| 修复后复审 | Pending | R1–R3 单独复核；R4、G5 人工/Owner 验收另列 |
+
+
+### 限定修复执行记录：R1（2026-11-11）
+
+执行基线 e997029，codex/dev；初始 dirty 仅本任务的限定修复授权/审查内容（46 additions / 1 deletion），已完整保留。R4 源码本项未修改。
+
+修复前通过有效 F6 绑定和真实 App/Canvas 分发触发 rotate90cw、flipH：A 按键后同步切到同文档 B，两个用例均 Failed，分别观察到 B 像素/几何改变和新增历史，与 R1 一致。未 mock dispatcher、run、工具或变换算法，动态 import 本身提供异步边界。
+
+修复仅收紧 quickTransform 入口：固定 session/doc、全部选择 ID 与图层对象、active/mask/channel、工具/mode 和历史身份；使用本次请求范围内的 session/store 通知及 pointerdown 使失效不可逆，选择变化后恢复也不复活；import 继续后核对目标、最终 Action enabled/access、canEdit、outputPending/closePending、busy 和 Modal，finally 清理观察者。保留原旋转/翻转算法、Action 和宏记录，没有通用队列。
+
+验证 `npm exec -- vitest run tests/input/listeners.test.tsx -t 'R1:'`：6 tests Passed（其余原 32 项未在本次定向运行），其中 rotate90cw/flipH 各测 15 种失效变化，以及稳定多选成功路径、一条历史、undo/redo、未选图层不变；同文档切层的两个独立复现也保留为回归。`npm run typecheck`、diff --check Passed。修复前隔离运行曾出现已有 jsdom 色彩 WASM 路径警告；修复后定向运行无失败。真实 Windows/中文 IME/生产人工、Owner 及独立实现复审仍 Pending。

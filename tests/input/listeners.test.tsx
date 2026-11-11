@@ -261,3 +261,64 @@ it('vertical text owner retains its session when its own tool access is disabled
  try {await act(async()=>{key(input,'Escape');key(input,'Enter',{ctrlKey:true});});expect(textEditState()?.layerId).toBe(layer.id);}finally{restore();}
  await act(async()=>key(input,'Escape'));expect(textEditState()).toBeNull();
 });
+
+it.each(['rotate90cw','flipH'])('R1: %s must not transform a newly selected layer after dispatch',async(kind)=>{
+ const {session}=await mount();const first=paintFixture(session),second=createPixelLayer('Second',8);
+ second.raster.writeFloat({x:0,y:0,w:4,h:2},new Float32Array(32).fill(1));session.doc.insertLayer(second);session.setActive(first.id);
+ const state=()=>session.doc.allLayers().map(l=>({id:l.id,x:l.kind==='pixel'?l.x:null,y:l.kind==='pixel'?l.y:null,pixels:l.kind==='pixel'?Array.from(l.raster.readFloat({x:0,y:0,w:32,h:32})):null}));
+ const before=state(),entry=session.history.current.id;await act(async()=>keymap.set(`edit.transform.${kind}`,['F6']));
+ // Dynamic import always yields: change the real session before its continuation runs.
+ await act(async()=>{key(window,'F6');session.setActive(second.id);});
+ expect(state()).toEqual(before);expect(session.history.current.id).toBe(entry);
+});
+
+function quickLayerState(session:ReturnType<typeof inputSession>['session']) {
+ return session.doc.allLayers().map(l=>({id:l.id,x:l.kind==='pixel'?l.x:null,y:l.kind==='pixel'?l.y:null,pixels:l.kind==='pixel'?Array.from(l.raster.readFloat({x:-16,y:-16,w:48,h:48})):null}));
+}
+it.each(['rotate90cw','flipH'])('R1: %s cancels changed/restored targets and rechecks final admission',async(kind)=>{
+ const {session}=await mount();const a=paintFixture(session), b=createPixelLayer('B',8);
+ b.raster.writeFloat({x:0,y:0,w:3,h:2},new Float32Array(24).fill(1));session.doc.insertLayer(b);
+ const id=`edit.transform.${kind}`,original=actionDefinitions().find(x=>x.id===id)!;
+ await act(async()=>keymap.set(id,['F6']));
+ const changes: [string,()=>void][]=[
+  ['selection changes and returns',()=>{session.setActive(b.id);session.setActive(a.id);}],
+  ['multi-selection expands',()=>session.setActive(b.id,true)],
+  ['multi-selection shrinks',()=>session.setActive(a.id)],
+  ['multi-selection expands then returns',()=>{session.setActive(b.id,true);session.setActive(a.id);}],
+  ['document changes and returns',()=>{inputSession();editor.activate(session.id);}],
+  ['document changes',()=>{inputSession();}],
+  ['target removed',()=>{session.doc.removeLayer(a);session.doc.emit({type:'structure'});}],
+  ['target replaced under same id',()=>{const replacement=createPixelLayer('Replacement',8);replacement.id=a.id;session.doc.removeLayer(a);session.doc.insertLayer(replacement);session.doc.emit({type:'structure'});}],
+  ['final action access revoked',()=>{restore=installAccessPolicy(entry=>({visible:true,enabled:entry!==`action:${id}`}));}],
+  ['final action enabled revoked',()=>register({...original,enabled:()=>false})],
+  ['canEdit revoked',()=>{session.editProtected=true;}],
+  ['output pending before canEdit lock',()=>{session.outputPending=Promise.resolve(true);}],
+  ['close pending before canEdit lock',()=>{session.closePending=Promise.resolve(true);}],
+  ['tool changes and returns',()=>{editor.setTool('brush');editor.setTool('move');}],
+  ['new interaction finishes before continuation',()=>{const canvas=container.querySelector('.viewport')!;pointer(canvas,'pointerdown',1,1);pointer(canvas,'pointerup',1,1);}],
+ ];
+ let restore:(()=>void)|undefined;
+ for (const [label,change] of changes) {
+  // Recreate the fixture's target identity after destructive cases; no command history is involved.
+  await act(async()=>{
+   editor.activate(session.id);session.editProtected=false;session.outputPending=null;session.closePending=null;
+   if(session.doc.getLayer(a.id)!==a){const replacement=session.doc.getLayer(a.id);if(replacement)session.doc.removeLayer(replacement);session.doc.insertLayer(a);}
+   session.setActive(a.id);if(label==='multi-selection shrinks')session.setActive(b.id,true);
+  });
+  let snapshots:ReturnType<typeof quickLayerState>[]=[],entries:string[]=[];
+  try {
+   await act(async()=>{key(window,'F6');change();snapshots=editor.sessions.map(quickLayerState);entries=editor.sessions.map(s=>s.history.current.id);});
+   expect(editor.sessions.map(quickLayerState),label).toEqual(snapshots);expect(editor.sessions.map(s=>s.history.current.id),label).toEqual(entries);
+  } finally {restore?.();restore=undefined;register(original);session.editProtected=false;session.outputPending=null;session.closePending=null;}
+ }
+});
+it.each(['rotate90cw','flipH'])('R1: stable %s affects only the original selected set with one undoable history',async(kind)=>{
+ const {session}=await mount();const a=paintFixture(session), b=createPixelLayer('B',8), untouched=createPixelLayer('untouched',8);
+ const data=new Float32Array([1,0,0,1,0,1,0,1,0,0,1,1,1,1,0,1,0,1,1,1,1,0,1,1]);
+ b.raster.writeFloat({x:0,y:0,w:3,h:2},data);b.x=20;session.doc.insertLayer(b);untouched.raster.writeFloat({x:0,y:0,w:3,h:2},data);untouched.x=40;session.doc.insertLayer(untouched);
+ session.setActive(a.id);session.setActive(b.id,true);const before=quickLayerState(session),index=session.history.index;
+ await act(async()=>{keymap.set(`edit.transform.${kind}`,['F6']);key(window,'F6');});
+ const after=quickLayerState(session);expect(after.slice(0,2)).not.toEqual(before.slice(0,2));expect(after[2]).toEqual(before[2]);expect(session.history.index).toBe(index+1);expect(session.history.current.command?.record?.action).toBe(`edit.transform.${kind}`);
+ await act(async()=>key(window,'z',{ctrlKey:true}));expect(quickLayerState(session)).toEqual(before);
+ await act(async()=>key(window,'z',{ctrlKey:true,shiftKey:true}));expect(quickLayerState(session)).toEqual(after);
+});

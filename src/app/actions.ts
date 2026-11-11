@@ -188,10 +188,33 @@ async function startTransform(kind?: string) {
   beginTransform(kind as never);
 }
 async function quickTransform(kind: string) {
-  const target = editor.active, doc = target?.doc;
-  const { quickTransformLayer } = await import('../tools/transformTool');
-  if (!target || editor.active !== target || target.doc !== doc || !target.canEdit() || useApp.getState().dialogs.length) return;
-  quickTransformLayer(kind as never);
+  const target = editor.active;
+  if (!target) return;
+  const doc = target.doc, layers = target.selectedLayers(), selected = new Set(target.selectedIds);
+  const active = target.activeLayer(), mode = target.mode, tool = editor.currentToolId;
+  const mask = target.editMask, channel = target.activeChannelId, entry = target.history.current.id;
+  const unchanged = () => editor.active === target && editor.session(target.id) === target && target.doc === doc
+    && target.activeLayer() === active && target.mode === mode && editor.currentToolId === tool
+    && target.editMask === mask && target.activeChannelId === channel && target.history.current.id === entry
+    && target.selectedIds.size === selected.size && [...selected].every(id => target.selectedIds.has(id))
+    && layers.length === target.selectedLayers().length && layers.every(l => doc.getLayer(l.id) === l);
+  // A request is invalidated permanently, including A→B→A before the import continuation.
+  // These observers live only for this quick-transform request, not a command queue.
+  let cancelled = false;
+  const invalidate = () => {cancelled = true;};
+  const offTarget = target.on(() => {if (!unchanged()) invalidate();});
+  const offUI = useApp.subscribe(() => {if (!unchanged() || useApp.getState().dialogs.length) invalidate();});
+  if (typeof window !== 'undefined') window.addEventListener('pointerdown', invalidate, true);
+  try {
+    const { quickTransformLayer } = await import('../tools/transformTool');
+    const final = action(`edit.transform.${kind}`);
+    if (cancelled || !unchanged() || !target.canEdit() || target.outputPending || target.closePending
+      || editor.currentTool?.busy?.() || useApp.getState().dialogs.length || !final || final.comingSoon || final.enabled?.() === false) return;
+    quickTransformLayer(kind as never);
+  } finally {
+    offTarget();offUI();
+    if (typeof window !== 'undefined') window.removeEventListener('pointerdown', invalidate, true);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
