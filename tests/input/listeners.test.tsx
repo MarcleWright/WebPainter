@@ -376,3 +376,57 @@ it.each(['brushOpacity','flow','layerOpacity','fillOpacity'])('R2: normal %s com
   await act(async()=>vi.advanceTimersByTimeAsync(1));expect(value()).toBe(.7);await act(async()=>vi.advanceTimersByTimeAsync(700));expect(brush?changes:pushes).toHaveBeenCalledTimes(2);
  } finally {vi.useRealTimers();}
 });
+
+it.each(['input','textarea','contenteditable'])('R3: Modal %s owns letters/editing chords rebound to view commands',async(kind)=>{
+ let localKeys=0;
+ const child=kind==='input'?<input data-editor onKeyDown={()=>localKeys++}/>:kind==='textarea'?<textarea data-editor onKeyDown={()=>localKeys++}/>:<div data-editor contentEditable suppressContentEditableWarning onKeyDown={()=>localKeys++}>editable</div>;
+ const {session}=await mount(<Modal title="R3 text" onClose={()=>{}}>{child}</Modal>);const target=container.querySelector('[data-editor]')!,zoom=session.view.zoom,entry=session.history.current.id;
+ await act(async()=>keymap.set('view.zoomIn',['A','Ctrl+A','Ctrl+Z','Ctrl+Backspace']));
+ for(const [value,init] of [['a',{}],['a',{ctrlKey:true}],['z',{ctrlKey:true}],['Backspace',{ctrlKey:true}]] as [string,KeyboardEventInit][]) {
+  let event!:KeyboardEvent;await act(async()=>{event=key(target,value,init);});expect(event.defaultPrevented).toBe(false);expect(session.view.zoom).toBe(zoom);
+ }
+ expect(localKeys).toBe(4);expect(session.history.current.id).toBe(entry);
+});
+
+it('R3: number/select navigation and button activation precede view bindings',async()=>{
+ let number=12,selectKeys=0,buttonKeys=0,clicks=0,confirmed=0;
+ const {session}=await mount(<Modal title="R3 controls" onClose={()=>{}} onOk={()=>{confirmed++;}}>
+  <NumberField label="R3 number" value={12} onChange={v=>{number=v;}}/>
+  <select data-select defaultValue="one" onKeyDown={()=>selectKeys++}><option value="one">One</option><option value="two">Two</option></select>
+  <button data-button onKeyDown={()=>buttonKeys++} onClick={()=>clicks++}>Local button</button>
+ </Modal>);const zoom=session.view.zoom;
+ await act(async()=>keymap.set('view.zoomIn',['ArrowUp','ArrowDown','Home','Space','Enter','Tab']));
+ await act(async()=>key(container.querySelector('[role=dialog] input.num')!,'ArrowUp'));expect(number).toBe(13);
+ const select=container.querySelector('[data-select]')!,button=container.querySelector('[data-button]')!;
+ for(const value of ['ArrowDown','Home','Enter']){let event!:KeyboardEvent;await act(async()=>{event=key(select,value);});expect(event.defaultPrevented).toBe(false);}
+ for(const value of [' ','Enter']){let event!:KeyboardEvent;await act(async()=>{event=key(button,value);});expect(event.defaultPrevented).toBe(false);}
+ let tab!:KeyboardEvent;await act(async()=>{tab=key(container.querySelector('[role=dialog]')!,'Tab');button.dispatchEvent(new MouseEvent('click',{bubbles:true}));});
+ expect(tab.defaultPrevented).toBe(false);expect(selectKeys).toBe(3);expect(buttonKeys).toBe(2);expect(clicks).toBe(1);expect(confirmed).toBe(0);expect(session.view.zoom).toBe(zoom);
+});
+it('R3: unclaimed non-text view key zooms once, while a locally consumed key does not zoom',async()=>{
+ let consumed=0;const {session}=await mount(<Modal title="R3 view" onClose={()=>{}}>
+  <div data-surface tabIndex={0}>Surface</div><div data-consumed tabIndex={0} onKeyDown={e=>{e.preventDefault();consumed++;}}>Local owner</div><button data-view-button>Non-text control</button>
+ </Modal>);const steps=vi.spyOn(session.view,'zoomStep'),before=session.view.zoom;
+ await act(async()=>keymap.set('view.zoomIn',['A']));
+ await act(async()=>key(container.querySelector('[data-consumed]')!,'a'));expect(steps).not.toHaveBeenCalled();expect(consumed).toBe(1);expect(session.view.zoom).toBe(before);
+ let event!:KeyboardEvent;await act(async()=>{event=key(container.querySelector('[data-surface]')!,'a');});expect(event.defaultPrevented).toBe(true);expect(steps).toHaveBeenCalledTimes(1);expect(session.view.zoom).not.toBe(before);
+ await act(async()=>{keymap.set('view.zoomIn',['Ctrl+=']);key(container.querySelector('[data-view-button]')!,'=',{ctrlKey:true});});expect(steps).toHaveBeenCalledTimes(2);
+});
+it('R3: IME and modal Enter/Escape take priority even when those keys are view-bound',async()=>{
+ let confirmed=0,closed=0;const {session}=await mount(<Modal title="R3 IME" onClose={()=>closed++} onOk={()=>confirmed++}><div data-surface tabIndex={0}>Surface</div></Modal>);
+ const surface=container.querySelector('[data-surface]')!,steps=vi.spyOn(session.view,'zoomStep');await act(async()=>keymap.set('view.zoomIn',['A','Enter','Escape']));
+ await act(async()=>{surface.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));for(const value of ['a','Enter','Escape'])expect(key(surface,value).defaultPrevented).toBe(false);});expect(steps).not.toHaveBeenCalled();expect(confirmed+closed).toBe(0);
+ await act(async()=>{surface.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));key(surface,'Enter');await new Promise(r=>setTimeout(r,5));});expect(confirmed).toBe(1);expect(steps).not.toHaveBeenCalled();
+ await act(async()=>key(surface,'Escape'));expect(closed).toBe(1);await act(async()=>key(surface,'a'));expect(steps).toHaveBeenCalledTimes(1);
+});
+it.each(['textarea','contenteditable'])('R3: multiline %s Enter and repeat remain local editing events',async(kind)=>{
+ let confirmed=0;const child=kind==='textarea'?<textarea data-editor/>:<div data-editor contentEditable suppressContentEditableWarning>editable</div>;
+ const {session}=await mount(<Modal title="R3 multiline" onClose={()=>{}} onOk={()=>confirmed++}>{child}</Modal>);const zoom=session.view.zoom;
+ await act(async()=>keymap.set('view.zoomIn',['Enter']));
+ await act(async()=>{expect(key(container.querySelector('[data-editor]')!,'Enter').defaultPrevented).toBe(false);expect(key(container.querySelector('[data-editor]')!,'Enter',{repeat:true}).defaultPrevented).toBe(false);});expect(confirmed).toBe(0);expect(session.view.zoom).toBe(zoom);
+});
+it('R3: modal text and non-text areas still isolate save and document edits',async()=>{
+ const {session}=await mount(<Modal title="R3 isolation" onClose={()=>{}}><input data-editor/><div data-surface tabIndex={0}>Surface</div></Modal>);const layer=paintFixture(session),before=pixels(layer),entry=session.history.current.id;
+ for(const target of [container.querySelector('[data-editor]')!,container.querySelector('[data-surface]')!])await act(async()=>{key(target,'s',{ctrlKey:true});key(target,'Delete');key(target,'n',{ctrlKey:true});});
+ expect(io.chooseSavePath).not.toHaveBeenCalled();expect(io.writePath).not.toHaveBeenCalled();expect(pixels(layer)).toEqual(before);expect(session.history.current.id).toBe(entry);expect(container.querySelectorAll('[role=dialog]')).toHaveLength(1);
+});

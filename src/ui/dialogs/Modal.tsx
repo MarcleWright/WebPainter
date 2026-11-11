@@ -1,4 +1,4 @@
-import {isComposing, MODAL_VIEW} from '../../app/inputContext';
+import {isComposing, isTextTarget, MODAL_VIEW} from '../../app/inputContext';
 import {keymap, chordFromEvent} from '../../app/shortcuts';
 import {run} from '../../app/actions';
 import {editor} from '../../app/editor';
@@ -33,14 +33,28 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
   const onKey = (e: React.KeyboardEvent) => {
     e.stopPropagation();
     if (e.defaultPrevented || isComposing(e)) return;
-    if (e.repeat && ['Enter','Escape'].includes(e.key)) {e.preventDefault();return;}
+    const target = e.target instanceof Element ? e.target : null;
+    const control = target?.closest('button,a[href],[role="button"],[role="checkbox"],[role="radio"],[role="switch"],[role="slider"],[role="spinbutton"],[role="combobox"],[role="listbox"],[role="option"],[role="textbox"],[role="menuitem"]');
+    if (e.key === 'Escape') {e.preventDefault();if (!e.repeat) onClose();return;}
+    if (e.key === 'Enter') {
+      // Multiline editing and native control activation precede modal submission and view keys.
+      if (control || target?.matches('textarea,select') || target?.closest('[contenteditable]:not([contenteditable="false"])')) return;
+      if (e.repeat) {e.preventDefault();return;}
+      if (onOk && !okDisabled) {
+        e.preventDefault();(document.activeElement as HTMLElement | null)?.blur();if (pending.current) return;
+        pending.current = true;
+        const session = editor.active, dialog = useApp.getState().dialogs.at(-1);
+        setTimeout(() => {pending.current = false; if (alive.current && editor.active === session && useApp.getState().dialogs.at(-1) === dialog) okRef.current?.();}, 0);
+      }
+      return;
+    }
+    // Text/select controls retain editing chords; other controls retain activation/navigation.
+    // An unclaimed view chord may still work on a non-text control (e.g. Ctrl+= on a button).
+    const controlNavigation = [' ','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key);
+    const textLikeControl = control?.matches('[role="textbox"],[role="combobox"],[role="listbox"],[role="option"],[role="menuitem"]');
+    if (e.key === 'Tab' || isTextTarget(e.target) || textLikeControl || control && controlNavigation) return;
     const bound = keymap.lookup(chordFromEvent(e.nativeEvent));
-    if (bound && MODAL_VIEW.has(bound)) {e.preventDefault(); void run(bound); return;}
-    if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-    if (e.key === 'Enter' && onOk && !okDisabled && (e.target as HTMLElement).tagName !== 'TEXTAREA' && (e.target as HTMLElement).tagName !== 'BUTTON') { e.preventDefault(); (document.activeElement as HTMLElement | null)?.blur(); if (pending.current || e.repeat) return;
-      pending.current = true;
-      const session = editor.active, dialog = useApp.getState().dialogs.at(-1);
-      setTimeout(() => {pending.current = false; if (alive.current && editor.active === session && useApp.getState().dialogs.at(-1) === dialog) okRef.current?.();}, 0); }
+    if (bound && MODAL_VIEW.has(bound)) {e.preventDefault(); void run(bound);}
   };
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} onKeyDown={onKey}>
