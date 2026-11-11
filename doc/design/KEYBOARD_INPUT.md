@@ -1,6 +1,6 @@
 # 键盘输入约定
 
-2026-11-11 实现交接。自动与生产 smoke 已验证的范围见[任务记录](../ai/tasks/2026-11-10_01_shortcut-unification.md)；原实现审查为 Changes Requested；限定 R1–R3 已本地修复，待独立复审，R4 明确延期。Windows 人工/中文 IME 和 Owner 验收仍 Pending。
+2026-11-11 实现交接。自动与生产 smoke 已验证的范围见[任务记录](../ai/tasks/2026-11-10_01_shortcut-unification.md)；原实现审查为 Changes Requested；限定 R1–R3 修复 review 已通过（Owner 确认），R4 明确延期。Windows 人工/中文 IME 和 Owner 验收仍 Pending。
 
 ## 绑定与显示
 

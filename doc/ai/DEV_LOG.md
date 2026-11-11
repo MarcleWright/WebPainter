@@ -6,7 +6,7 @@
 
 ### 2026-11-11 快捷键统一实现交接
 
-Status: 原实现审查 Changes Requested；限定 R1–R3 分别本地修复待复审，R4 延期；人工/Owner Pending，未推送。
+Status: 原实现审查 Changes Requested；限定 R1–R3 修复 review 已通过（Owner 确认），R4 延期；人工/Owner Pending。已授权推送 origin/codex/dev，不合并/发布。
 
 - [任务 P1-P5](tasks/2026-11-10_01_shortcut-unification.md) 记录固定 PhotoCraft 源码参考、输入优先级、工具重绑定、常用绑定及验收; codex/dev 独立实施。
 - 复用 Action/keymap/工具与历史；有效绑定、分发/焦点/IME、held pan、上下文复制及首批绑定已接入。原 75 项定向检查、生产构建与隔离生产 smoke 证据保留；本轮限定修复 hash、补测和最终门槛见任务文末。

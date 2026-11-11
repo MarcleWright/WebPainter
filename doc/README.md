@@ -7,7 +7,7 @@
 | 你想了解 | 主要文档 |
 | --- | --- |
 | 项目面向谁、与 ADA 的关系 | [产品定位](product/PRODUCT_BRIEF.md) |
-| 快捷键统一、PS 常用绑定与分阶段实施 | [输入约定](design/KEYBOARD_INPUT.md)、[快捷键任务 P1-P5](ai/tasks/2026-11-10_01_shortcut-unification.md), R1–R3 已本地修复待独立复审；R4 延期，人工/Owner Pending |
+| 快捷键统一、PS 常用绑定与分阶段实施 | [输入约定](design/KEYBOARD_INPUT.md)、[快捷键任务 P1-P5](ai/tasks/2026-11-10_01_shortcut-unification.md), R1–R3 review 已通过（Owner 确认）；R4 延期，人工/Owner Pending |
 | 为什么优化 4K、先做什么、怎样算有效 | [产品性能方向](product/PERFORMANCE_DIRECTION.md) |
 | 拖动时看什么、什么时候落定、怎样撤销 | [交互约定](design/INTERACTION_RULES.md) |
 | 原有结构与 fork 的边界 | [架构入口](architecture/ARCHITECTURE_OVERVIEW.md) |

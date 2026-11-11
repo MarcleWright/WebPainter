@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented / 原实现审查 Changes Requested；Owner 限定的 R1、R2、R3 已按顺序分别本地修复并补回归，待独立复审。R4 明确延期，未修复。2026-11-10 方案 Approved 与 P1–P5 历史交接证据保留，当前修复范围、hash、检查及限制见文末「限定修复授权与验收」。R1 的 P1 为缺陷优先级，不是原实施阶段 P1。未推送、合并或发布，G5 人工/真实 Windows/中文 IME/Owner 验收仍 Pending，不据三项修复宣称整体实现验收通过。
+Implemented / 原实现审查 Changes Requested；Owner 限定的 R1、R2、R3 已按顺序分别本地修复并补回归；Owner 于本次交接确认 review 已通过。R4 明确延期，未修复。2026-11-10 方案 Approved 与 P1–P5 历史交接证据保留，当前修复范围、hash、检查及限制见文末「限定修复授权与验收」。R1 的 P1 为缺陷优先级，不是原实施阶段 P1。本次已获提交并推送 origin/codex/dev 授权，不合并或发布；G5 人工/真实 Windows/中文 IME/Owner 验收仍 Pending，不据三项修复宣称整体实现验收通过。
 
 工作目录 `D:/00_Projects_WSY/AI/Codex_Projects/WebPainter_Dev`, 分支 `codex/dev`, 核对基线 `59f81b5`。实施前检查实际 HEAD/工作区; 不修改 main_native、embedded 或相邻 ADA, 不带入其他工作区未提交的启动脚本。
 
@@ -385,3 +385,12 @@ R4 保持延期：AdjustmentDialog 仍以提交 permit 限制取消；活动图�
 独立复审代码范围：`e997029310789082ca09e0684e599aac74b8b7de..f8e94b8dae167ab1a1b6d4c98258c03f8c23ecc5`。后续文档提交只补 hash、检查结果与稳定规则，不含业务修复。原 task 的限定授权、审查说明与历史阶段记录均保留，无相邻 ADA/main_native/embedded 修改，无推送/合并/发布。
 
 复审建议按 R1→R2→R3 检查三个独立提交及文末新增回归：特别复核同文档/多选与变化恢复的永久取消、最终 Action/pending 准入、长/短交互后旧数字不落下、模态文字与控件事件不被吞掉，同时非文本未认领 view 键仍执行一次。使用 P-INPUT/P-BUILD/P-DOC 重验；允许 R1–R3 单独复核，不把 R4/G5 人工/Owner Pending 抹掉。本交接不是复审 Approved。
+
+
+### Review 通过与远端推送授权（2026-11-11）
+
+Owner 在当前聊天明确告知“已通过 review，提交并推送到远端”。据此将本轮 R1–R3 修复复审更新为通过；代码仍为 R1 `5a4e59f`、R2 `beff81e`、R3 `f8e94b8`，交接记录 `66302c4`。未收到新增代码修改要求；102 项 P-INPUT、P-BUILD、P-DOC 的既有证据保持，不因纯状态文档变更重复运行完整测试。
+
+R4 按既有决定继续延期，仍可能在调整目标失效后无法取消；G5 人工、真实 Windows/中文 IME 与 Owner 使用验收继续 Pending。review 通过不替代这些验收。
+
+推送前核对：工作区干净，codex/dev HEAD 为 66302c4；origin 为 MarcleWright/WebPainter 的 GitHub 仓库，upstream push 保持 DISABLED，远端尚无 codex/dev。仅提交本次 review 状态文档并推送 `HEAD:refs/heads/codex/dev`，设置 origin 跟踪；不推 main/integration/embedded，不合并或发布，不修改相邻工作区。实际推送成功与提交一致性在推送后通过远端 ref 核对，结果见最终交付。
