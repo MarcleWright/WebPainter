@@ -430,3 +430,31 @@ it('R3: modal text and non-text areas still isolate save and document edits',asy
  for(const target of [container.querySelector('[data-editor]')!,container.querySelector('[data-surface]')!])await act(async()=>{key(target,'s',{ctrlKey:true});key(target,'Delete');key(target,'n',{ctrlKey:true});});
  expect(io.chooseSavePath).not.toHaveBeenCalled();expect(io.writePath).not.toHaveBeenCalled();expect(pixels(layer)).toEqual(before);expect(session.history.current.id).toBe(entry);expect(container.querySelectorAll('[role=dialog]')).toHaveLength(1);
 });
+
+it('P1 dialog: exposed-canvas wheel/middle pan preserve focused parameters and composition without edits',async()=>{
+ let closes=0;const {session}=await mount(<Modal title="P1 navigation" onClose={()=>closes++}><input data-parameter defaultValue="pending"/></Modal>);
+ const canvas=container.querySelector<HTMLElement>('.viewport')!,input=container.querySelector<HTMLInputElement>('[data-parameter]')!,backdrop=container.querySelector('.modal-backdrop')!;
+ vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,right:400,bottom:300,width:400,height:300,x:0,y:0,toJSON(){}});
+ input.focus();const before=session.history.current.id;
+ await act(async()=>{input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));backdrop.dispatchEvent(new WheelEvent('wheel',{clientX:100,clientY:100,deltaY:20,bubbles:true,cancelable:true}));});expect(session.view.panY).toBe(-20);expect(document.activeElement).toBe(input);expect(input.value).toBe('pending');
+ const middle=(type:string,x:number)=>{const ev=new MouseEvent(type,{clientX:x,clientY:100,button:1,bubbles:true,cancelable:true});Object.defineProperty(ev,'pointerId',{value:12});backdrop.dispatchEvent(ev);};
+ await act(async()=>{middle('pointerdown',100);middle('pointermove',120);middle('pointerup',120);});expect(session.view.panX).toBe(20);expect(document.activeElement).toBe(input);
+ await act(async()=>{key(input,' ');input.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));key(input,' ');backdrop.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));});expect(closes).toBe(0);expect(session.history.current.id).toBe(before);
+ await act(async()=>{key(canvas,'Delete');pointer(canvas,'pointerdown',1,1);pointer(canvas,'pointermove',20,1);pointer(canvas,'pointerup',20,1);});expect(session.history.current.id).toBe(before);
+});
+it('P1 dialog: Space pan owns its tail, popup/blur/top-stack invalidation cannot edit a new target',async()=>{
+ const {session}=await mount(<Modal title="P1 held" onClose={()=>{}}><div data-nav tabIndex={0}>Navigation</div></Modal>);const canvas=container.querySelector<HTMLElement>('.viewport')!,backdrop=container.querySelector('.modal-backdrop')!,nav=container.querySelector('[data-nav]')!;
+ vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,right:400,bottom:300,width:400,height:300,x:0,y:0,toJSON(){}});
+ const point=(type:string,x:number)=>{const ev=new MouseEvent(type,{clientX:x,clientY:100,button:0,bubbles:true,cancelable:true});Object.defineProperty(ev,'pointerId',{value:13});backdrop.dispatchEvent(ev);};
+ await act(async()=>{key(nav,' ',{code:'Space'});point('pointerdown',100);window.dispatchEvent(new KeyboardEvent('keyup',{key:' ',code:'Space'}));point('pointermove',120);point('pointerup',120);});expect(session.view.panX).toBe(20);
+ await act(async()=>{key(nav,' ',{code:'Space'});point('pointerdown',100);window.dispatchEvent(new Event('blur'));point('pointermove',150);point('pointerup',150);});expect(session.view.panX).toBe(20);
+ const menu=document.createElement('div');menu.setAttribute('role','menu');document.body.append(menu);await act(async()=>{backdrop.dispatchEvent(new WheelEvent('wheel',{clientX:100,clientY:100,deltaY:20,bubbles:true,cancelable:true}));});expect(session.view.panY).toBe(0);menu.remove();
+ let old=0,top=0;await act(async()=>root.render(<><App/><Modal title="P1 lower" onClose={()=>old++} onOk={()=>old++}><input/></Modal><Modal title="P1 top" onClose={()=>top++}><input/></Modal></>));
+ const dialogs=container.querySelectorAll('[role=dialog]');await act(async()=>{dialogs[0].querySelector<HTMLButtonElement>('button.primary')!.click();key(dialogs[0],'Escape');key(dialogs[1],'Escape');});expect(old).toBe(0);expect(top).toBe(1);
+});
+it('P1 dialog: position is remembered by type and constrained on resize; title drag never pans',async()=>{
+ const {session}=await mount(<Modal positionKey="P1 remembered" title="First label" onClose={()=>{}}><input/></Modal>);let head=container.querySelector('.modal-head')!;
+ await act(async()=>{pointer(head,'pointerdown',10,10);pointer(head,'pointermove',90,70);pointer(head,'pointerup',90,70);});expect((container.querySelector('.modal') as HTMLElement).style.transform).toContain('80px');expect(session.view.panX).toBe(0);
+ await act(async()=>root.render(<App/>));await act(async()=>root.render(<><App/><Modal positionKey="P1 remembered" title="Second label" onClose={()=>{}}><input/></Modal></>));expect((container.querySelector('.modal') as HTMLElement).style.transform).toContain('80px');
+ vi.stubGlobal('innerWidth',380);vi.stubGlobal('innerHeight',220);await act(async()=>window.dispatchEvent(new Event('resize')));expect((container.querySelector('.modal') as HTMLElement).style.transform).toBe('translate(0px, 0px)');
+});

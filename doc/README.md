@@ -20,6 +20,7 @@
 | 本地运行和远程配置 | [开发环境](engineering/DEV_SETUP.md) |
 | 怎样验证、哪些还没有验证 | [验证约定](engineering/TESTING.md) |
 | 当前已知缺口 | [已知问题](engineering/KNOWN_ISSUES.md) |
+| 透明调整窗口、受控画布导航与移动选区贴合 | [交互对齐任务](ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md)，待方案审查，未授权实现 |
 | 后续 AI 如何继续 | [当前上下文](ai/AI_CONTEXT.md)、[协作规则](ai/AI_WORKFLOW.md)、[进展索引](ai/DEV_LOG.md) |
 | 原始证据 | [材料入口](material/README.md) |
 

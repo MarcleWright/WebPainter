@@ -6,7 +6,7 @@ import {AccessBoundary} from '../AccessBoundary';
  */
 import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 import { useApp, ui } from '../../app/store';
-import { Modal } from './Modal';
+import { DialogType, Modal } from './Modal';
 import * as Doc from './DocumentDialogs';
 import * as Edit from './EditingDialogs';
 import * as Misc from './MiscDialogs';
@@ -82,14 +82,14 @@ export function DialogHost() {
         const close = () => ui.closeDialog(d.id);
         if (!C) {
           return (
-            <Modal key={d.id} title="Coming Soon" onClose={close} onOk={close}>
+            <Modal key={d.id} positionKey={d.type} title="Coming Soon" onClose={close} onOk={close}>
               This dialog ({d.type}) is coming soon.
             </Modal>
           );
         }
         return (
           <Suspense key={d.id} fallback={null}>
-            <AccessBoundary entry={'dialog:'+d.type}><C {...(d.props ?? {})} close={close} /></AccessBoundary>
+            <DialogType.Provider value={d.type}><AccessBoundary entry={'dialog:'+d.type}><C {...(d.props ?? {})} close={close} /></AccessBoundary></DialogType.Provider>
           </Suspense>
         );
       })}
@@ -121,7 +121,7 @@ function ConfirmHost() {
   };
   const cancelIndex = cur.buttons.length - 1;
   return (
-    <Modal title="Celenne Studio" onClose={() => answer(cancelIndex)} noFooter width={440}>
+    <Modal positionKey="confirm" title="Celenne Studio" onClose={() => answer(cancelIndex)} noFooter width={440}>
       <p style={{ marginTop: 0 }}><b>{cur.message}</b></p>
       {cur.detail && <p className="faint">{cur.detail}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 0 }}>

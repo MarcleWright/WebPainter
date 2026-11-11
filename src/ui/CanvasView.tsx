@@ -547,6 +547,7 @@ export function CanvasView() {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if(document.querySelector('[role="dialog"]')) return;
     const s = editor.active;
     const h = host();
     if (!s || !h) return;
@@ -684,12 +685,14 @@ export function CanvasView() {
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
+    if(document.querySelector('[role="dialog"]')) return;
     const h = host();
     const p = toPointer(e, 2);
     if (h && p) currentTool()?.doubleClick?.(h, p);
   };
 
   const onWheel = (e: React.WheelEvent) => {
+    if(document.querySelector('[role="dialog"]')) return;
     const s = editor.active;
     if (!s) return;
     const r = viewRef.current!.getBoundingClientRect();

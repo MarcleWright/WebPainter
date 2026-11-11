@@ -4,6 +4,13 @@
 
 ## Recent
 
+### 2026-11-11 弹窗与移动选区交互规划
+
+Status: 首轮方案审查 Changes Requested；R1–R3 已修订，待复审，仅文档，未授权实现。
+
+- [交互对齐任务](tasks/2026-11-11_01_dialog-and-selection-interaction.md)：公共透明模态背景、受控画布导航及位置记忆；移动片段 Alpha 生成贴合轮廓，配套覆盖率与单次撤销。三阶段范围及验收已列明。
+- 颜色填充延迟记录为 [WP-PERF-002](../engineering/KNOWN_ISSUES.md)，由其他分支处理，不混入本任务。
+
 ### 2026-11-11 快捷键统一实现交接
 
 Status: 原实现审查 Changes Requested；限定 R1–R3 修复 review 已通过（Owner 确认），R4 延期；人工/Owner Pending。已授权推送 origin/codex/dev，不合并/发布。
