@@ -158,4 +158,14 @@ Owner 已选择公共透明模态背景及受控画布交互；移动轮廓来�
 | C1 | 当前生产窗口 4K 大选区 native 输入、GPU preview 与呈现截图已执行；持续跟手/无明显新增卡顿的人工体验 **Pending / Inconclusive**，没有 FPS 结论，中选区和真实照片未验收 |
 | 实现/Owner | 独立实现复审 **Pending**；Owner 体验与最终验收 **Pending**；方案复审 Approved 不代表本实现 Approved |
 
-独立复审以 `d679514..本任务交接HEAD` 为范围，同时读取任务与最终源码，不只看 diff。建议重点读 Modal/DialogHost/Canvas 的输入与生命周期、MoveTool 的共享资格/paired alpha/私有 CPU override/逐资源失败回滚、Selection.previewOutline 与 Canvas 缓存，以及上述 reference 和接管测试。P1 `4c99632`、P2 `2c3d33b`；P3 hash 在阶段提交后由单独文档回执回填。此前 task 与四份既有文档修改已保留；本轮仅修改本 worktree，未推送、合并、发布或修改相邻 ADA/main_native/embedded。
+独立复审以 `d679514..本任务交接HEAD` 为范围，同时读取任务与最终源码，不只看 diff。建议重点读 Modal/DialogHost/Canvas 的输入与生命周期、MoveTool 的共享资格/paired alpha/私有 CPU override/逐资源失败回滚、Selection.previewOutline 与 Canvas 缓存，以及上述 reference 和接管测试。P1 `4c99632`、P2 `2c3d33b`；P3 `9c8b21b`；阶段 hash 由本次独立文档回执回填，避免提交内容自引用。此前 task 与四份既有文档修改已保留；本轮仅修改本 worktree，未推送、合并、发布或修改相邻 ADA/main_native/embedded。
+
+### 阶段提交回执
+
+| 阶段 | 本地提交 | 验证 |
+| --- | --- | --- |
+| P1 | `4c99632` | P-INPUT 105/105、typecheck；公共输入边界及位置测试 |
+| P2 | `2c3d33b` | 定向数值/reference/真实 GPU 22/22；Move+输出追加 36/36；typecheck |
+| P3 | `9c8b21b` | 最终关联集 177/177、P-BUILD、P-DOC（9 文档/103 相对链接）及最终生产窗口 errors=[] |
+
+本回执仅补齐已完成阶段 hash，不更改上述验收状态；独立实现复审与人工/Owner 均 Pending。不推送、合并或发布。
