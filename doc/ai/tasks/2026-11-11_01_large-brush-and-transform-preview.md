@@ -202,3 +202,26 @@ brush300的p95中位数下降约49.8%；eraser300的p95中位数仅约0.6%变化
 低频300px brush/eraser各前3后3有效正式结果的256个tile SHA均一致。前态eraser一份up结算为0且末段像素异于同输入其它重复，按提前终止/来源未定异常排除；前态brush重试仍混入实体鼠标，也排除。用修改前保全的baseline-source.tar创建只读用途的独立源码副本，复用同一未改Electron host、runtime/夹具/隔离配置补采每工具一份，凑足各3份；没有覆盖main dirty或切分支。所有异常/首轮A实现afterA和最终afterA2原件均保留，最终结论仅使用有效样本。初版大数组结构比较测试耗时过长已中断，改用原始字节SHA；一次node环境缺document产生未处理错误后改用jsdom重跑，不将这些尝试记为通过。
 
 A实现及以上证据提交后继续B；未声称Owner/真实手绘笔/ADA新包已验收。
+
+
+## 10. B实现与阶段验证
+
+在既有compositor override/atlas内加入affine源采样，不新增renderer。资格为单个RGB/RGBA8普通像素层、Normal/opacity与fillOpacity为1、无选区/蒙版/效果等，最多3个简单根像素层；上下层仍按原合成顺序。仅非退化正交affine平移/缩放/旋转/翻转，Warp/quad/shear、组、多层、其它色彩/位深或复杂显示组合保留CPU read。完整源按原raster内容边界准备，包含负坐标和画布外像素；完整源包围矩形最多256tile且源+两份可见集须满足既有atlas容量，超限整体回退，不裁源。预览采用premultiplied bilinear及既有mip；GPU/CPU预览允许小于2/255误差，正式CPU bicubic权威算法未改。纯旋转的浮点det在mip二次幂边界曾造成重复上传，已用仅预览的稳定层级舍入修复。
+
+资源依赖由变换会话私有源clone、原层raster身份/version/rev、文档rev、GPU设备、显示设置/viewport层级及当前简单堆栈资格组成；参数仅更新inverse，不重传源。mip逐tile自底向上准备，单次Canvas处理预算6ms（不可中断的单tile单位可能超预算，并非硬实时）。RenderEngine另持有当前准备代际，冻结该批参数；持续输入只替换下一批latest，完成全部可见tile才交换整份Map，保持进度。viewport/颜色/源变化废弃准备，上一份完整画布保留至替换；CPU回退使用同一协议。CPU viewport缓存版本采用单调值，避免新Map版本重用上传旧纹理。单tile准备异常废弃私有Map后可重试，不能发布部分帧。既有Move atomicPreview不改用该协议。
+
+Enter的CPU准备、写入及history成功前不清状态；工具内COW root/selection恢复点覆盖浮选区部分写入或命令首个swap后异常。history尚未插入则恢复像素/selection，保留当前参数，可重试/Escape；history插入后的通知异常按已提交处理，避免重试重复提交。成功后清override进入完整authority帧准备，保留最后完整预览至新权威可见集完成。退出/切文档/第二次变换释放源atlas键；设备/源/资格失效以当前参数回退CPU，不重置矩阵。up补结算最后指针点，避免重负载下最后坐标被丢弃。
+
+阶段定向验证：新增transformPreview **19项**，连同Move output及tile bounds共 **51/51通过**；P-BUILD通过（既有Vite URL/模块外置警告保留）。含CPU预算/持续参数进度、上下层遮挡、负坐标和超画布源、四类affine、mip1/2、最终独立CPU warp逐字节比较、undo/redo/native、mask/blend/group/capacity回退、颜色/viewport/GPU/源变化、文档切换/二次变换资源释放，CPU准备/部分命令swap/部分float-write/通知故障及预览tile失败重试。
+
+### 完整native开发窗口证据
+
+正式文件为before-transform.json（只计move/scale）、before-transform-rotate.json及afterB2-transform.json。每种操作预热1次+交错正式3次，源/viewport/runtime/隔离偏好同配方，正常CDP输入60点；不是物理呈现延迟或生产dist。新实现三种正式结果RAF p95分别均为16.8–16.9ms；前态move为33.4/33.5/33.3，scale为33.5/33.4/33.4，真实rotate为33.5/33.5/50.1ms。前态每次拖动混合revision约31–59帧，新实现全部为0。正式拖动持续发布57–61份完整代际，最长发布间隔33.5–50.2ms，未以停手才收敛换取一致性；首次从begin至可见完整预览502.8–680.2ms（含调度/准备，不宣称纯GPU时间）。稳态源atlas上传增量全部0。
+
+CPU Enter仍为6767–12402ms，保留为未优化长阻塞。重启后的afterB-handoff-valid补采三种Enter：最后完整预览保留到authority，Enter后引擎收敛137–257ms；可观察交接帧无混合revision、无缺失可见tile。单次CPU fallback慢速平移补采afterB-cpu-valid：340个拖动观察帧、21份呈现代际、混合0，停手pending=false；Enter约9831ms、收敛321ms，旧preview到authority完整切换。这是回退正确性探针，不充作三轮性能收益。
+
+所有正式B结果undo/redo的层坐标及逐tile SHA恢复一致（byteSize可因mip缓存驻留不同，不作像素字段比较）。同矩阵前后结果逐tile精确相同：move有3组、scale/rotate各9组配对；前态少数move漏结算最后点而矩阵不同的样本不强行当等量像素比较。A另有低频等量前3后3核验；B低频完整窗口只采CPU fallback单次，B三轮低频独立对照未执行，不标记通过；自动四类affine精确提交参考覆盖保留。
+
+原始早期afterB rep3出现1Hz/无代际推进，按窗口活跃性异常排除；重启隔离profile后用最终afterB2整组替代。曾尝试系统窗口截图恢复，FrameArrived超时且检测到用户输入，未继续操作用户窗口；后续仅关闭并重启自有隔离测试窗口。追加源码热更新后工具模块状态重置使afterB-handoff/afterB-cpu没有有效变换矩阵，均排除，afterB-handoff-valid及afterB-cpu-valid为重启后的有效补采。未把排除样本或错误旋转分类算通过。故障重试最后修正仅影响异常分支，之后51项/构建及有效交接探针已重验；正常三轮矩阵无需因文档变更重跑。
+
+B阶段实现已完成，整体回归及最终自查继续；Owner原作、真实笔、物理显示、真实设备丢失/内存压力、生产dist性能仍未验收。没有执行PhotoCraft产品同机对照、全部模式/组合笛卡尔积或ADA集成验证。

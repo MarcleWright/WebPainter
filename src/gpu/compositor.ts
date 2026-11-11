@@ -22,7 +22,7 @@ import type { GroupLayer, Layer, LayerId } from '../document/types';
 import { hasRaster } from '../document/types';
 import type { Rect } from '../image-engine/rect';
 import { tileRange, type TiledRaster } from '../image-engine/tiledRaster';
-import { compositeRegion, hasEffects, isHidden, labBlends, layerCoverage, mayAffect, modeOf, opacityOf, readLayerContent, renderFillLayer, type CompositeOptions, type Ctx, type LayerOverride } from '../rendering/compositor';
+import { affinePreviewLevel, compositeRegion, hasEffects, isHidden, labBlends, layerCoverage, mayAffect, modeOf, opacityOf, readLayerContent, renderFillLayer, type CompositeOptions, type Ctx, type LayerOverride } from '../rendering/compositor';
 import { blendIfActive, channelsRestricted } from '../rendering/blendIf';
 import { isCmykDoc, isLabDoc, plateColor } from '../color/plates';
 import { needsInkDisplay } from '../rendering/inkView';
@@ -157,7 +157,7 @@ interface SrcDesc {
   groupUnpremul?: boolean;
 }
 
-type Pipe = keyof typeof WGSL_MODULES | `filter:${'gather' | 'blurH' | 'blurV' | 'straighten' | 'unsharp' | 'crop' | 'selmix' | 'floating'}`;
+type Pipe = keyof typeof WGSL_MODULES | `filter:${'gather' | 'blurH' | 'blurV' | 'straighten' | 'unsharp' | 'crop' | 'selmix' | 'floating' | 'affine'}`;
 
 interface Op {
   pipe: Pipe;
@@ -221,6 +221,39 @@ export class GpuCompositor {
   get floatingAtlasResidentTiles(): number { return this.atlases[2].resident; }
   reserveFloatingAtlas(): number { this.atlases[2].reserveEmpty(128 << 20); return this.atlases[2].layers; }
   readonly stats: GpuCompositorStats = { gpuTiles: 0, cpuTiles: 0, gpuPreviews: 0, lastFallback: null };
+  private affineSources = new WeakMap<TiledRaster, Map<number, { version: number; jobs: {level: number; tx: number; ty: number}[]; keys: Set<object> }>>();
+  get affineAtlasUploads(): number { return this.atlases[0].uploads; }
+  canPrepareAffine(bounds: Rect, visibleTiles: number): boolean {
+    const rg = tileRange(bounds), count = (rg.tx1 - rg.tx0 + 1) * (rg.ty1 - rg.ty0 + 1);
+    return !this.disposed && count <= 256 && count + visibleTiles * 2 <= this.atlases[0].layers * this.atlases[0].pages.length;
+  }
+  prepareAffine(raster: TiledRaster, bounds: Rect, level: number, budgetMs: number): boolean {
+    let levels = this.affineSources.get(raster);
+    if (!levels) { levels = new Map(); this.affineSources.set(raster, levels); }
+    let state = levels.get(level);
+    if (!state || state.version !== raster.version) {
+      if(state)this.atlases[0].forget(state.keys);
+      const jobs: {level: number; tx: number; ty: number}[] = [];
+      // Build mips bottom-up in individual tile units, never one full-source synchronous reduction.
+      for (let l = Math.min(1, level); l <= level; l++) {
+        const sc = 1 << l, rg = tileRange({x: Math.floor(bounds.x/sc), y: Math.floor(bounds.y/sc), w: Math.ceil((bounds.x+bounds.w)/sc)-Math.floor(bounds.x/sc), h: Math.ceil((bounds.y+bounds.h)/sc)-Math.floor(bounds.y/sc)});
+        for (let ty=rg.ty0;ty<=rg.ty1;ty++) for(let tx=rg.tx0;tx<=rg.tx1;tx++)jobs.push({level:l,tx,ty});
+      }
+      state = {version:raster.version,jobs,keys:new Set()}; levels.set(level,state);
+    }
+    const start = performance.now();
+    while(state.jobs.length && performance.now()-start <= budgetMs) {
+      const j=state.jobs[0], t=raster.levelTile(j.level,j.tx,j.ty);
+      if(t && j.level===level) {this.atlases[0].slot(t.obj,t.rev,++this.serial,()=>({data:t.data,w:TS,h:TS}));state.keys.add(t.obj);}
+      state.jobs.shift();
+    }
+    return !state.jobs.length;
+  }
+  releaseAffine(raster: TiledRaster): void {
+    const levels=this.affineSources.get(raster); if(!levels)return;
+    for(const state of levels.values())this.atlases[0].forget(state.keys);
+    this.affineSources.delete(raster);
+  }
   disposed = false;
 
   constructor(readonly device: GPUDevice) {
@@ -618,6 +651,18 @@ export class GpuCompositor {
 
   private previewSource(enc: Encoding, ctx: Ctx, layer: Layer & { raster: TiledRaster; x: number; y: number }, r: Rect, g: NonNullable<LayerOverride['gpu']>): SrcDesc | null {
     if (isLabDoc(ctx.doc)) return null; // Lab previews run through the RGB view on the CPU
+    if (g.affine) {
+      const a=g.affine;
+      if (a.device!==this.device || this.disposed || ctx.plate || ctx.doc.canvas.colorMode!=='rgb')return null;
+      const inv=a.inverse, scale=1<<ctx.level;
+      const level=affinePreviewLevel(inv,ctx.level), ls=1<<level;
+      const region={x:Math.floor(a.bounds.x/ls),y:Math.floor(a.bounds.y/ls),w:Math.ceil((a.bounds.x+a.bounds.w)/ls)-Math.floor(a.bounds.x/ls),h:Math.ceil((a.bounds.y+a.bounds.h)/ls)-Math.floor(a.bounds.y/ls)};
+      const atlas=this.atlasSource(enc,a.raster,{x:0,y:0},region,level);
+      const meta=enc.pushF32(Float32Array.from([...inv,scale,r.x,r.y]));
+      const out=this.take(enc,r.w*r.h);
+      this.raw(enc,'filter:affine',{w:r.w,h:r.h,mode:level,srcOff:meta,atlas},out,null,null);
+      return {src:SRC.straight,buf:out,srcOff:0};
+    }
     if (g.floating) {
       if (ctx.level > 2 || ctx.plate || ctx.doc.canvas.colorMode !== 'rgb') return null;
       const scale = 1 << ctx.level;

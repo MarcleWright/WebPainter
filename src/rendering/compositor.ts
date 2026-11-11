@@ -38,12 +38,20 @@ import { platePatterns } from './platePatterns';
 import type { LayerEffects as Effects } from '../effects/types';
 import type { BlendMode } from '../image-engine/blend';
 
+/** A stable affine preview mip; avoid power-of-two jitter from rotation roundoff. */
+export function affinePreviewLevel(inv: import('../image-engine/matrix').Homography, level: number): number {
+  const scale=Math.sqrt(Math.abs(inv[0]*inv[4]-inv[1]*inv[3]))*(1<<level);
+  return scale>1.5?Math.min(8,Math.floor(Math.log2(scale)+1e-10)):0;
+}
+
 export interface LayerOverride {
   hidden?: boolean;
   /** Experimental interaction validity check; invalid previews are discarded before display. */
   interaction?: { valid: () => boolean; abort: () => void };
   /** Replaces content sampling (live transform / filter preview). Straight RGBA for rect at level (and CMYK plate). */
   read?: (r: Rect, level: number, plate?: number) => Float32Array;
+  /** Budgeted stable-source preparation for a coherent transform frame. */
+  prepare?: (level: number, budgetMs: number) => boolean;
   adjustment?: Adjustment;
   opacity?: number;
   blendMode?: Layer['blendMode'];
@@ -54,7 +62,7 @@ export interface LayerOverride {
    * stays the CPU path): a destructive adjustment or a filter on the layer's pixels, blended by
    * the selection.
    */
-  gpu?: { adjustment?: Adjustment; filter?: { id: string; params: Record<string, unknown> }; floating?: { cut: import('../image-engine/tiledRaster').TiledRaster; pixels: import('../image-engine/tiledRaster').TiledRaster; x: number; y: number } };
+  gpu?: { affine?: { raster: import('../image-engine/tiledRaster').TiledRaster; bounds: Rect; inverse: import('../image-engine/matrix').Homography; device: GPUDevice }; adjustment?: Adjustment; filter?: { id: string; params: Record<string, unknown> }; floating?: { cut: import('../image-engine/tiledRaster').TiledRaster; pixels: import('../image-engine/tiledRaster').TiledRaster; x: number; y: number } };
 }
 
 export interface CompositeOptions {

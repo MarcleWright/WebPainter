@@ -706,6 +706,22 @@ fn gather(@builtin(global_invocation_id) id: vec3u) {
   dst[id.y * p.w + id.x] = s;
 }
 // Compose at native resolution before the same 2x2 reductions as the RGBA8 pyramid.
+fn affineTap(x: i32,y: i32)->vec4f {
+  let c=atlasAt(x,y,p.gx0,p.gy0,p.gw,p.gh,p.grid);return vec4f(c.rgb*c.a,c.a);
+}
+@compute @workgroup_size(16,16)
+fn affine(@builtin(global_invocation_id) id: vec3u) {
+  if(id.x>=p.w||id.y>=p.h){return;}
+  let q=p.srcOff;
+  let x=(f32(id.x)+df(q+10u)+0.5)*df(q+9u);let y=(f32(id.y)+df(q+11u)+0.5)*df(q+9u);
+  let ls=f32(1u<<p.mode);
+  let u=(df(q)*x+df(q+1u)*y+df(q+2u))/ls-0.5;
+  let v=(df(q+3u)*x+df(q+4u)*y+df(q+5u))/ls-0.5;
+  let ix=i32(floor(u));let iy=i32(floor(v));let fx=fract(u);let fy=fract(v);
+  let a=affineTap(ix,iy);let b=affineTap(ix+1,iy);let c=affineTap(ix,iy+1);let d=affineTap(ix+1,iy+1);
+  let out=a+(b-a)*fx+(c-a)*fy+(a-b-c+d)*fx*fy;
+  if(out.a>0.000001){dst[id.y*p.w+id.x]=vec4f(out.rgb/out.a,out.a);}else{dst[id.y*p.w+id.x]=vec4f(0.0);}
+}
 fn floatPixel(x: i32, y: i32) -> vec4f {
   let b = atlasAt(x, y, p.gx0, p.gy0, p.gw, p.gh, p.grid);
   let q = p.srcOff;

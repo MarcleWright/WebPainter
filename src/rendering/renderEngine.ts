@@ -37,6 +37,8 @@ export interface DisplayTile {
   /** Actual pixel size of the tile (edge tiles may be smaller). */
   w: number;
   h: number;
+  /** Consistent transform generation published with the complete visible set. */
+  previewRevision?: number;
   /** Set when the tile was composited on the GPU: its pixels live in this texture, not in `data`. */
   gpu?: { texture: GPUTexture; view: GPUTextureView; storage: GPUTextureView };
 }
@@ -197,6 +199,74 @@ export class RenderEngine {
   private overrides = new Map<LayerId, LayerOverride>();
   /** Keep a floating-preview generation together when rendering visible tiles. */
   atomicPreview = false;
+  private coherent: { revision: number; presented: number; visible: string; hold: boolean; latest: Map<LayerId, LayerOverride> | null; finishing: boolean;
+    stage: { revision: number; overrides: Map<LayerId, LayerOverride>; tiles: Map<string, DisplayTile>; jobs: [number, number][]; level: number; visible: string; view: ViewOptions; docRev: number } | null } | null = null;
+
+  /** Transform-only complete-frame handoff; preparation is never restarted merely for a new pointer. */
+  setPreviewOverrides(overrides: Map<LayerId, LayerOverride>, finishing = false, discard = false): void {
+    this.overrides = overrides;
+    const c = this.coherent ??= { revision: 0, presented: 0, visible: this.previewViewKey(), hold: false, latest: null, finishing: false, stage: null };
+    c.revision++; c.latest = new Map(overrides); c.finishing = finishing;
+    if (finishing || discard) this.discardPreviewStage();
+    this.atomicPreview = false;
+    this.clearQueue(); this.onUpdate?.();
+  }
+
+  get coherentPreview(): boolean { return !!this.coherent; }
+  get holdPreviewFrame(): boolean {
+    const c=this.coherent,v=this.lastVisible;
+    return !!c && (c.hold || c.visible!==this.previewViewKey() || !!v?.tiles.some(([x,y])=>!this.tiles.has(key(v.level,x,y))));
+  }
+  private previewViewKey(): string {
+    const v=this.lastVisible;return v?`${v.level}|${v.tiles.map(([x,y])=>`${x},${y}`).join(';')}`:'';
+  }
+
+  private discardPreviewStage(): void {
+    const c = this.coherent;
+    if (!c?.stage) return;
+    for (const t of c.stage.tiles.values()) if (t.gpu) activeGpu?.releaseTile(t);
+    c.stage = null;
+  }
+
+  private restartPreview(): void {
+    const c = this.coherent;
+    if (!c) return;
+    this.discardPreviewStage(); c.revision++; c.latest = new Map(this.overrides);
+  }
+
+  private processPreview(budgetMs: number): number {
+    const c = this.coherent!, start = performance.now(), visible=this.previewViewKey();
+    if(c.stage && c.stage.visible!==visible)this.restartPreview();
+    if(!c.stage && !c.latest && c.visible!==visible)c.latest=new Map(this.overrides);
+    if (!c.stage && c.latest && this.lastVisible) {
+      const vis = this.lastVisible;
+      c.stage = { revision: c.revision, overrides: c.latest, tiles: new Map(), jobs: [...vis.tiles], level: vis.level, visible, view: this.view, docRev: this.doc.rev };
+      c.latest = null;
+    }
+    const stage = c.stage; if (!stage) return 0;
+    // View/source changes invalidate preparation; pointer changes do not, so rapid input progresses.
+    if (stage.view !== this.view || stage.docRev !== this.doc.rev) { this.restartPreview(); return 0; }
+    for (const ov of stage.overrides.values()) if (ov.prepare && !ov.prepare(stage.level, Math.max(0, budgetMs - (performance.now() - start)))) { this.lastRenderMs=performance.now()-start; return 0; }
+    let n = 0;
+    while (stage.jobs.length && performance.now() - start <= budgetMs) {
+      const [tx, ty] = stage.jobs[0];
+      let t: DisplayTile;
+      try { t = this.renderTile(stage.level, tx, ty, stage.tiles, stage.overrides); }
+      catch(error) { this.discardPreviewStage(); c.latest=new Map(this.overrides); throw error; }
+      stage.jobs.shift();
+      // Viewport CPU texture keys survive map replacement: never reuse a prior upload version.
+      t.version=++this.clock; t.previewRevision = stage.revision; n++;
+    }
+    if (!stage.jobs.length) {
+      const old = this.tiles; this.tiles = stage.tiles; c.presented = stage.revision; c.visible=stage.visible; c.hold=false; c.stage = null;
+      for (const t of old.values()) if (t.gpu) activeGpu?.releaseTile(t);
+      this.clearQueue();
+      if (c.finishing && !c.latest) this.coherent = null;
+      this.onUpdate?.();
+    }
+    this.lastRenderMs = performance.now() - start; this.renderedTiles += n;
+    return n;
+  }
   lift: LiftState | null = null;
   private unsub: () => void;
   private clock = 0;
@@ -220,6 +290,7 @@ export class RenderEngine {
   }
 
   dispose(): void {
+    this.discardPreviewStage(); this.coherent = null;
     this.unsub();
     this.releaseGpuTiles(activeGpu);
     engines.delete(this);
@@ -243,6 +314,7 @@ export class RenderEngine {
   // Invalidation
   // -------------------------------------------------------------------------------------------
   private handleChanges(changes: DocumentChange[]) {
+    this.restartPreview();
     const lift = this.lift;
     if (lift && !lift.settling) {
       const onlyMoving = changes.every((c) => (c.type === 'pixels' || c.type === 'mask') && lift.ids.has(c.layerId));
@@ -460,6 +532,8 @@ export class RenderEngine {
 
   /** Frees every GPU tile texture (compositor switched or lost); the tiles re-render. */
   releaseGpuTiles(c: GpuCompositor | null): void {
+    this.restartPreview();
+    if(this.coherent)this.coherent.hold=true;
     for (const t of this.tiles.values()) {
       if (!t.gpu) continue;
       if (c) c.releaseTile(t);
@@ -524,6 +598,7 @@ export class RenderEngine {
 
   setView(v: Partial<ViewOptions>): void {
     this.view = { ...this.view, ...v };
+    this.restartPreview();
     this.invalidateAll();
   }
 
@@ -551,7 +626,7 @@ export class RenderEngine {
   }
 
   hasPendingWork(): boolean {
-    return this.queue.length > 0 || !!this.lift?.prep.length;
+    return !!(this.coherent?.latest || this.coherent?.stage) || this.queue.length > 0 || !!this.lift?.prep.length;
   }
 
   clearQueue(): void {
@@ -561,6 +636,7 @@ export class RenderEngine {
 
   /** Renders queued tiles until `budgetMs` elapses. Returns the number of tiles rendered. */
   process(budgetMs = 10): number {
+    if (this.coherent) return this.processPreview(budgetMs);
     if (!this.queue.length && !this.lift?.prep.length) return 0;
     const start = performance.now();
     // A lift being dragged goes first: once shown, the drag needs no per-frame tile rendering at
@@ -610,14 +686,14 @@ export class RenderEngine {
     }
   }
 
-  private renderTile(level: number, tx: number, ty: number): DisplayTile {
+  private renderTile(level: number, tx: number, ty: number, target = this.tiles, overrides = this.overrides): DisplayTile {
     const { w: lw, h: lh } = this.levelSize(level);
     const r = { x: tx * DISPLAY_TILE, y: ty * DISPLAY_TILE, w: Math.min(DISPLAY_TILE, lw - tx * DISPLAY_TILE), h: Math.min(DISPLAY_TILE, lh - ty * DISPLAY_TILE) };
     const k = key(level, tx, ty);
-    let tile = this.tiles.get(k);
+    let tile = target.get(k);
     if (!tile) {
       tile = { level, tx, ty, data: new Uint8ClampedArray(DISPLAY_TILE * DISPLAY_TILE * 4), version: 0, stale: true, lastUsed: ++this.clock, w: r.w, h: r.h };
-      this.tiles.set(k, tile);
+      target.set(k, tile);
     }
     tile.w = r.w;
     tile.h = r.h;
@@ -629,7 +705,7 @@ export class RenderEngine {
     if (v.maskOfLayer) {
       if (tile.gpu) activeGpu?.releaseTile(tile);
       this.toDisplay(this.renderMaskView(v.maskOfLayer, r, level), r, tile.data, level, true);
-    } else this.renderInto(tile, r, level, this.overrides);
+    } else this.renderInto(tile, r, level, overrides);
     tile.version++;
     tile.stale = false;
     tile.lastUsed = ++this.clock;

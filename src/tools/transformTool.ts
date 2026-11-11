@@ -1,3 +1,8 @@
+import { gpuCompositor } from '../rendering/renderEngine';
+import type { GpuCompositor } from '../gpu/compositor';
+import { affinePreviewLevel, type LayerOverride } from '../rendering/compositor';
+import { blendIfActive } from '../rendering/blendIf';
+import { hasEnabledEffect } from '../effects/types';
 import {access} from '../app/access';
 /**
  * Free Transform (Ctrl+T) and quick transforms.
@@ -52,6 +57,9 @@ interface FloatState {
 
 interface State {
   session: DocumentSession;
+  sourceKeys?: Map<LayerId, {raster: TiledRaster; version: number; rev: number}>;
+  gpuDisabled?: boolean;
+  gpuSources?: Map<TiledRaster, GpuCompositor>;
   ids: LayerId[];
   base: Rect;
   M: Affine;
@@ -126,9 +134,43 @@ function maskAsRgba(m: { raster: TiledRaster }): { raster: TiledRaster; bounds: 
   return { raster: tmp, bounds: mb };
 }
 
+function releaseSources(s: State): void {
+  for (const [r,g] of s.gpuSources ?? []) if (!g.disposed) g.releaseAffine(r);
+  s.gpuSources?.clear();
+}
+function sourceChanged(s: State): boolean {
+  return !!s.sourceKeys && [...s.sourceKeys].some(([id,k]) => {
+    const l=s.session.doc.getLayer(id); return !l || !hasRaster(l) || l.raster!==k.raster || l.raster.version!==k.version || l.rev!==k.rev;
+  });
+}
+function gpuFor(s: State, src: Layer & {raster:TiledRaster}): GpuCompositor | null {
+  const doc=s.session.doc, gpu=gpuCompositor(), M=s.M;
+  if(s.gpuDisabled || !gpu || gpu.disposed || s.float || s.selOnly || s.warp || s.quad || s.ids.length!==1 ||
+     doc.canvas.colorMode!=='rgb' || doc.canvas.bitDepth!==8 || !doc.selection.isEmpty() || !src.visible ||
+     Math.abs(M[0]*M[2]+M[1]*M[3])>1e-7 || Math.abs(M[0]*M[3]-M[1]*M[2])<1e-8 ||
+     doc.root.children.length>3 || gpu.viewSupported(doc,s.session.engine.view))return null;
+  if(doc.root.mask || doc.root.vectorMask || doc.root.opacity!==1 || hasEnabledEffect(doc.root.effects))return null;
+  if(!doc.root.children.every(l=>l.kind==='pixel' && l.blendMode==='normal' && l.opacity===1 && l.fillOpacity===1 &&
+     !l.mask && !l.vectorMask && !l.clipping && !hasEnabledEffect(l.effects) && !blendIfActive(l.advanced.blendIf) &&
+     l.advanced.channels.every(Boolean) && l.advanced.knockout==='none'))return null;
+  const b=rasterContentBounds(src.raster);
+  return b && src.raster.depth===8 && src.raster.fill===0 && gpu.canPrepareAffine(b,s.session.engine.lastVisible?.tiles.length??32)?gpu:null;
+}
+
 function updatePreview(s: State): void {
   if (s.selOnly) return; // outline only (drawn by the overlay)
   const eng = s.session.engine;
+  const changed=sourceChanged(s);
+  if(changed) {
+    s.gpuDisabled=true; releaseSources(s);
+    for(const id of s.ids){const live=s.session.doc.getLayer(id);if(live)s.originals.set(id,cloneLayer(live));}
+    s.sourceKeys=undefined;
+  }
+  if(!s.sourceKeys && !s.float) {
+    s.sourceKeys=new Map();
+    for(const id of s.ids){const l=s.session.doc.getLayer(id);if(l && hasRaster(l))s.sourceKeys.set(id,{raster:l.raster,version:l.raster.version,rev:l.rev});}
+  }
+  const overrides=new Map<LayerId,LayerOverride>();
   const H = homography(s);
   const inv = invertH(H);
   const mesh = s.warp ? sampleMesh(warpMap(s)) : null;
@@ -141,7 +183,8 @@ function updatePreview(s: State): void {
     // CMYK: each plate previews from its own raster (bounds from plate 0).
     const cmyk = isCmykDoc(s.session.doc);
     const plateOf = (r: TiledRaster, plate: number) => (plate && cmyk ? ensureCompanion(r) : r);
-    eng.setOverride(l.id, skip ? null : {
+    if(skip)continue;
+    const ov: LayerOverride = {
       includesMask: !s.float,
       read: (r, level, plate = 0) => {
         const sc = 1 << level;
@@ -179,16 +222,35 @@ function updatePreview(s: State): void {
         }
         return px;
       },
-    }, null);
+    };
+    const src=orig;
+    const gpu=src?gpuFor(s,src):null;
+    if(gpu && src) {
+      const bounds=rasterContentBounds(src.raster)!;
+      const inverse=multiplyH([1,0,-src.x,0,1,-src.y,0,0,1],inv);
+      ov.gpu={affine:{raster:src.raster,bounds,inverse,device:gpu.device}};
+      s.gpuSources??=new Map();s.gpuSources.set(src.raster,gpu);
+      ov.prepare=(level,budget)=>{
+        if(gpuCompositor()!==gpu || gpu.disposed)return true;
+        const mip=affinePreviewLevel(inverse,level);
+        return gpu.prepareAffine(src.raster,bounds,mip,budget);
+      };
+    }
+    const rev=s.session.doc.rev;
+    ov.interaction={valid:()=>st===s && editor.session(s.session.id)===s.session && !sourceChanged(s) &&
+      s.session.doc.rev===rev && (!gpu || (gpuCompositor()===gpu && !gpu.disposed && !!src && gpuFor(s,src)===gpu)),
+      abort:()=>{if(st!==s)return;s.gpuDisabled=true;releaseSources(s);updatePreview(s);}};
+    overrides.set(l.id,ov);
   }
-  eng.invalidateAll();
+  const lostQualification=!!s.gpuSources?.size && ![...overrides.values()].some(ov=>!!ov.gpu?.affine);
+  if(lostQualification)releaseSources(s);
+  eng.setPreviewOverrides(overrides,false,changed || lostQualification);
 }
 
 function clearPreview(s: State): void {
   if (s.selOnly) return;
-  const ids = s.float ? [s.float.layerId] : s.ids.flatMap((id) => rasterLayers(s.originals.get(id)!).map((l) => l.id));
-  for (const id of ids) s.session.engine.setOverride(id, null, null);
-  s.session.engine.invalidateAll();
+  s.session.engine.setPreviewOverrides(new Map(),true);
+  releaseSources(s);
 }
 
 export function beginTransform(kind: TransformKind = 'free'): void {
@@ -330,17 +392,29 @@ function transformMask(s: State, mask: TiledRaster, mesh: Float64Array | null, H
 }
 
 export function commitTransform(): void {
-  const s = st;
-  if (!s) return;
+  const s=st;if(!s || editor.session(s.session.id)!==s.session || !s.session.canEdit())return;
+  const doc=s.session.doc, root=cloneLayer(doc.root), selection=doc.selection.snapshot(), entry=s.session.history.current.id;
+  try { applyTransform(s); }
+  catch(error) {
+    // do()/CPU failures precede history insertion. Observer failures after insertion have committed.
+    if(s.session.history.current.id===entry) {
+      doc.root=root;doc.selection.restore(selection);
+      doc.emit({type:'structure'},{type:'selection'});
+      updatePreview(s);s.session.notify();
+      ui.toast('error','Transform failed; retry or press Escape.',String(error));return;
+    }
+    ui.toast('warning','Transform committed, but a notification failed.',String(error));
+  }
+  clearPreview(s);s.session.mode={kind:'none'};st=null;s.session.notify();ui.bump('viewRev');
+}
+
+function applyTransform(s: State): void {
   const doc = s.session.doc;
   const H = homography(s);
   const mesh = s.warp && !isIdentityGrid(s.warp.grid, s.base) ? sampleMesh(warpMap(s)) : null;
   const isAffine = !s.quad || isAffineQuad(s.quad);
   const identity = s.warp ? !mesh : !s.quad && s.M.every((v, i) => Math.abs(v - [1, 0, 0, 1, 0, 0][i]) < 1e-9);
   const label = s.selOnly ? 'Transform Selection' : s.warp ? 'Warp' : 'Free Transform';
-  clearPreview(s);
-  s.session.mode = { kind: 'none' };
-  st = null;
   if (identity) {
     if (s.float) {
       const l = doc.getLayer(s.float.layerId) as Layer & { raster: TiledRaster };
@@ -740,7 +814,8 @@ export class TransformController implements Tool {
     h.redraw();
   }
 
-  up() {
+  up(h: ToolHost, p: ToolPointer) {
+    if(this.drag)this.move(h,p);
     this.drag = null;
     ui.bump('viewRev');
   }
@@ -757,6 +832,7 @@ export class TransformController implements Tool {
 
   cancel() {
     this.drag = null;
+    cancelTransform();
   }
 
   drawOverlay(h: ToolHost, g: CanvasRenderingContext2D) {
