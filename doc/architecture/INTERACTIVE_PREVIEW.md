@@ -10,6 +10,14 @@
 
 Move 的显式输出交接、自动保存等待和关闭取消规则由 [默认接入任务](../ai/tasks/2026-11-06_01_default-gpu-selection-move.md) 冻结。默认接入及定向验证已完成, 人工验收待完成; 不扩展优化格式范围或重建渲染器。
 
+## 2026-11-11 片段覆盖与 CPU 回退
+
+[交互对齐任务](../ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md) 在原 Move/LayerOverride/CompositeCommand 链路实现 min Alpha 片段与配套原位剩余。Selection.previewOutline 仅作私有显示引用，不进入文档格式或历史。Canvas 轮廓缓存包含 mask 身份；移动中只更新偏移，落定提交像素与选区并保留一次拖动一次撤销。
+
+CPU 回退现在也使用私有 cut 和惰性 LayerOverride.read（保留原生位深），而非在正式 raster 上逐次 restore/stamp。GPU 支持条件没有扩大，GPU 私有 cut/pixels 资源按原能力释放。已有其他 preview 时拒绝开始，不覆盖其他 owner。
+
+局部 guard 同时核对 session/doc/layer/位置、selection/raster/mask 对象及版本、目标模式与 override 身份。失效丢暂态与缓存，清理引用只处理本次对象；提交前复查，提交异常按每个资源最后自有版本分别回滚，外部接管的状态保留。不建立编辑器全局事务系统。真实 WebGPU 小 fixture 和强制 CPU、生产隔离窗口脚本已运行；完整人工/设备及 4K 跟手体验仍 Pending，阶段结果见任务。
+
 ## 区分显示与正式数据
 
 ```mermaid

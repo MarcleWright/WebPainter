@@ -72,7 +72,6 @@ interface FloatDrag {
     cut: TiledRaster;
     pixels: TiledRaster;
     selectionVersion: number;
-    moved: DocumentSession['doc']['selection']['moved'];
     stop: () => void;
     override: LayerOverride | null;
   };
@@ -388,7 +387,7 @@ export class MoveTool implements Tool {
     const outline = {mask: new TiledRaster(1, 8), bounds: d.rect, dx: d.ox, dy: d.oy};
     outline.mask.writeFloat(d.rect, d.floatCov);
     const stopDoc = s.doc.on(invalidate), stopGpu = gpu ? onGpuLost(invalidate) : () => {};
-    d.preview = { session: s, doc: s.doc, layer, x: layer.x, y: layer.y, selection: s.doc.selection, outline, docRev: s.doc.rev, raster, rasterVersion: raster.version, mask: s.doc.selection.mask, maskVersion: s.doc.selection.mask.version, selectionVersion: s.doc.selection.version, moved: s.doc.selection.moved, gpu, cut, pixels, stop: () => { stopDoc(); stopGpu(); }, override: null };
+    d.preview = { session: s, doc: s.doc, layer, x: layer.x, y: layer.y, selection: s.doc.selection, outline, docRev: s.doc.rev, raster, rasterVersion: raster.version, mask: s.doc.selection.mask, maskVersion: s.doc.selection.mask.version, selectionVersion: s.doc.selection.version, gpu, cut, pixels, stop: () => { stopDoc(); stopGpu(); }, override: null };
     editor.beginInteraction();
   }
 
@@ -407,7 +406,6 @@ export class MoveTool implements Tool {
     if (!p) return;
     p.stop();
     if (p.override && p.session.engine.getOverride(d.layerId) === p.override) p.session.engine.setOverride(d.layerId, null);
-    if (p.session.doc.selection === p.selection && p.selection.mask === p.mask && p.mask.version === p.maskVersion && p.session.doc.selection.version === p.selectionVersion) p.session.doc.selection.moved = p.moved;
     if (p.selection.previewOutline === p.outline) p.selection.previewOutline = null;
     p.gpu?.releaseFloating(p.cut, p.pixels);
     editor.endInteraction();
@@ -481,7 +479,7 @@ export class MoveTool implements Tool {
       const preview = d.preview;
       if (!d.dx && !d.dy) {
         if (preview.override && s.engine.getOverride(layer.id) === preview.override) s.engine.setOverride(layer.id, null);
-        preview.override = null; if (sel.previewOutline === preview.outline) sel.previewOutline = null; sel.moved = preview.moved; h.redraw(); return;
+        preview.override = null; if (sel.previewOutline === preview.outline) sel.previewOutline = null; h.redraw(); return;
       }
       let cpu: TiledRaster | null = null;
       const override: LayerOverride = {
@@ -546,7 +544,8 @@ export class MoveTool implements Tool {
         try {
           owner.raster.restore(after); rasterVersion = owner.raster.version;
           owner.mask.restore(selAfter); maskVersion = owner.mask.version;
-          sel.moved = { version: sel.version, baseVersion: d.baseSelVersion, dx: ox, dy: oy, mdx: ox, mdy: oy };
+          // The contour changed shape: never reuse an unpainted, pre-drag wide outline.
+          sel.moved = null;
           s.push(command, true);
         } catch (error) {
           if (s.history.current.command === command) {

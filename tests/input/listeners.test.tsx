@@ -458,3 +458,16 @@ it('P1 dialog: position is remembered by type and constrained on resize; title d
  await act(async()=>root.render(<App/>));await act(async()=>root.render(<><App/><Modal positionKey="P1 remembered" title="Second label" onClose={()=>{}}><input/></Modal></>));expect((container.querySelector('.modal') as HTMLElement).style.transform).toContain('80px');
  vi.stubGlobal('innerWidth',380);vi.stubGlobal('innerHeight',220);await act(async()=>window.dispatchEvent(new Event('resize')));expect((container.querySelector('.modal') as HTMLElement).style.transform).toBe('translate(0px, 0px)');
 });
+
+it('P3 modal: Tab wraps in the top shell and document switch drops captured navigation tails',async()=>{
+ const {session}=await mount(<Modal title="P3 target" onClose={()=>{}} onOk={()=>{}}><input data-first/><button data-last>Last</button></Modal>);
+ const canvas=container.querySelector<HTMLElement>('.viewport')!,backdrop=container.querySelector('.modal-backdrop')!,dialog=container.querySelector('[role=dialog]')!;
+ vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,right:400,bottom:300,width:400,height:300,x:0,y:0,toJSON(){}});
+ const controls=[...dialog.querySelectorAll<HTMLElement>('input,button')];
+ await act(async()=>{controls.at(-1)!.focus();key(controls.at(-1)!,'Tab');});expect(document.activeElement).toBe(controls[0]);
+ await act(async()=>key(controls[0],'Tab',{shiftKey:true}));expect(document.activeElement).toBe(controls.at(-1));
+ const point=(type:string,x:number)=>{const ev=new MouseEvent(type,{clientX:x,clientY:100,button:1,bubbles:true,cancelable:true});Object.defineProperty(ev,'pointerId',{value:19});backdrop.dispatchEvent(ev);};
+ await act(async()=>{point('pointerdown',100);point('pointermove',110);});const original=session.view.panX;let next!:ReturnType<typeof inputSession>;
+ await act(async()=>{next=inputSession();point('pointermove',180);point('pointerup',180);backdrop.dispatchEvent(new WheelEvent('wheel',{clientX:100,clientY:100,deltaY:20,bubbles:true,cancelable:true}));});
+ expect(session.view.panX).toBe(original);expect(next.session.view.panX).toBe(0);expect(next.session.view.panY).toBe(0);expect(next.session.history.canUndo).toBe(false);
+});

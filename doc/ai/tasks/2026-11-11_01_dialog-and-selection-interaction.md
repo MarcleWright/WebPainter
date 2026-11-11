@@ -73,7 +73,7 @@
 | --- | --- | --- |
 | P1 公共弹窗 | 透明背景、位置记忆及输入边界；完成导航与已有取色入口清单、实际事件传播验证 | 自动验证通过，人工 Pending |
 | P2 选区移动 | 片段覆盖率/轮廓、选区优先命中、提取与挖空、GPU/CPU 交接、版本所有权及单次历史配套实现 | 自动验证通过，窗口/Owner Pending |
-| P3 集成验收 | 运行关联回归、构建及当前源码独立窗口检查；记录人工未覆盖项，更新 owner 文档 | Pending |
+| P3 集成验收 | 运行关联回归、构建及当前源码独立窗口检查；记录人工未覆盖项，更新 owner 文档 | 实施/自动/窗口脚本完成，独立复审与人工 Pending |
 
 按本轮 Owner 授权 P1→P2→P3 串行执行并分别本地提交。发现范围外缺陷记录并隔离，不以修补全编辑器为任务前置。
 
@@ -133,4 +133,29 @@ Owner 已选择公共透明模态背景及受控画布交互；移动轮廓来�
 - 补测：8/16/32 Alpha×coverage 0/.25/.5/1 + .37 羽化数值；偏移低 Alpha 环和洞、原选区外起点、全低 Alpha 缓存失效后重拖、hover 不 lift、两步撤销；Alt/取消/空片段/锁定/零位移/返回起点；真实 GPU 与强制 CPU 预览/落定对照；双后端 8 种接管×3 种迟到尾事件（含 raster/mask/selection 对象、图层移除、override 和切 session）；CPU 提交失败后分别保留外部像素/选区。原 GPU 取消、提交失败、保存/输出交接仍保留。
 - 验证：Move+独立新语义 reference+真实 WebGPU floatingSelection 3 文件 22/22；追加低 Alpha 轮廓后 Move+moveOutput 2 文件 36/36；typecheck 通过。扩展回归最初 175/176 通过，唯一失败是 moveOutput 旧 CPU“必须写正式 raster”断言；按私有预览契约更新并在上述 36/36 中通过。未隐藏失败，P3 统一重跑最终关联集。原始日志在本地 `doc/material/local/dialog-selection-2026-11-11/`，不提交。
 - 旧 C2 乘法固定 hash 已随获批产品语义作废，engine reference 用独立字节数组计算重叠放置、羽化、剩余与轮廓，不用重新抄当前输出 hash；GPU C2 比较同 fixture 的硬件/强制 CPU。真实 GPU 测试使用可用 WebGPU adapter，不是 mock；仍不代表真实窗口/4K/设备或 Owner 验收。
-- P2 提交：本节所在阶段提交，hash 在 P3 回填。独立实现审查及 A1–A4/C1 人工 Pending；旧快捷键任务 R4 调整目标失效后取消限制仍保留，本任务未修复。
+- P2 提交：`2c3d33b`。独立实现审查及 A1–A4/C1 人工 Pending；旧快捷键任务 R4 调整目标失效后取消限制仍保留，本任务未修复。
+
+### P3 集成与交接（2026-11-11）
+
+- 集成核对补强：正式片段 contour 已改变形状，落定时清除旧 moved-outline 复用标记，避免整次手势落在两帧之间时复用原宽松轮廓；私有预览不再恢复本次未写过的 Selection.moved。补测无绘制间隔的落定标记及实际 Modal Tab 循环、切 session 后迟到中键/wheel 对新旧 view 均无影响。
+- 最终 P-INPUT、P-MOVE，加 moveSelectionReference / floatingSelection / GPU compositor 联合集：**11 文件 177/177 通过**；`npm run build`（含 typecheck、renderer 和 Electron）通过。原始日志 `p3-regression-final.log`、`p3-build-final.log` 在本地材料目录。compositor 测试报告最大 GPU/CPU 差异 1.49e-6；该汇总仅是测试数值，不是完整产品验收。
+- 当前源码生产窗口：重建后正常 main/preload/app:// 加载，独立 `final-userData` / `final-temp`，未读取原用户 profile。Windows 10 系列，Electron 44.4.5 / Chromium 152.0.7977.130；运行时 WebGPU compositing，adapter vendor=nvidia / architecture=ampere；OS 枚举 RTX A5000（驱动 32.0.15.9636），不以 OS 名称代替运行时 adapter 选择证据。
+- 真实窗口自动输入：4096×2160 RGB8 合成非均匀图像，2800×1500 宽松选区含 2400×1200 半透明片段及透明洞，另有原选区外图形；25% zoom。通过 Electron 原生 mouse/wheel 事件进入 Canvas：参数草稿未 blur 时滚轮/中键导航且焦点/值保留、外部点击不关闭/不记历史、标题拖动及同类型恢复位置；大选区在原选区外起点拖动，GPU 私有 preview 存在且正式版本不写，松手一条历史，撤销宽松选区、重做贴合轮廓，外部图形不动、无残留 override/临时轮廓。`p3-production-final.log`：errors=[]、Electron exit 0。
+- 已查看窗口截图 `canvas-before-modal.png`、`modal-transparent-navigation.png`、`move-4k-mid.png`、`move-4k-committed.png`，确认 Color Balance 外部未加深色遮罩、标题可达，拖动中图像已位移且轮廓含洞。它们是合成样例、脚本输入与有限截图检查，不是设计师持续拖动/真实照片体验或 FPS 证据。
+- 测试夹具问题如实留存：初次 native wheel 检查早于异步事件呈现，加入等待后通过；后续新建尺寸脚本即时 blur 早于 React draft 更新，加入输入状态等待；截图先于已排队 native move 呈现，最终等待 RAF 后重采，实际 GPU 预览/轮廓可见。以上调整均在忽略材料中的测试 harness，未因脚本时序修改产品准入或声称性能提升。日志保留失败尝试，最终以 `p3-production-final.log` 和最终构建为准。
+- owner 文档：输入约定、交互约定、INTERACTIVE_PREVIEW、PhotoCraft 稳定借鉴结论及 README/AI_CONTEXT/DEV_LOG 索引已更新；旧快捷键任务状态未改写，填充性能 WP-PERF-002 未实施，R4 调整目标失效后无法取消继续延期。
+- P-DOC：UTF-8 无 BOM、当前相关文档相对链接、本地材料 Git 忽略、上游 docs/README/CHANGELOG/NOTES 不变及 `git diff --check` 通过（验证输出见本地 `p3-doc.log`）。
+
+### 验收边界与独立实现复审入口
+
+| 项目 | 当前证据与状态 |
+| --- | --- |
+| A1 | 公共外壳源码/注册清单与 Color Balance 生产窗口截图已核对；16 调整与五类预览逐项中性参数颜色/内部预览人工矩阵 **Pending** |
+| A2 | 实际 App/Canvas DOM 参数/组合事件、popup、held pan、焦点测试通过；原生窗口参数未 blur 的滚轮/中键通过；中文 IME 候选窗口、原生 Space/弹窗内滚动/popup 的完整人工矩阵 **Pending** |
+| A3 | 双层 Modal、局部文本/组合事件、编辑隔离与正常确认自动回归通过；Windows 双层实际窗口/真实 IME 人工 **Pending** |
+| A4 | 位置/标题/失焦/切 session 迟到事件自动回归和有限生产标题/位置检查通过；关闭/后台目标切换的完整人工矩阵 **Pending**。无合格的已有主画布取色 owner 入口，未新增；旧 R4 限制仍存在 |
+| B1–B5 | 原生位深数值、真实 MoveTool/历史、CPU 回退、真实 WebGPU 合成与两路资源接管/清理自动证据通过；真实复杂作品、设备及完整组合人工 **Pending** |
+| C1 | 当前生产窗口 4K 大选区 native 输入、GPU preview 与呈现截图已执行；持续跟手/无明显新增卡顿的人工体验 **Pending / Inconclusive**，没有 FPS 结论，中选区和真实照片未验收 |
+| 实现/Owner | 独立实现复审 **Pending**；Owner 体验与最终验收 **Pending**；方案复审 Approved 不代表本实现 Approved |
+
+独立复审以 `d679514..本任务交接HEAD` 为范围，同时读取任务与最终源码，不只看 diff。建议重点读 Modal/DialogHost/Canvas 的输入与生命周期、MoveTool 的共享资格/paired alpha/私有 CPU override/逐资源失败回滚、Selection.previewOutline 与 Canvas 缓存，以及上述 reference 和接管测试。P1 `4c99632`、P2 `2c3d33b`；P3 hash 在阶段提交后由单独文档回执回填。此前 task 与四份既有文档修改已保留；本轮仅修改本 worktree，未推送、合并、发布或修改相邻 ADA/main_native/embedded。

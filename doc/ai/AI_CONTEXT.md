@@ -1,6 +1,6 @@
 # 当前上下文
 
-2026-11-11 新规划：[弹窗与移动选区交互任务](tasks/2026-11-11_01_dialog-and-selection-interaction.md) 首轮审查 Changes Requested，R1–R3 已修订待复审，未授权实现。Owner 已选 PhotoCraft 的公共透明模态/受控导航及片段 Alpha 贴合思路；保持一次拖动一次撤销。填充延迟 WP-PERF-002 交其他分支，不混入本任务或此前快捷键验收。
+2026-11-11 [弹窗与移动选区交互任务](tasks/2026-11-11_01_dialog-and-selection-interaction.md) 方案复审通过，Owner 授权 P1→P2→P3；已分别本地提交公共透明 Modal/受控导航、min Alpha 片段与私有 CPU/GPU 预览及配套验证。最终关联回归 177/177、生产构建和当前源码隔离生产窗口脚本通过；独立实现复审、完整 Windows/IME、4K 人工跟手体验及 Owner 验收 Pending。仅本地提交，不推送/合并/发布；旧快捷键 R4 仍延期。填充延迟 WP-PERF-002 继续交其他分支。
 
 2026-11-11 当前工作目录 WebPainter_Dev、分支 codex/dev；P1–P5 原实现已交接（原定向 75 项/构建/隔离 smoke 证据保留）。后续实现审查为 Changes Requested；Owner 限定 R1→R2→R3 修复已分别本地提交，Owner 已确认 review 通过并授权推送 origin/codex/dev；R4 调整目标失效无法取消明确延期。当前验证和提交 hash 见[任务文末](tasks/2026-11-10_01_shortcut-unification.md)，稳定规则见[输入约定](../design/KEYBOARD_INPUT.md)。Windows 人工/中文 IME、G5 和 Owner 验收仍 Pending，不能标记整体实现验收通过。本次只推 codex/dev，不合并/发布，未修改 main_native、embedded 或相邻 ADA；下方保留历史时点。
 

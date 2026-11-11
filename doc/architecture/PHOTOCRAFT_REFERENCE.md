@@ -77,3 +77,7 @@ PhotoCraft 值得借鉴, 尤其是暂态编辑与正式文档分工、图块级�
 ## 仍待确认
 
 未执行 PhotoCraft native/Web 同条件基准; 未验收其复杂预览正确性; 未证明所有热点已覆盖; WebPainter 的有限脚本前后结果见任务 02, 不等于 PhotoCraft 同条件比较。产品收益和建议顺序见 [性能方向](../product/PERFORMANCE_DIRECTION.md), 基线与成本见 [评估](../engineering/4K_SELECTION_ASSESSMENT.md)。
+
+## 2026-11-11 WP 的受限交互借鉴
+
+[弹窗与片段任务](../ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md) 已采用公共透明 Modal、受控暴露画布导航、按类型记忆位置，以及 min Alpha 的配套提取/剩余覆盖。Move 从单层像素选区资格判断，不再以按下点覆盖阈值判断；临时轮廓取本次片段 Alpha，原选区外内容不参与。WP 保持每次拖动独立提交与撤销，CPU/GPU 均用私有预览并以资源身份/版本限制清理；不移植跨多拖动统一 drop、完整 UI 框架或填充性能实现。自动与窗口脚本证据不替代独立实现审查和人工/Owner 验收。

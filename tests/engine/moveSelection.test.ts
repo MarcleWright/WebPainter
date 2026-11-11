@@ -137,6 +137,8 @@ it('B1/B3 low-alpha ring, outside/hole starts and cache-free redrag preserve sha
   expect(doc.selection.previewOutline!.mask.readFloat({x:7,y:6,w:1,h:1})[0]).toBe(0);expect(doc.selection.previewOutline!.mask.readFloat({x:5,y:4,w:1,h:1})[0]).toBeCloseTo(.25,2);
   tool.up(host);const first=layer.raster.readPixels(region).slice(),firstMask=doc.selection.mask.readPixels(region).slice();
   expect(layer.x).toBe(3);expect(doc.selection.bounds(doc.bounds)).toEqual({x:15,y:4,w:5,h:5});
+  // A complete gesture may land between animation frames; old wide-contour translation is invalid.
+  expect(doc.selection.movedOutline()).toBeNull();
   // A fresh tool has no floating cache. Start over the transparent hole at the new location.
   const next=new MoveTool();next.down(host,movePoint(17,6));next.move(host,movePoint(27,6));next.up(host);next.up(host);
   expect(layer.raster.readFloat({x:22,y:2,w:1,h:1})[3]).toBeCloseTo(.25,2);

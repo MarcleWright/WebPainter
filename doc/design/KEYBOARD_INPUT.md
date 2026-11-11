@@ -20,6 +20,14 @@
 - 数字延后 350ms，绑定原 session/doc/layer 对象、mode、mask/channel、tool 和参数类型。切层/工具/文档/文本焦点/Modal 后取消缓存；Canvas pointer 交互开始立即取消旧 timer 与两位数缓存，即使短拖动已经结束也不再应用。执行时再检查 pointer 身份/busy、原目标、canEdit、outputPending/closePending 和相关 access。Modal 延迟确认仍验证原实例/目标身份。
 - 快速旋转/翻转的异步入口固定原 session/doc、完整选中图层对象与选择集合、mode/工具及必要编辑身份；选择或交互变化后恢复也不复活旧请求，继续前重查最终 Action enabled/access 和目标编辑/保存关闭状态。不改变既有变换算法、Action/宏及历史。
 
+## 公共弹窗的画布导航（2026-11-11）
+
+[弹窗与选区任务](../ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md) 改为透明模态外壳。最上层 Modal 仍拥有输入，外部点击不关闭、不编辑背景；Tab 在该弹窗循环，普通 Canvas 绘图入口拒绝 Modal 背景事件。位置按对话框类型在本次应用会话记忆并限制在视口可达范围。
+
+暴露的实际画布区域允许滚轮（原有平移/修饰缩放）及中键平移，即使参数仍聚焦、尚未 blur 或处于组合输入；它们只改变绑定 session/doc 的 view，不让参数失焦或转入工具。Space/用户重绑的 held pan 仅在非文本、非 IME 焦点可发起左键导航；文本 Space 保留字符语义。标题/控件内开始的序列不能移交画布，popup/menu 期间不接管导航。失焦、弹窗栈变化、关闭或切文档清理临时状态，迟到尾事件不编辑新目标。
+
+目前公共对话框没有具备明确 owner 的主画布取色入口；ColorPicker 内部 SV/hue 不属于背景画布导航授权，ColorRange 读取已有前景色也不开放当前工具透传。独立实现审查与完整 Windows/中文 IME、人工/Owner 验收 Pending，旧任务 R4 限制如下保留。
+
 ## 首批兼容操作
 
 | 默认键 | Action / 语义 |
