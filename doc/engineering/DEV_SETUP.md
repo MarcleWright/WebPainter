@@ -4,7 +4,7 @@
 
 ## 仓库
 
-- 当前目录: `D:/00_Projects_WSY/AI/Codex_Projects/WebPainter`。
+- WP 本体主要工作目录: `D:/00_Projects_WSY/AI/Codex_Projects/WebPainter_main_native`, 当前承载 main; 通用优化可从这里创建任务分支。`WebPainter` 工作目录承载 integration/embedded, 用于 ADA 嵌入适配。它们共享同一 Git 仓库, 源码与开发配置各自独立。
 - origin: `https://github.com/MarcleWright/WebPainter.git`, 默认推送目标。
 - upstream: `https://github.com/puripooh5-cloud/celenne-studio.git`, fetch 保留, 本地 pushurl 为 DISABLED。
 - 初始化后 main 跟踪 origin/main, 两者同在 `a6599003`; 这是当时状态, 后续以 git 为准。
@@ -31,6 +31,12 @@ npm start
 开发入口: `npm run dev` 为浏览器, `npm run dev:electron` 为桌面开发。完整说明见上游开发文档。
 
 ### 启动当前源码的完整工程
+
+日常开发优先双击本工作目录根下的 [start-dev.bat](../../start-dev.bat), 无需预先 build。它显示当前源码目录并调用下述 Start-WebPainter 流程, 不固定到其他目录或分支; 在 main_native 中运行即加载 main_native 当前源码, 包含未提交改动。
+
+- 前端 TS/TSX/CSS 保存后由 Vite 热更新或自动刷新。完整刷新可能重置内存中的编辑状态, 开发时先保存作品。
+- Electron main/preload、构建配置或依赖发生变化时, 保存作品并关闭编辑器, 再双击脚本; main/preload 每次启动重新构建。该入口不声称主进程也支持热更新。
+- 首次缺少依赖时按提示在当前目录执行 `npm ci`; 缺少 Electron 运行时的处理见本页下方。
 
 双击仓库根目录 [Start-WebPainter.bat](../../Start-WebPainter.bat)。入口自动构建本目录当前 Electron main/preload, 通过本地 Vite 加载当前前端源码, 支持场景按实际能力默认启用 GPU 移动。打开的是完整桌面编辑器, 不创建合成图片; 可自行新建或打开文件, 沿用原生文件对话框与读写服务。
 

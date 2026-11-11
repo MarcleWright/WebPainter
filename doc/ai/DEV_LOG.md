@@ -14,6 +14,11 @@
 - 两阶段完成：132项定向回归、构建通过；完整native开发窗口D的p95中位数改善88.7%/90.8%，低频像素/边界一致；人工及生产dist性能未验收，待 ADA集成-REV。
 - [任务与证据](tasks/2026-11-10_02_tile-content-bounds-cache.md#8-执行记录阶段一)，两次本地阶段提交后交 ADA集成-REV，未授权下游更新。
 
+### 2026-11-10 main_native 日常开发入口
+
+- 新增 [start-dev.bat](../../start-dev.bat), 复用本目录 Start-WebPainter/Vite/Electron, 前端改动热更新, main/preload 重启后生效。
+- Owner 指定 WP 本体以 main_native 为主要工作目录, 两个 worktree 分工及使用说明见 [DEV_SETUP](../engineering/DEV_SETUP.md)。本轮不改编辑器算法或品牌, 不提交/推送。
+
 ### 2026-11-06 保存与关闭可靠性实现
 
 Status: 局部实现及定向自动验证完成, 待独立 reviewer 复审和人工验收。

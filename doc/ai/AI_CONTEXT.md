@@ -4,6 +4,8 @@
 
 2026-11-10 [图块级内容边界缓存任务](tasks/2026-11-10_02_tile-content-bounds-cache.md)两阶段已完成：局部精确缓存及132项定向测试、构建通过；同配方完整native开发窗口D的RAF p95中位数改善88.7%/90.8%，低频逐tile像素SHA及边界一致。待 ADA集成-REV 统一独立review；真实手绘笔/物理呈现/Owner原作品及生产dist性能仍Pending。只交付 main 两次本地提交，既存启动dirty保留，不推进embedded/ADA或推送发布。
 
+2026-11-10 Owner 指定后续 WP 本体主要在 `WebPainter_main_native` 工作, 当前为 main; `WebPainter` 保留 embedded 工作目录。新增根目录 `start-dev.bat`, 复用当前 checkout 的 Vite + 原生 Electron 启动流程; 前端热更新, main/preload 改动重启。见 [开发环境](../engineering/DEV_SETUP.md#启动当前源码的完整工程)。
+
 2026-11-06 03B：main独立worktree通用native v1已实施，待后续统一review。初始main ef3eea8；75项首次组合检查、追加后native18项/类型及构建通过，6层4K codec与tile往返有记录。格式/拒绝边界见 [native格式](../engineering/NATIVE_FORMAT.md)，[执行证据](tasks/2026-11-06_03B_native-codec.md)。只由main单向合入embedded供ADA固定包使用，不引入ADA/embedded依赖；未推送/发布，人工/Photoshop未验收。
 
 更新: 2026-11-06。保持短而当前; 详细历史读任务记录。
