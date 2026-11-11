@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-11 [Ctrl+T后台确认与透视预览](tasks/2026-11-11_02_transform-commit-and-projective-preview.md)四阶段实施及验证完成，待独立实现review与Owner体验：专用Worker保留CPU原1024采样语义，owner保护/安全拒绝与透视GPU稳定源已接入。295项整体回归，末次取消owner修正后65项复验及构建通过；开发/生产Worker与取消重试有真实窗口证据。透视p95约改善49%，确认最长主线程任务约8秒→94–128ms，总耗时仍6.8–8.0秒；人工/真实设备等Pending，不判整体Go。只main本地提交，不推进embedded/ADA/发布，大画笔不在本轮。
+
 2026-11-11 [大笔刷与Ctrl+T任务](tasks/2026-11-11_01_large-brush-and-transform-preview.md)四阶段实现/验证完成，待ADA集成-REV独立复审：253项整体回归、强化非均匀夹具后19项复验及构建通过。同尺寸重采：300px eraser p95约改善33.2%，brush帧尾未改善（撤销初测49.8%结论）；Ctrl+T p95约改善49.7%，混合revision为0，CPU Enter仍约6–12秒且交接有长尾。低频精确像素一致；支持/回退及人工未验收见任务，不判整体Go。既存启动dirty保留，不推送或推进embedded/ADA。
 
 2026-11-10 [图块级内容边界缓存任务](tasks/2026-11-10_02_tile-content-bounds-cache.md)两阶段已完成：局部精确缓存及132项定向测试、构建通过；同配方完整native开发窗口D的RAF p95中位数改善88.7%/90.8%，低频逐tile像素SHA及边界一致。待 ADA集成-REV 统一独立review；真实手绘笔/物理呈现/Owner原作品及生产dist性能仍Pending。只交付 main 两次本地提交，既存启动dirty保留，不推进embedded/ADA或推送发布。

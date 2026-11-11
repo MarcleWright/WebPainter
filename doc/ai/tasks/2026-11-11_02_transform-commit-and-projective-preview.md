@@ -1,6 +1,6 @@
 # Ctrl+T 后续：后台确认与透视预览
 
-日期：2026-11-11。状态：**Owner已于本轮授权阶段0→C→D→整体验证连续实施、分阶段本地提交；执行中，不推送或推进embedded/ADA/发布。**
+日期：2026-11-11。状态：**Owner已于本轮授权阶段0→C→D→整体验证连续实施、分阶段本地提交；实现与规定验证已完成，待独立实现review和Owner人工体验；不推送或推进embedded/ADA/发布。**
 
 ## 1. 范围与基线
 
@@ -76,15 +76,15 @@
 
 ## 6. 执行、提交与交审边界
 
-未来获明确实施授权后，按阶段0 → C → D → 整体验证执行，C/D 各自完成正确性检查后本地提交；整体证据及文档另一个提交。不把正确性检查全部拖到最后。正常范围内连续推进，设计范围变更才回报，不因常规实现细节反复要求确认。
+按本轮Owner明确授权，依阶段0 → C → D → 整体验证执行，C/D 各自完成正确性检查后本地提交；整体证据及文档另一个提交。不把正确性检查全部拖到最后。正常范围内连续推进，设计范围变更才回报，不因常规实现细节反复要求确认。
 
 整体至少覆盖 transformPreview、Move/输出交接、tile bounds、history/native 相关回归与项目构建；实际命令按 TESTING 和阶段0落点确定。不新增全模式笛卡尔积。Worker 加载需同时验证开发入口及生产构建窗口，不能只用 mock/源码 Worker 测试；未获得窗口证据则标 Pending。
 
 完成后交 ADA集成-REV 独立 review，列提交、源码/配套环境、支持/回退条件、前后原始证据索引及未验收项。自动测试、开发/生产窗口、Owner体验、独立复审分别记录；不得自动推送、合入 embedded 或更新 ADA 包。
 
-## 7. 当前交付
+## 7. 实施前设计交付记录
 
-仅新增后续设计并连接既有任务入口。尚未实施 C/D，尚未执行本轮测试或性能测量。
+设计阶段仅新增任务并连接入口。其后Owner告知计划评审通过并授权实施；实施、验证和剩余Pending见第8–11节，设计通过不等于实现或体验通过。
 
 评审修订：接受reviewer的P2，明确共同安全预检与能力回退分离，并补充容量拒绝不得调用同步CPU提交的回归；同时纳入采样分区及编辑保护归属两项阶段0澄清。此为计划修订，待reviewer复核，不自行标记Approved。
 
@@ -152,3 +152,42 @@ C阶段代码和以上证据本地提交后进入D；不涉及大笔刷、embedd
 生产production-D.json：真实app://窗口正常组合键拖角，override.projective=true；通过保留原生Worker构造、只记录URL的观察器确认加载 `app://celenne/assets/transformWorker-CckuvPAs.js`，非mock。Enter返回11.8ms、progress/Cancel约16.1ms出现，任务期canEdit=false，完成一次历史，undo/redo逐tile一致。与开发测试分别记录；没有把script窗口证明当Owner/物理设备验收。
 
 D阶段实现、以上定向回归及开发/生产路径证据完成后本地提交，整体回归和最终上下文继续。
+
+
+## 11. 整体验证与交审结果
+
+阶段0 `cf4d013`、C `dd94aca`、D `0ec5c2d` 已本地提交；本节所在最终提交包含整体证据、上下文及取消回调owner最后修正。后者将Cancel绑定具体task而不是可被重试替换的s.job，旧回调/旧session取消句柄不能取消新operation，已结束task的cancel也不再改写metrics。整体回归 **18文件295/295通过**；最后这一局部修正后相关task/projective/Move-output **3文件65/65复验通过**，最新P-BUILD通过（含typecheck），不虚增为360个唯一测试。
+
+整体文件：engine下transformTask、batchedPaint、core、regressions、native、modes、inkModes、cmyk、features、moveSelection、moveSelectionReference、tileContentBounds；gpu下projectivePreview、transformPreview、compositor、preview、floatingSelection、moveOutput。保留原笔刷和GPU Move优化，不做全格式/全工具笛卡尔积。
+
+### C最终性能与分段证据
+
+正式比较只使用第10节 before-transparent/final2两组同环境、同4K含全透明/半透明源、同输入/最终矩阵的预热+三轮；没有并行测试/构建。最终分段diagnostics每次记录backend=worker，峰值在途始终262144bytes。普通/Ctrl操作保守CPU资源估计698089472bytes、组合透视714866688bytes；这是此次变换相关源/结果/临时资源的静态估计，不是实测全应用RSS/VRAM，GPU atlas另有独立容量预检。
+
+| 确认路径 | 前态Enter→authority drain三次/ms | final2三次/ms | 总耗时中位数变化 |
+| --- | --- | --- | --- |
+| 仿射 |8941/8367/8549|7202/7145/7646|减少约15.8%|
+| Ctrl拖角 |8949/8413/8995|6806/7406/7207|减少约19.5%|
+| 组合透视 |8848/8655/9113|8047/7948/7710|减少约10.2%|
+
+以上总时长包含authority准备和轮询，不是纯内核，不能从单Worker推断普遍并行加速。正式后台任务快照0.3–0.9ms、共同预检0–0.2ms、私有源copy累计36.4–44.2ms（单单位最大0.3–0.5ms）、source ACK等待24.8–50.4ms、内核+量化6443–7644.9ms、Worker计算墙时含结果ACK6473.2–7683.1ms、主线程结果组装1.2–2.9ms、交换/历史0.2–0.6ms，结果就绪6576–7781.8ms。分段有包含关系，不相加冒充总耗时。
+
+前态正式最长主线程任务8063–8840ms；final2为94–128ms，Enter事件返回5.2–28.9ms，已消除该路径原数秒连续UI冻结，但**仍有authority bounds/mip/显示长任务**。结果就绪到引擎drain的差值约204–299ms，含预检/轮询，不当成裸GPU交接计时；观察commit可见tile齐全、代际不混杂且无倒退，保留最后preview至authority。RAF/元数据不能证明物理显示扫描，体验仍待人工验收。
+
+为补齐旧同步路径的分段成本，另从原a2fac7d归档建立baseline-diagnostic，只加入performance.now计时（原始baseline-source/tar不改），before-phases每路径单份诊断：快照0–0.4ms、warp准备62.8–88.5ms、原内核8108.2–8389.9ms、结果writeFloat构建337.9–461.4ms、history安装0.4–1.6ms；原路径无传输，记0/N/A。该带探针额外样本未预热/三轮，**只作归因，不混入正式性能表**。原正式before-transparent仍是无计时补丁的保全源码。
+
+### 最新生产取消/重试与收口
+
+production-final-cancel-retry.json来自最新生产构建真实app://窗口、同透视入口：实际Cancel按钮约14.9ms响应，取消后像素/历史与原作精确一致、mode仍transform；再次Enter加载第二个真实原生Worker，最终只产生一个历史步骤，undo/redo一致。观察器仅包装原生构造记录URL，没有mock Worker。此前开发取消三轮及生产加载/立即进度证据仍保留。末次回调owner修正仅影响取消/重试分支，正常像素与性能计算路径未改，不把最终正式矩阵冒称重跑过取消补丁后的性能。
+
+| 分类 | 当前支持/处理 | 验收边界 |
+| --- | --- | --- |
+| 后台确认 | 单个根RGB8普通Normal像素目标，opacity/fillOpacity1，无selection/蒙版/效果/高级混合等，合法affine或quad | 原CPU内核/1024逻辑分区，私有图块，session/revision/op校验，一次history；不是GPU权威结果 |
+| 合法CPU回退 | 功能不支持或Worker不存在/启动加载失败，且共同几何/总预算已通过 | 明确提示标准处理可能暂停UI；同步路径仍有owner保护，不宣称此类全部消除阻塞 |
+| 安全拒绝 | 非finite/近奇异/自交/投影horizon、范围或总预算超限，或动态appearance/Warp/非零fill等不能证明安全容量的情况 | 保留参数供调整/Escape；零同步CPU绕过。运行中Worker失败不自动CPU再做 |
+| 透视GPU | 原有限RGB8简单根像素图层组合≤3、完整源/全部mip atlas预算可容纳，Ctrl两种路径 | 逐显示tile空间mip、齐次除法和完整代际；GPU能力不足且共同容量安全时CPU preview |
+| 生命周期 | 任务期间编辑/历史/工具及重复确认保护，保存/关闭等待，失败/取消显式退出；owner-only释放 | 自动注入及脚本窗口证据通过，真实Owner操作习惯/设备体验仍Pending |
+
+剩余事项/Pending：确认总耗时仍约6.8–8.0秒，authority仍有最高128ms开发长任务（生产阶段另见最高225ms），透视首次mip层级切换仍可造成约107ms完整画面发布间隔；CPU回退仍可能阻塞。真实手绘笔/物理呈现、Owner原作品及真实保存关闭体验、真实设备丢失/内存压力（本轮为程序化失效/故障/容量注入）、分发安装包/不同设备和全组合矩阵未验收。没有运行PhotoCraft产品同机基准，没有ADA消费端或集成包验收；不自动改判整体体验Go。
+
+原始JSON、PNG、脚本、源码归档/诊断副本均留在忽略目录 `doc/material/local/2026-11-11/transform-commit/run-01/`，final-manifest.json给出源码与有效证据SHA索引。P-DOC核对UTF-8无BOM、相关本地链接与材料忽略，git diff --check通过。前任务01的既存dirty衔接段SHA保持，未纳入本轮；AI_CONTEXT/DEV_LOG仅回填本任务02段。完成后交指定独立reviewer，随后暂停；不推送、不修改embedded/ADA、不更新固定包或发布。

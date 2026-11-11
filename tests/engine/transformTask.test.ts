@@ -68,9 +68,9 @@ it.each(['huge','singular','nonfinite','memory','quad'] as const)('rejects %s be
  const cpu=vi.spyOn(imageOps,'warpLayerRaster');commitTransform();expect(cpu).not.toHaveBeenCalled();expect(FakeWorker.all).toHaveLength(0);expect(hash(l.raster)).toBe(before);expect(s.history.entries).toHaveLength(1);expect(transformState()).toBe(state);expect(s.canEdit()).toBe(true);
 });
 it.each(['cancel','switch','close-direct'] as const)('%s terminates a live job, settles waiters and ignores late results',async kind=>{
- FakeWorker.mode='hold';const {l,s}=fixture(),before=hash(l.raster);commitTransform();const pending=s.transformPending!;await held();const worker=FakeWorker.all[0];
+ FakeWorker.mode='hold';const {l,s}=fixture(),before=hash(l.raster);commitTransform();const pending=s.transformPending!;await held();const worker=FakeWorker.all[0],oldCancel=ui.get().progress.at(-1)!.cancel!;
  if(kind==='cancel')ui.get().progress.at(-1)!.cancel!();else if(kind==='switch')editor.addDocument(newDoc(8,8));else editor.removeSession(s.id);
- expect(await pending).toBe(false);expect(worker.terminated).toBe(true);worker.onmessage?.({data:{type:'done',id:'old',pixels:1}});expect(hash(l.raster)).toBe(before);expect(s.history.entries).toHaveLength(1);expect(s.transformPending).toBeNull();if(kind==='cancel'){expect(transformState()).not.toBeNull();expect(s.canEdit()).toBe(true);FakeWorker.mode='normal';commitTransform();expect(await s.transformPending).toBe(true);expect(s.history.entries).toHaveLength(2);}
+ expect(await pending).toBe(false);expect(worker.terminated).toBe(true);worker.onmessage?.({data:{type:'done',id:'old',pixels:1}});expect(hash(l.raster)).toBe(before);expect(s.history.entries).toHaveLength(1);expect(s.transformPending).toBeNull();if(kind==='cancel'){expect(transformState()).not.toBeNull();expect(s.canEdit()).toBe(true);FakeWorker.mode='normal';commitTransform();oldCancel();expect(await s.transformPending).toBe(true);expect(s.history.entries).toHaveLength(2);}
 });
 it('runtime worker failure ends a waiting save without CPU fallback or a false save, then allows retry',async()=>{
  FakeWorker.mode='hold';const {l,s}=fixture(),before=hash(l.raster);commitTransform();const pending=s.transformPending!;await held();const saving=saveAs(s);await sleep();expect(io.writePath).not.toHaveBeenCalled();expect(s.canEdit()).toBe(false);

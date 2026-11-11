@@ -4,6 +4,10 @@
 
 ## Recent
 
+### 2026-11-11 Ctrl+T 后台确认与透视预览
+
+- [任务与证据](tasks/2026-11-11_02_transform-commit-and-projective-preview.md)：四阶段完成，295项整体回归、取消owner修正后65项复验及构建通过；透视拖动及UI响应改善，确认仍数秒，人工/Owner未验收。交独立review后暂停，不推进下游。
+
 ### 2026-11-11 大笔刷与Ctrl+T
 
 - 四阶段完成：253项整体回归、强化夹具19项复验及构建通过；同尺寸eraser/Ctrl+T帧尾改善，brush帧尾未改善，人工与整体Go未验收，交ADA集成-REV后暂停。

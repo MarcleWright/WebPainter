@@ -66,5 +66,5 @@ export function startTransformTask(source:TiledRaster,plan:TransformPlan,id:stri
       }catch(error){finish(error instanceof Error?error:Error(String(error)));}
     })();
   }catch(error){finish(new TransformWorkerUnavailable(String(error)));}
-  return {promise,metrics,cancel:()=>{metrics.cancelled=true;finish(Error('Transform cancelled'));}};
+  return {promise,metrics,cancel:()=>{if(closed)return;metrics.cancelled=true;finish(Error('Transform cancelled'));}};
 }

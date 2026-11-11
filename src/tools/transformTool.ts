@@ -474,11 +474,13 @@ export function commitTransform(): void {
   const root=cloneLayer(doc.root),selection=doc.selection.snapshot(),token=session.acquireEditProtection('transform'),id=`transform-${++operationCounter}`;
   const live=doc.getLayer(source.id);if(!live||!hasRaster(live)){session.releaseEditProtection(token);return;}
   const sourceRaster=live.raster,sourceVersion=live.raster.version,sourceRev=live.rev;
-  const p=ui.progress('Preparing transform…',()=>s.job?.task.cancel(),true);
+  let cancelTask=()=>{};
+  const p=ui.progress('Preparing transform…',()=>cancelTask(),true);
   const task=startTransformTask(source.raster,plans[0],id,f=>p.update(f,`Applying transform… ${Math.round(f*100)}%`));
+  cancelTask=()=>task.cancel();
   task.metrics.snapshotMs=performance.now()-snapshotStart;task.metrics.admitMs=admitMs;
   const job={id,task,token};s.job=job;
-  const cancel=()=>{if(st===s)cancelTransform();else task.cancel();};session.cancelTransformTask=cancel;
+  const cancel=()=>{if(st===s&&s.job===job)cancelTransform();else task.cancel();};session.cancelTransformTask=cancel;
   let pending!:Promise<boolean>;
   pending=(async()=>{
     let committed=false;
