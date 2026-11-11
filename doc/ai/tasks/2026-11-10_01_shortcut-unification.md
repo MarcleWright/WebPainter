@@ -170,7 +170,7 @@ P1 可列出其他缺少的 Photoshop 默认键, 但不据此自动加入本轮;
 | P2 | 自动门槛 Passed | `d8afe72`； 输入定向 9/9、P-TYPE 通过；事件链与原子配置证据见下；人工 Pending |
 | P3 | 自动门槛 Passed | `ee51a5f`； 定向 51/51、P-TYPE/P-MOVE 通过；人工 Pending |
 | P4 | 自动门槛 Passed | `d62c999`； 三类业务均覆盖；定向 64/64、P-TYPE 通过；人工 Pending |
-| P5 | 自动收口；人工 Pending | 本阶段本地提交 hash 在最终交接记录补记；P-INPUT 75/75、P-BUILD/生产 smoke/P-DOC 通过；不宣称 G5 人工通过 |
+| P5 | 自动收口；人工 Pending | `03ccd30`；P-INPUT 75/75、P-BUILD/生产 smoke/P-DOC 通过；不宣称 G5 人工通过 |
 
 ## Review Result
 
@@ -284,3 +284,10 @@ P5 的自动门槛通过；人工可按任务授权缺项交接，**G5 完整人
 - 本交接只请求实现审查，不授权推送、合并或发布；Owner 人工完成前不宣称完整 Photoshop 兼容。
 
 稳定规则已归 [KEYBOARD_INPUT](../../design/KEYBOARD_INPUT.md)，验证入口归 [TESTING](../../engineering/TESTING.md)；README、AI_CONTEXT、DEV_LOG 只更新本任务状态和索引。
+
+
+### Final local commit record
+
+P1 `ff6c0a1` → P2 `d8afe72` → P3 `ee51a5f` → P4 `d62c999` → P5 `03ccd307726d01266c4669a7f1a417d2cfff191e`。本次额外文档提交仅补记 P5 hash，按 Ordered Phases 允许的最终交接记录收口，不包含业务改动。
+
+独立实现审查代码范围：`59f81b51fa2db6f6ea0e7d31094d8015549c6ec8..03ccd307726d01266c4669a7f1a417d2cfff191e`。P1–P5 的实现与自动验证已交付；G5 人工、独立实现审查和 Owner 验收仍 Pending，无推送/合并/发布。
