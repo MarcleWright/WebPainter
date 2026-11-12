@@ -2,7 +2,7 @@
 
 ## Status
 
-方案复审 Approved；P1→P2→P3 已实施并分别本地提交。独立实现审查 Changes Requested（交接 HEAD f1e54b9），发现两项 P2；2026-11-12 Owner 已同意限定修复，执行要求见文末 F1–F2。本轮按 F1→F2 修复、补测并分别本地提交，沿用此前本地提交授权；不推送、合并或发布。修复复审及人工/Owner 验收 Pending。目标工作区 WebPainter_Dev，分支 codex/dev，原执行基线 d6795149322062570084b73d39d505738a26ade7。
+方案复审 Approved；P1→P2→P3 已实施并分别本地提交。原实现审查 Changes Requested 的两项 P2 已按 F1–F2 修复，2026-11-12 独立限定修复复审 Approved（f1e54b9..bb76b64）。Owner 已授权提交并推送当前 codex/dev 到 origin；不合并或发布。完整人工/Owner 验收仍 Pending。目标工作区 WebPainter_Dev，原执行基线 d6795149322062570084b73d39d505738a26ade7；下文保留各阶段历史授权与验证状态。
 
 ## Task Brief
 
@@ -229,3 +229,9 @@ Owner 已选择公共透明模态背景及受控画布交互；移动轮廓来�
 - F2：`9e7fcd9`，Modal 控件激活优先、事件传播补测及修复后 190/190/构建/原生窗口证据。
 - P-DOC：8 份相关文档 UTF-8 无 BOM、98 个相对链接、材料忽略及上游文档保护通过；本回执未改链接或代码，追加后 diff check 通过。最终工作区核对在本地回执提交后执行，不推送/合并/发布。
 - 交独立修复复审；实现/人工/Owner 整体验收未批准，前述 Pending/Inconclusive 不变。
+
+### 独立修复复审与推送授权（2026-11-12）
+
+- F1–F2 限定修复复审 Approved，审查范围 f1e54b9..bb76b64；未发现新增 P1/P2 阻断项。F1 覆盖率相减与独立固定数值验收、F2 控件激活优先及默认/重绑 held 补测均关闭。
+- Reviewer 独立复跑 11 文件 190/190、typecheck、git diff --check 通过；核对 coder 的原生 Space 脚本及日志，本轮未重新执行窗口测试。复审时工作区干净。
+- Owner 随后明确授权提交并推送到远端；目标仅 origin/codex/dev，不合并或发布。真实 IME、完整窗口矩阵、4K 持续跟手与 Owner 验收仍 Pending，批准不替代这些门槛。
