@@ -4,6 +4,14 @@
 
 ## Recent
 
+### 2026-11-12 当前架构维护与同步
+
+- 吞吐实现/独立oracle/任务已提交 `dc553cb`；本轮94项定向回归重跑通过。更新架构入口、交互预览/后台确认和PhotoCraft历史对照，Owner已观察明显提速，按授权同步origin/main。原始材料不入Git，完整实现review仍Pending，不推进下游。
+
+### 2026-11-12 Ctrl+T 正式确认吞吐实施
+
+- [实施与证据](tasks/2026-11-12_01_transform-confirm-throughput.md)：专用单Worker采样内核，305项回归/P-BUILD及开发生产取消重试通过；同环境4K三类中位总耗时透明降低39.6–44.3%、不透明42.0–45.5%，精确像素及预算不变。仍有4–5秒等待/最高235ms交接长尾，待独立review及Owner体验；Owner反馈提速明显，另授权本轮架构文档维护、提交及推送origin/main；不推进下游。
+
 ### 2026-11-11 Ctrl+T 后台确认与透视预览
 
 - [任务与证据](tasks/2026-11-11_02_transform-commit-and-projective-preview.md)：四阶段完成，295项整体回归、取消owner修正后65项复验及构建通过；透视拖动及UI响应改善，确认仍数秒，人工/Owner未验收。交独立review后暂停，不推进下游。

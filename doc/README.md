@@ -8,6 +8,7 @@
 | --- | --- |
 | 项目面向谁、与 ADA 的关系 | [产品定位](product/PRODUCT_BRIEF.md) |
 | 为什么优化 4K、先做什么、怎样算有效 | [产品性能方向](product/PERFORMANCE_DIRECTION.md) |
+| 当前Move/Ctrl+T预览、后台确认与输出交接 | [交互预览架构](architecture/INTERACTIVE_PREVIEW.md) |
 | 拖动时看什么、什么时候落定、怎样撤销 | [交互约定](design/INTERACTION_RULES.md) |
 | 原有结构与 fork 的边界 | [架构入口](architecture/ARCHITECTURE_OVERVIEW.md) |
 | 预览与正式数据如何分工 | [交互预览主线](architecture/INTERACTIVE_PREVIEW.md) |

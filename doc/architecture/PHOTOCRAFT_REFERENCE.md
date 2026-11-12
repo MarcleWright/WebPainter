@@ -1,12 +1,18 @@
 # PhotoCraft 源码对照与借鉴范围
 
-研究日期: 2026-11-05。结论来自固定源码阅读, 未编译或运行本轮 Rust 基准, 未做两项目同条件人工拖动测试。
+原始研究日期: 2026-11-05；当前WP状态补充：2026-11-12。结论来自固定源码阅读, 未编译或运行本轮 Rust 基准, 未做两项目同条件人工拖动测试。
 
 ## 对照版本
 
-- WebPainter/Celenne: `a659900384aee878f01e4caae183a666acc7959b`, 当前 fork 无业务源码改造。
+- 下方历史对照中的Celenne为 `a659900384aee878f01e4caae183a666acc7959b`，不是当前WP实现。当前职责以[架构入口](ARCHITECTURE_OVERVIEW.md)为准。
 - PhotoCraft: tag **v0.20.2**, commit **7c12f647150f8e7b2e07718f7993b1fcaa57fefe**。选择用户先前试用的版本, 不把持续变化的 main 当成同一个版本。
 - 本地研究原件由 [material](../material/README.md) 保存; 下方固定链接可独立复查。
+
+## 当前WP落实情况（2026-11-12）
+
+浮动选区GPU图层内预览、按图块revision的内容边界缓存、Ctrl+T稳定完整源及合法透视GPU预览、后台确认和单Worker专用精确采样内核已实现。PhotoCraft原生Rayon并行没有被移植；WP保留原bicubic系数、1024逻辑分区及量化语义，未引入Rust/WASM。大画笔只落地有限同步批处理，画笔帧尾收益尚未证实。
+
+固定参考的后台快照/取消和按目标块计算帮助划分职责，但性能结论来自WP自身测量；没有两产品同机基准。当前实现及限制见[预览合同](INTERACTIVE_PREVIEW.md)，精确数据见[吞吐任务](../ai/tasks/2026-11-12_01_transform-confirm-throughput.md)。下文对照表保留为研究时的历史基线与推理，不再充当当前缺失能力清单。
 
 ## 结论
 

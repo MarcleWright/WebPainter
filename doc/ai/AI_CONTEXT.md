@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-12 [Ctrl+T正式确认吞吐](tasks/2026-11-12_01_transform-confirm-throughput.md)已按Owner授权实施，待独立实现review；Owner已观察明显提速；只改专用Worker采样内核。独立b01dcb7 oracle及305项整体回归、P-BUILD、开发/生产实际取消重试通过；同环境4K窗口三类总耗时中位数透明降低39.6–44.3%、不透明42.0–45.5%，最终tile/坐标/输入精确一致。仍约4–5秒，authority长尾最高235ms；原768MiB预算、预览和文件协调不变。本轮Owner另授权提交并推送origin/main；不推进下游，详细证据及限制见任务。
+
 2026-11-11 [Ctrl+T后台确认与透视预览](tasks/2026-11-11_02_transform-commit-and-projective-preview.md)四阶段实施及验证完成，待独立实现review与Owner体验：专用Worker保留CPU原1024采样语义，owner保护/安全拒绝与透视GPU稳定源已接入。295项整体回归，末次取消owner修正后65项复验及构建通过；开发/生产Worker与取消重试有真实窗口证据。透视p95约改善49%，确认最长主线程任务约8秒→94–128ms，总耗时仍6.8–8.0秒；人工/真实设备等Pending，不判整体Go。只main本地提交，不推进embedded/ADA/发布，大画笔不在本轮。
 
 2026-11-11 [大笔刷与Ctrl+T任务](tasks/2026-11-11_01_large-brush-and-transform-preview.md)四阶段实现/验证完成，待ADA集成-REV独立复审：253项整体回归、强化非均匀夹具后19项复验及构建通过。同尺寸重采：300px eraser p95约改善33.2%，brush帧尾未改善（撤销初测49.8%结论）；Ctrl+T p95约改善49.7%，混合revision为0，CPU Enter仍约6–12秒且交接有长尾。低频精确像素一致；支持/回退及人工未验收见任务，不判整体Go。既存启动dirty保留，不推送或推进embedded/ADA。
@@ -10,29 +12,14 @@
 
 2026-11-06 03B：main独立worktree通用native v1已实施，待后续统一review。初始main ef3eea8；75项首次组合检查、追加后native18项/类型及构建通过，6层4K codec与tile往返有记录。格式/拒绝边界见 [native格式](../engineering/NATIVE_FORMAT.md)，[执行证据](tasks/2026-11-06_03B_native-codec.md)。只由main单向合入embedded供ADA固定包使用，不引入ADA/embedded依赖；未推送/发布，人工/Photoshop未验收。
 
-更新: 2026-11-06。保持短而当前; 详细历史读任务记录。
+更新: 2026-11-12。保持短而当前; 详细历史读任务记录。
 
-## 当前阶段
+## 当前阶段与入口
 
-- WebPainter 是 Celenne fork, 独立目录 `D:/00_Projects_WSY/AI/Codex_Projects/WebPainter`。业务源码基线 a6599003, 应用品牌尚未替换。
-- 已有安装、生产构建与小 PSD 启动检查; 用户实际试用认可 UI/功能, 同时观察到 4K 选区拖动问题。
-- 已建立 `doc/`, 保留 `docs/` 原作者体系; 先前测量已提升为项目评估, PhotoCraft v0.20.2 对照已归档。
-- [原型任务 02](tasks/2026-11-05_02_4k-selection-preview-prototype.md) 已按受限原型 Go 收口: 用户实际试用确认性能达到可用水平, 完整人工场景和正式化仍待验证; 品牌/ADA/Rust 改造未开展。
-- 准备、核心、有限验证及局部修复分别提交; 用户已授权同步自有 origin/main, 不推送上游或发布。
-- 2026-11-06 独立复审修复提交 59c01de 为 Approved, 72 项相关测试和构建通过; 原型 Go 不等于生产默认启用。
-- Start-Task02 仅作合成样例验证, 保留 F7/F8/F9; 已移除 F6 算法切换和实验标记。
-- Start-WebPainter 为完整当前源码入口, 使用原 profile/temp, 读取正常用户偏好, 不强制关闭自动保存或注入优化开关。
-- 新反馈 Ctrl+J 复制整层: 已核对其绑定 layer.duplicate, 现有 Layer via Copy 支持读取选区但无快捷键。记录为 WP-EDIT-001, 未授权或实施该行为调整, 不混入性能任务。
-- 默认接入 d3a7fb1 已实现, 独立复审为 Changes Requested: 保存后关闭会丢失较新修改, 另存为可能保留旧路径。[保存与关闭可靠性任务](tasks/2026-11-06_02_save-close-reliability.md) 承接旧缺陷和新增回归, 已按授权实现并完成定向自动验证, 待独立实现复审和人工验收; 修复复审后再结合 [默认接入任务](tasks/2026-11-06_01_default-gpu-selection-move.md) 的人工验收收口。未推送或发布。
-
-## 优先议题
-
-- 产品目标是实时跟手、画面连贯、最终结果可信、撤销习惯不变。
-- 主线明确为浮动选区状态 + 稳定资源 WebGPU 图层内实时合成, 松手写回。输入减负、块级缓存和缩略复用配套; CPU 保留作参考/提交/回退, 不再列为同等未决主路线。
-- 原型保留全部核心优化, 验证缩为 RGB 8 位 4K 中/大选区前后对照、一个效果组合、小 fixture 像素与历史检查。30fps 为参考目标, 不叠加多项数值硬门槛; 完整矩阵、GPU 读回和故障/资源审计后移。
-- 默认路径已有输出交接, 但复审暴露文件生命周期缺陷; 后续采用手动保存期间限制目标文档编辑、独立处理路径/保存点、关闭等待后重查的主线。保留 GPU 核心, 不建设通用任务队列; 目标会话保护已实现, 实现复审与人工验收另行记录。
-- 借鉴 PhotoCraft 的普通 Move 与 Ctrl+T 必须分开。前者仍构造显示结果, 后者有缓存纹理预览; 原生平移的 Rayon 分支不等于 Web 并行。
-- 保持一次拖动一次撤销。不要照搬 PhotoCraft 在多次移动后才 select.drop 的分组方式。
+- WP本体通用改进在main工作树 `WebPainter_main_native`；embedded工作树 `WebPainter`单向合入main，ADA消费固定包。正常开发入口为根目录start-dev.bat，见[开发环境](../engineering/DEV_SETUP.md)。
+- 当前模块、已实现优化与安全/回退边界见[架构入口](../architecture/ARCHITECTURE_OVERVIEW.md)及[预览/后台确认](../architecture/INTERACTIVE_PREVIEW.md)，不以旧原型研究文档代替当前源码。
+- 2026-11-12 Owner反馈确认提速明显，并授权维护文档、提交及推送origin/main；本次包含当前吞吐实现/测试/任务，未授权下游包更新或发布。Owner体验反馈不代替完整实现独立review。
+- 一次用户操作一次历史、CPU权威像素、共同安全预检、owner token和完整画面交接保持；未做多Worker/Rust/GPU权威提交。大画笔、authority显示长尾仍待后续。
 
 ## 证据边界
 

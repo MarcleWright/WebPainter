@@ -1,4 +1,4 @@
-# 选区移动的交互预览主线
+# 交互预览、后台确认与输出交接
 
 状态: 2026-11-06 受限实验原型已实施、复审, 用户实际试用确认性能达到可用水平, 本轮受限 gate 为 Go; 完整场景与正式化仍有未验证项。采用 PhotoCraft 的浮动选区状态思路, 在本项目扩展稳定资源的 WebGPU 图层内实时合成; 松手写回并保留一次拖动一次撤销。决策见 [ADR-0002](../ai/decisions/ADR-0002_floating-selection-webgpu-prototype.md)。
 
@@ -40,17 +40,29 @@ flowchart LR
 
 仅在最终画面顶部画一张浮动图片, 对普通不透明单层可能看似正确, 对蒙版、Multiply、剪贴和上方调整层就可能改变结果。不得把这种覆盖方式作为所有场景的实现。
 
-## 现成能力与缺口
+## 当前能力与边界
 
-| 能力 | 已有基础 | 尚需验证/扩展 |
+2026-11-12按main源码更新：
+
+| 能力 | 当前实现 | 边界 |
 | --- | --- | --- |
-| 内容替换 | `LayerOverride.read`, `RenderEngine.setOverride` | 正确的底图与浮动内容组合、脏区及稳定缓存 |
-| GPU 预览 | 当前可描述 adjustment/filter | 目前没有浮动选区位移来源; 仅添加 CPU read 回调仍可能 CPU 计算并上传 |
-| 整层缓存拖动 | lift 的 below/moving/above 缓存和交接 | 不能原样套用: beginLift 拒绝 override, 对混合/剪贴/全局调整有限制 |
-| 内容边界 | 当前按 raster.version 缓存整体边界 | 评估块级缓存, 需包含块 revision、默认像素和格式语义 |
-| 历史 | 现有移动在松手保存一条命令 | 保留现有连续拖动和撤销规则, 不能照搬 PhotoCraft 的跨拖动浮动历史 |
+| Move选区 | GPU floating描述在原图层内组合私有cut/pixels | 保留资格回退与原历史语义 |
+| Ctrl+T预览 | GPU affine描述可携带projective标记；稳定完整源atlas，逆单应采样 | 简单RGB8层及有限堆栈；复杂组合/mesh warp不在支持范围 |
+| 完整画面 | RenderEngine冻结一份准备代际，预算内完成后整份交换；输入更新下一批latest | 持续拖动仍推进；预算是单位间软预算，不保证每单位硬实时 |
+| 内容边界 | 按图块revision/格式/默认值缓存局部精确边界，再合并当前图块 | 删除、恢复、COW及写入必须正确失效 |
+| 正式确认 | 独立后台Worker计算私有结果，主线程校验并一次历史提交 | 非后台资格的合法场景可标准CPU回退，仍可能阻塞 |
 
-源码入口: [compositor](../../src/rendering/compositor.ts)、[renderEngine](../../src/rendering/renderEngine.ts)、[GPU compositor](../../src/gpu/compositor.ts)、[moveTool](../../src/tools/moveTool.ts)。
+源码入口：[compositor](../../src/rendering/compositor.ts)、[renderEngine](../../src/rendering/renderEngine.ts)、[GPU compositor](../../src/gpu/compositor.ts)、[moveTool](../../src/tools/moveTool.ts)、[transformTool](../../src/tools/transformTool.ts)。
+
+## Ctrl+T预览与正式确认
+
+完整源包含负坐标及画布外像素，不以裁切到文档显示范围的缓存代替。仿射/透视拖动复用源资源并改变采样参数；投影奇异、horizon和容量先检查，GPU资源/功能不足的安全场景才CPU预览回退。透视mip策略与正式CPU区域中心选mip是不同用途，不把显示纹理写为最终图层。
+
+Enter先通过共同几何/总容量预检。支持后台的简单单根RGB/RGBA8普通Normal像素层使用专用Worker，保留原输出原点1024×1024逻辑分区与bicubic语义；256图块仅用于存储/传输。`transformResample.ts`只优化该确认路径的完整邻域访问，通用resample、resize与其他工具不改。峰值操作预算仍768MiB，不以总进程RSS代替预算。
+
+私有源不transfer文档/历史共享buffer；结果分块ACK并组装私有raster。重复Enter不启动第二任务；取消终止专用Worker，保留可调整预览。失败、旧operation/source/session回执不能安装；成功校验后受保护提交一次历史，再等完整权威可见集交接。Worker加载失败仅在共同安全检查通过时允许标准CPU回退；运行中失败不自动同步重做，几何/总容量拒绝不能回退绕过。
+
+操作持有自己的编辑保护token，阻止目标文档外部修改但允许自己的正式历史提交；保存/自动保存等待稳定结果，失败不得保存预览或标记成功。关闭/切文档协调取消与失效，清理只能释放自己的保护。详见[后台确认任务](../ai/tasks/2026-11-11_02_transform-commit-and-projective-preview.md)和[吞吐任务](../ai/tasks/2026-11-12_01_transform-confirm-throughput.md)。
 
 ## 状态与生命周期约束
 
@@ -61,7 +73,7 @@ flowchart LR
 - 若加入异步预览/提交, 旧文档或已取消交互的结果必须被拒绝。GPU 资源需有结束和释放边界; 允许既有 floating 数据按源身份有界复用, 以保持 A 到 B 到 C 不在 B 留孔洞。
 - 当前每次拖动对应一次撤销已经成立; 优化应保留, 不宣称新增此能力。
 - 交接期间不能把某些显示块换成新位置, 另一些长期保留旧位置。具体呈现策略需要实测响应与一致性的取舍。
-- 原型只在独立 profile 的合成文档运行并关闭自动保存, 不默认替换日常工作流。正式化前必须定义拖动与保存/导出/自动保存读取的一致性; 未来生成消费者另行接入。本轮未设计新保存格式或 ADA 协议。
+- 历史原型测量使用独立profile与合成文档；当前支持路径已默认接入正常工作流。保存/导出/自动保存读取稳定权威结果并协调进行中的交互，不能沿用原型关闭自动保存的条件作为产品保证。ADA生成消费者另有集成合同。
 
 ## 何时再考虑更大改造
 
