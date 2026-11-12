@@ -190,4 +190,14 @@
 | A7 | 锁定/access/输出/切工具、Space、实际保存/正常关闭受控 IO 与 PSD/native 重开、独立 Direct Selection/Convert Point、关联 Move 等自动通过；真实文件系统/全部格式/笔设备 **Pending** |
 | 审查/发布 | **待独立实现复审**；方案通过与自动通过均不是整体实现/人工/Owner Approved。未授权推送、合并或发布 |
 
-复审从 `2a4a606..本任务交接HEAD` 读最终源码与任务，不能只看 diff。重点入口：PenTool / PenDraft / PenSession / pathEditing；Action/editOps/inputDispatch；Session setters、Editor.activate/setTool、FileOps prepare/close、editLayer 的定向快照 guard；HistoryPanel/PathsPanel/LayersPanel/DocTabs；Canvas cancel/lostcapture 与修饰键传播；实际 penSession.test.tsx 和本地生产日志。P1 `431989f`，P2 `aad75b1`；P3 为本节所在阶段提交，hash 随后用独立文档回执回填。原有文档改动已保留，未改相邻 ADA/main_native/embedded，未推送/合并/发布。
+复审从 `2a4a606..本任务交接HEAD` 读最终源码与任务，不能只看 diff。重点入口：PenTool / PenDraft / PenSession / pathEditing；Action/editOps/inputDispatch；Session setters、Editor.activate/setTool、FileOps prepare/close、editLayer 的定向快照 guard；HistoryPanel/PathsPanel/LayersPanel/DocTabs；Canvas cancel/lostcapture 与修饰键传播；实际 penSession.test.tsx 和本地生产日志。P1 `431989f`，P2 `aad75b1`；P3 `1231c9a`；hash 由本次独立文档回执回填，避免提交内容自引用。原有文档改动已保留，未改相邻 ADA/main_native/embedded，未推送/合并/发布。
+
+### 阶段提交回执（2026-11-12）
+
+| 阶段 | 本地提交 | 验证 |
+| --- | --- | --- |
+| P1 | `431989f` | 会话/局部历史/主动目标与面板保护；P-INPUT/P-MOVE 134/134、typecheck |
+| P2 | `aad75b1` | Ctrl/Alt 编辑、统一闭合和 pointer 生命周期；关联 149/149、钢笔定向 25/25、typecheck |
+| P3 | `1231c9a` | 最终 9 文件 163/163、生产构建、P-DOC（6 文档/84 相对链接）；当前源码 DPR1/强制 DPR2 原生序列 errors=[] |
+
+独立实现复审 **Pending**，未执行的真实 IME/OS AltTab/物理高 DPR、完整人工及 Owner 验收按上表保留 Pending/Inconclusive。本回执仅补齐阶段 hash，未改代码或链接；追加后 UTF-8 无 BOM/diff check 通过。本轮仅本地提交，不推送、合并或发布。
