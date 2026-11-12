@@ -12,7 +12,7 @@ Move 的显式输出交接、自动保存等待和关闭取消规则由 [默认�
 
 ## 2026-11-11 片段覆盖与 CPU 回退
 
-[交互对齐任务](../ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md) 在原 Move/LayerOverride/CompositeCommand 链路实现 min Alpha 片段与配套原位剩余。Selection.previewOutline 仅作私有显示引用，不进入文档格式或历史。Canvas 轮廓缓存包含 mask 身份；移动中只更新偏移，落定提交像素与选区并保留一次拖动一次撤销。
+[交互对齐任务](../ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md) 在原 Move/LayerOverride/CompositeCommand 链路实现 min Alpha 片段；2026-11-12 按实现审查 F1 将原位剩余纠正为 `max(a-k,0)`，目标放置沿用 source-over，不以原位叠加重建 Alpha 作为挖空条件。Selection.previewOutline 仅作私有显示引用，不进入文档格式或历史。Canvas 轮廓缓存包含 mask 身份；移动中只更新偏移，落定提交像素与选区并保留一次拖动一次撤销。
 
 CPU 回退现在也使用私有 cut 和惰性 LayerOverride.read（保留原生位深），而非在正式 raster 上逐次 restore/stamp。GPU 支持条件没有扩大，GPU 私有 cut/pixels 资源按原能力释放。已有其他 preview 时拒绝开始，不覆盖其他 owner。
 

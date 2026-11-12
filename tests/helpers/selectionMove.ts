@@ -53,3 +53,21 @@ export async function checkFragmentOwnership(render?: (f:ReturnType<typeof fragm
     for(const s of [...editor.sessions])editor.removeSession(s.id);
   }
 }
+
+/** Fixed overlap example: red opaque/.5 selection, blue .75/.25 selection, shift right one. */
+export function overlapFeatherFixture(depth:BitDepth=8){
+  const doc=newDoc(8,4,depth),raster=new TiledRaster(4,depth);
+  raster.writeFloat({x:1,y:1,w:2,h:1},new Float32Array([1,0,0,1, 0,0,1,.75]));
+  const layer=createPixelLayer('fixed feather overlap',depth,raster);add(doc,layer);
+  const session=editor.addDocument(doc);session.setActive(layer.id);
+  doc.selection.setRegion({x:1,y:1,w:2,h:1},new Float32Array([.5,.25]));
+  const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})};
+  return {doc,layer,session,host,tool:new MoveTool()};
+}
+
+export function expectFixedOverlap(pixels:Float32Array){
+  // Red .5 remains at x1. At x2 incoming red .5 covers remaining blue .5:
+  // alpha .75, red 2/3, blue 1/3. Blue .25 lands on empty x3.
+  const expected=[1,0,0,.5, 2/3,0,1/3,.75, 0,0,1,.25];
+  for(let i=0;i<expected.length;i++)expect(Math.abs(pixels[i]-expected[i])).toBeLessThanOrEqual(2/255+1e-6);
+}

@@ -77,7 +77,7 @@ it('composes float on GPU before layer effects and preserves formal pixels durin
   editor.removeSession(session.id);
 });
 
-it('C2 GPU and forced CPU commit agree on paired min-alpha and fragment contour', () => {
+it('C2 GPU and forced CPU commit agree on subtractive min-alpha and fragment contour', () => {
   if (!gpu) throw new Error('GPU unavailable');
   const run = (backend: GpuCompositor | null) => {
     setGpuCompositor(backend);
@@ -224,4 +224,38 @@ it('B5 real GPU invalidation releases tiles and preserves external raster/mask/s
     expect(gpu!.floatingAtlasResidentTiles).toBeGreaterThan(0);
   });
   expect(gpu.floatingAtlasResidentTiles).toBe(0);
+});
+
+import {overlapFeatherFixture,expectFixedOverlap,movePoint} from '../helpers/selectionMove';
+it('F1 real GPU feather overlap matches explicit remaining/placement numbers, then commits and undoes once',async()=>{
+  if(!gpu)throw new Error('GPU unavailable');setGpuCompositor(gpu);
+  const {doc,layer,session,host,tool}=overlapFeatherFixture(),region={x:1,y:1,w:3,h:1};
+  const original=layer.raster.readPixels(region).slice(),mask=doc.selection.mask.readPixels(region).slice();
+  tool.down(host,movePoint(6,2));tool.move(host,movePoint(7,2));
+  const override=session.engine.getOverride(layer.id)!;expect(override.gpu?.floating).toBeTruthy();
+  const preview=await gpu.compositeRead(doc,region,{level:0,overrides:new Map([[layer.id,override]])});expect(preview).not.toBeNull();
+  // compositeRead is premultiplied; fixed premultiplied counterpart of the straight raster oracle.
+  const expected=[.5,0,0,.5, .5,0,.25,.75, 0,0,.25,.25];
+  for(let i=0;i<expected.length;i++)expect(Math.abs(preview![i]-expected[i])).toBeLessThan(2/255+1e-6);
+  expect(layer.raster.readPixels(region)).toEqual(original);expect(doc.selection.mask.readPixels(region)).toEqual(mask);
+  tool.up(host);expectFixedOverlap(layer.raster.readFloat(region));expect(session.history.index).toBe(1);expect(gpu.floatingAtlasResidentTiles).toBe(0);
+  session.history.undo();expect(layer.raster.readPixels(region)).toEqual(original);expect(doc.selection.mask.readPixels(region)).toEqual(mask);
+  session.history.redo();expectFixedOverlap(layer.raster.readFloat(region));editor.removeSession(session.id);
+});
+
+it('F1 real GPU non-overlap feather examples leave half/zero/half and move half/half/quarter',async()=>{
+  if(!gpu)throw new Error('GPU unavailable');setGpuCompositor(gpu);
+  const doc=newDoc(24,4),raster=new TiledRaster(4,8);
+  raster.writeFloat({x:1,y:1,w:3,h:1},new Float32Array([1,0,0,1, 0,1,0,.5, 0,0,1,.75]));
+  const layer=createPixelLayer('fixed non-overlap',8,raster);add(doc,layer);
+  const session=editor.addDocument(doc);session.setActive(layer.id);doc.selection.setRegion({x:1,y:1,w:3,h:1},new Float32Array([.5,.5,.25]));
+  const host:ToolHost={editor,session,redraw(){},setCursor(){},viewportSize:()=>({w:200,h:100})},tool=new MoveTool();
+  tool.down(host,movePoint(20,2));tool.move(host,movePoint(30,2));const override=session.engine.getOverride(layer.id)!;expect(override.gpu?.floating).toBeTruthy();
+  const region={x:0,y:0,w:24,h:4},preview=await gpu.compositeRead(doc,region,{level:0,overrides:new Map([[layer.id,override]])});expect(preview).not.toBeNull();
+  for(const [i,value] of [.5,0,.5].entries())expect(Math.abs(preview![((24+1+i)*4)+3]-value)).toBeLessThan(2/255);
+  for(const [i,value] of [.5,.5,.25].entries())expect(Math.abs(preview![((24+11+i)*4)+3]-value)).toBeLessThan(2/255);
+  tool.up(host);const output=layer.raster.readFloat(region);
+  for(const [i,value] of [.5,0,.5].entries())expect(Math.abs(output[((24+1+i)*4)+3]-value)).toBeLessThan(2/255);
+  for(const [i,value] of [.5,.5,.25].entries())expect(Math.abs(output[((24+11+i)*4)+3]-value)).toBeLessThan(2/255);
+  expect(gpu.floatingAtlasResidentTiles).toBe(0);editor.removeSession(session.id);
 });

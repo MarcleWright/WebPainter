@@ -2,7 +2,7 @@
 
 ## Status
 
-方案复审 Approved；2026-11-11 Owner 已授权 P1→P2→P3 串行实施、验证及各阶段本地提交，不推送、合并或发布。实现审查与人工/Owner 验收仍 Pending。目标工作区 WebPainter_Dev，分支 codex/dev，执行基线 d6795149322062570084b73d39d505738a26ade7。
+方案复审 Approved；P1→P2→P3 已实施并分别本地提交。独立实现审查 Changes Requested（交接 HEAD f1e54b9），发现两项 P2；2026-11-12 Owner 已同意限定修复，执行要求见文末 F1–F2。本轮按 F1→F2 修复、补测并分别本地提交，沿用此前本地提交授权；不推送、合并或发布。修复复审及人工/Owner 验收 Pending。目标工作区 WebPainter_Dev，分支 codex/dev，原执行基线 d6795149322062570084b73d39d505738a26ade7。
 
 ## Task Brief
 
@@ -169,3 +169,44 @@ Owner 已选择公共透明模态背景及受控画布交互；移动轮廓来�
 | P3 | `9c8b21b` | 最终关联集 177/177、P-BUILD、P-DOC（9 文档/103 相对链接）及最终生产窗口 errors=[] |
 
 本回执仅补齐已完成阶段 hash，不更改上述验收状态；独立实现复审与人工/Owner 均 Pending。不推送、合并或发布。
+
+## 实现审查修复 F1–F2（2026-11-12）
+
+本节为最新执行要求，前文 P1–P3 记录保留为历史证据。独立 review 对 d679514..f1e54b9 的结论为 Changes Requested；复跑 11 文件 177/177、typecheck 和 diff check 通过，但下述两个语义缺口未被原测试捕获。旧记录中的“paired alpha 正确”及实现审查 Pending 不作为当前结论。F1/F2 为实现修复编号，不与方案审查 R1–R3 或原阶段 P1/P2 混淆。
+
+### F1 / P2：修正羽化选区移动的原位剩余覆盖
+
+- 依据：`src/tools/moveTool.ts` 当前挖空采用 `(a-f)/(1-f)`；`tests/engine/moveSelection.test.ts` 和 `moveSelectionReference.test.ts` 重复同一公式。a=1、选区覆盖 k=0.5 时，移动到不重叠位置后原位仍为 1，目标新增 0.5，违背已批准的 PhotoCraft 覆盖率语义。
+- 固定参考仍为 7c12f647150f8e7b2e07718f7993b1fcaa57fefe：[pixels.rs 的 try_lift_coverage](https://github.com/storytold/photocraft/blob/7c12f647150f8e7b2e07718f7993b1fcaa57fefe/crates/engine/src/pixels.rs) 扣除覆盖率；[float_cmds 测试](https://github.com/storytold/photocraft/blob/7c12f647150f8e7b2e07718f7993b1fcaa57fefe/crates/engine/src/cmd/float_cmds/tests.rs) 明确 opaque/half selection 为 half left, half moved。
+- 实现契约：普通移动片段 `f=min(a,k)`；原位剩余 `r=max(a-k,0)`，等价于 `a-f`；轮廓覆盖率仍为 f。目标位置按现有 source-over 合成；Alt 复制保持原位不挖空。不再要求片段与余量在原位 source-over 后必须重建原始 Alpha，该条件不是此产品语义。最终零位移/拖回起点通过丢弃私有预览保留原始像素与选区，不能为满足零位移而改变正常挖空公式。
+- 补测：8/16/32 位分别验证不重叠移动的显式期望：a=1,k=.5 → 原位 .5/目标 .5；a=.5,k=.5 → 原位 0/目标 .5；a=.75,k=.25 → 原位 .5/目标 .25。覆盖羽化、重叠放置、Alt、连续移动、零位移/拖回起点、取消、一步撤销/重做；保留低 Alpha 重拖与外部接管测试。
+- 重叠场景使用固定像素例子分别断言挖空余量与目标 source-over 结果，不只比较 GPU 与 CPU。更新 reference 和真实 GPU 回归，禁止直接抄当前输出或与实现同公式互证。明确原生编码及选区 8 位量化容差。
+- 保留私有 CPU/GPU 预览、版本所有权、一次拖动一次历史及既有 GPU 能力范围；不得改回 pointermove 写正式像素。
+
+### F2 / P2：控件激活优先于 Modal 临时平移
+
+- 依据：`src/ui/dialogs/Modal.tsx` 的 held 绑定判断在按钮/控件归属判断之前。默认 Space 绑定 input.pan 时，焦点按钮的 Space 被 preventDefault，原生按钮激活被阻止。现有 R3 控件测试先把 Space 改绑为 view.zoomIn，未覆盖默认 held 分支。
+- 实现契约：保留局部已消费事件、文本/IME、模态 Enter/Esc、控件激活与导航的优先级；仅未被这些 owner 认领的有效 held 绑定可以进入临时平移。保留非文本导航区域的 Space 平移、弹窗中键/滚轮不移焦及 popup/失焦/顶层切换清理。只调整必要分发顺序/资格，不改默认绑定或引入新的输入框架。
+- 补测：默认绑定下，聚焦 OK、Cancel 和普通按钮，Space keydown/keyup 不被 held 分支阻止、不形成画布平移，原生激活只执行一次；无重复提交。保留非文本区域 held 导航正例、文本/IME Space、Enter/Esc、已有自定义绑定与控件导航回归。
+- DOM 单测需检查真实事件传播及 defaultPrevented，不能只手工 dispatch click 声称证明浏览器键盘激活。用当前源码隔离窗口的原生键盘输入验证按钮 Space；环境无法执行时明确 Inconclusive，并保留独立复审/人工门槛，不伪造通过。
+
+### 执行与收口
+
+1. 检查当前分支/HEAD/status，保留本次任务文档与任何无关改动；只在 WebPainter_Dev 执行。按 F1→F2 完成修复与定向补测，各自本地提交；提交中保留对应任务记录，不覆盖旧证据。
+2. 两项完成后运行 P-INPUT、P-MOVE、moveSelectionReference、真实 WebGPU floatingSelection 与 GPU compositor 的关联集及 P-BUILD、P-DOC；去重执行即可。GPU 无可用后端明确 Inconclusive。记录命令、结果、失败及处理、提交 hash 和未覆盖项；177/177 是修复前历史结果，不沿用为修复后证据。
+3. 更新本任务与确有变更的 owner 规则/短索引，纠正当前状态与 Alpha 语义，历史实施记录不删除。两项修复完成后标记“待独立复审”，不得自行将整体实现或 Owner 验收改为 Approved。
+4. 不扩大到填充性能、旧快捷键 R4、保存关闭主线、其他工具算法、相邻 worktree/ADA 或完整输入/渲染重构；不推送、合并、发布。遇到范围外问题记录并隔离。方案通过与自动回归通过均不替代真实 IME、完整窗口矩阵、4K 持续跟手及 Owner 验收。
+
+| 修复 | 状态 | 提交/验证 |
+| --- | --- | --- |
+| F1 羽化挖空语义与独立数值验收 | 已修复，待独立复审 | 本节所在 F1 提交；定向 30/30、typecheck 通过；hash 在 F2 回填 |
+| F2 控件 Space 与 held 导航归属 | Pending | 待 coder 执行 |
+
+### F1 执行记录（2026-11-12）
+
+- 起点：codex/dev / `f1e54b997826d46489f398dd8e78c44ea5b0474b`；工作区仅本任务既有修改，原文全部保留。普通挖空改为 `max(a-k,0)`；提取 min、Alt、目标 source-over、私有 CPU/GPU 预览、版本所有权与单次历史均保留。
+- 独立数值：8/16/32 位分别固定断言三例（1/.5 → .5/.5，.5/.5 → 0/.5，.75/.25 → .5/.25），同时覆盖预览、Alt、第二次拖动、中间无残影、两步历史、零位移/拖回起点、取消及 undo/redo。旧重建源 Alpha 条件删除。原生 Alpha/8 位选区量化联合容差 `1/255 + 1/maxValue(depth) + 1e-6`，不重叠显式例子不以实现公式生成期望。
+- 重叠 reference 改为固定两像素例：红 1/k=.5，蓝 .75/k=.25，右移 1。原位红 .5；重叠处 Alpha .75、直通道红 2/3 蓝 1/3；新位置蓝 .25。8/16/32 位 CPU 预览/落定及真实 GPU 预览读回/落定分别对固定数字断言，RGB/Alpha 容差 2/255+1e-6（涵盖 8 位选区及编码）。真实 GPU 另直接检查三例非重叠原位/目标数字；不以 GPU=CPU 替代预期数值。
+- 命令：`npm exec -- vitest run tests/engine/moveSelection.test.ts tests/engine/moveSelectionReference.test.ts tests/gpu/floatingSelection.test.ts --reporter=dot`，3 文件 **30/30 通过**；`npm run typecheck`、`git diff --check` 通过。保留既有低 Alpha、外部接管及失败回滚检查。原始日志：本地忽略目录 `doc/material/local/dialog-selection-fixes-2026-11-12/f1-final.log`。
+- 首轮新增 GPU 重叠断言误把 compositeRead 的预乘 RGBA 当成直通道（28/29）；核对现有 compositor 接口后用固定预乘期望 [.5,0,0,.5; .5,0,.25,.75; 0,0,.25,.25] 修正测试，再加 GPU 非重叠例后为上述 30/30。没有改产品合成接口或放宽数值门槛。
+- owner 规则同步纠正 INTERACTION_RULES、INTERACTIVE_PREVIEW 与 PhotoCraft 对照；P1–P3 旧过程保留为历史。F1 实现复审、真实作品/4K/IME 和 Owner 体验仍 Pending；F2 接续实施，最终关联集/构建/文档门槛在两项完成后执行。

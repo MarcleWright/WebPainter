@@ -101,7 +101,7 @@ describe('moving selected pixels', () => {
 import {fragmentFixture,movePoint,checkFragmentOwnership} from '../helpers/selectionMove';
 import {maxValue,type BitDepth} from '../../src/image-engine/pixels';
 
-it.each([8,16,32] as BitDepth[])('B2 %i-bit paired alpha, feather, contour and undo use native encoding', depth=>{
+it.each([8,16,32] as BitDepth[])('B2 %i-bit subtractive alpha, feather, contour and undo use native encoding', depth=>{
   const f=fragmentFixture(depth),{doc,layer,session,host,tool}=f;
   const values=[0,.25,.5,1],coverages=[0,.25,.5,1,.37],data=new Float32Array(5*4*4),cov=new Float32Array(20);
   for(let y=0;y<4;y++)for(let x=0;x<5;x++){const i=y*5+x;data[i*4]=.7;data[i*4+1]=.3;data[i*4+3]=values[y];cov[i]=coverages[x];}
@@ -117,10 +117,9 @@ it.each([8,16,32] as BitDepth[])('B2 %i-bit paired alpha, feather, contour and u
   const left=layer.raster.readFloat({x:2,y:2,w:5,h:4}),moved=layer.raster.readFloat({x:22,y:2,w:5,h:4}),selection=doc.selection.read({x:25,y:4,w:5,h:4});
   const tolerance=depth===32?1e-6:1/maxValue(depth)+1e-6;
   for(let i=0;i<20;i++){
-    const a=source[i*4+3],fragment=Math.min(a,coverage[i]),remaining=fragment===1?0:(a-fragment)/(1-fragment);
+    const a=source[i*4+3],fragment=Math.min(a,coverage[i]),remaining=Math.max(0,a-coverage[i]);
     expect(moved[i*4+3]).toBeCloseTo(fragment,depth===8?2:4);
     expect(Math.abs(left[i*4+3]-remaining)).toBeLessThanOrEqual(tolerance);
-    expect(Math.abs(left[i*4+3]*(1-fragment)+fragment-a)).toBeLessThanOrEqual(tolerance);
     expect(Math.abs(selection[i]-fragment)).toBeLessThanOrEqual(1/255+1e-6);
     expect(temp.mask.readFloat({x:5+i%5,y:4+Math.floor(i/5),w:1,h:1})[0]).toBe(selection[i]);
     expect(preview[((4+Math.floor(i/5))*64+25+i%5)*4+3]).toBeCloseTo(moved[i*4+3],5);
@@ -186,4 +185,40 @@ it('B1/B3 low-alpha display contour includes the ring hole rather than its bound
   const outline=doc.selection.previewOutline!,data=outline.mask.readFloat(outline.bounds);
   expect(traceContours(data,7,7,Number.MIN_VALUE)).toHaveLength(2);
   tool.up(host);const formal=doc.selection.read({x:14,y:3,w:7,h:7});expect(traceContours(formal,7,7,Number.MIN_VALUE)).toHaveLength(2);
+});
+
+it.each([8,16,32] as BitDepth[])('F1 %i-bit fixed non-overlap feather expectations, Alt, repeated move and history',depth=>{
+  // Product examples, not values calculated from MoveTool's cut formula.
+  for(const example of [
+    {a:1,k:.5,left:.5,moved:.5},
+    {a:.5,k:.5,left:0,moved:.5},
+    {a:.75,k:.25,left:.5,moved:.25},
+  ])for(const alt of [false,true]){
+    const {doc,layer,session,host,tool,region}=fragmentFixture(depth);
+    layer.raster.clear();layer.raster.writeFloat({x:2,y:2,w:1,h:1},new Float32Array([1,0,0,example.a]));
+    doc.selection.setRegion({x:5,y:4,w:1,h:1},new Float32Array([example.k]));
+    const original=layer.raster.readPixels(region).slice(),mask=doc.selection.mask.readPixels(region).slice(),tolerance=1/255+1/maxValue(depth)+1e-6;
+    const near=(actual:number,expected:number)=>expect(Math.abs(actual-expected)).toBeLessThanOrEqual(tolerance);
+    for(const mode of ['click','return','cancel']){
+      tool.down(host,movePoint(50,15));
+      if(mode!=='click'){tool.move(host,movePoint(60,15));if(mode==='return')tool.move(host,movePoint(50,15));}
+      if(mode==='cancel')tool.cancel(host);else tool.up(host);
+      expect(layer.raster.readPixels(region)).toEqual(original);expect(doc.selection.mask.readPixels(region)).toEqual(mask);expect(session.history.index).toBe(0);
+    }
+    tool.down(host,{...movePoint(50,15),alt});tool.move(host,movePoint(60,15));
+    const preview=session.engine.getOverride(layer.id)!.read!({x:0,y:0,w:64,h:24},0);
+    near(preview[(4*64+5)*4+3],alt?example.a:example.left);near(preview[(4*64+15)*4+3],example.moved);
+    tool.up(host);tool.up(host);expect(session.history.index).toBe(1);
+    near(layer.raster.readFloat({x:2,y:2,w:1,h:1})[3],alt?example.a:example.left);
+    near(layer.raster.readFloat({x:12,y:2,w:1,h:1})[3],example.moved);
+    near(doc.selection.coverageAt(15,4),example.moved);
+    const first=layer.raster.readPixels(region).slice(),firstMask=doc.selection.mask.readPixels(region).slice();
+    tool.down(host,movePoint(50,15));tool.move(host,movePoint(60,15));tool.up(host);expect(session.history.index).toBe(2);
+    near(layer.raster.readFloat({x:22,y:2,w:1,h:1})[3],example.moved);near(layer.raster.readFloat({x:12,y:2,w:1,h:1})[3],0);
+    near(layer.raster.readFloat({x:2,y:2,w:1,h:1})[3],alt?example.a:example.left);
+    const second=layer.raster.readPixels(region).slice();session.history.undo();expect(layer.raster.readPixels(region)).toEqual(first);expect(doc.selection.mask.readPixels(region)).toEqual(firstMask);
+    session.history.undo();expect(layer.raster.readPixels(region)).toEqual(original);expect(doc.selection.mask.readPixels(region)).toEqual(mask);
+    session.history.redo();session.history.redo();expect(layer.raster.readPixels(region)).toEqual(second);
+    editor.removeSession(session.id);
+  }
 });

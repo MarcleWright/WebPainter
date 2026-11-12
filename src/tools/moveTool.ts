@@ -362,8 +362,8 @@ export class MoveTool implements Tool {
     const float: FloatPixels = { px: native, alpha, w: rect.w, h: rect.h };
     const cut = layer.raster.clone();
     if (!p.alt) {
-      // Paired source-over decomposition: fragment + remainder reconstruct the source.
-      for (let i = 0; i < rect.w * rect.h; i++) px[i * 4 + 3] = alpha[i] < 1 ? Math.max(0, (px[i * 4 + 3] - alpha[i]) / (1 - alpha[i])) : 0;
+      // Lift coverage by subtraction; source-over applies only when placing the fragment.
+      for (let i = 0; i < rect.w * rect.h; i++) px[i * 4 + 3] = Math.max(0, px[i * 4 + 3] - cov[i]);
       cut.writeFloat(lr, px);
     }
     const cutState = cut.snapshot();
