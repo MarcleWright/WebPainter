@@ -1,6 +1,6 @@
 /** Dedicated, disposable transform worker. Logical sampling partitions match warpLayerRaster. */
 import { TiledRaster, Tile, nextGen, keyToTile } from '../image-engine/tiledRaster';
-import { warpRaster } from '../image-engine/resample';
+import { warpTransformRaster } from './transformResample';
 import type { TransformPlan } from '../image-engine/transformPlan';
 
 export class TransformWorkerEngine {
@@ -22,7 +22,7 @@ export class TransformWorkerEngine {
     for(let index=0;index<this.plan.logical.length;index++){
       const r=this.plan.logical[index];
       const unit=performance.now();
-      const px=warpRaster(this.source,this.plan.bounds,this.plan.inverse,r,'bicubic');
+      const px=warpTransformRaster(this.source,this.plan.bounds,this.plan.inverse,r);
       const part=new TiledRaster(4,8);
       part.writeFloat({x:0,y:0,w:r.w,h:r.h},px);part.compact();
       computeMs+=performance.now()-unit;
