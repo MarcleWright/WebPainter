@@ -106,10 +106,13 @@ export class PenTool implements Tool {
     if(!this.ensure()||!access('tool:pen').enabled)return;
     const hadDraft=!!this.draft;
     if(!this.draft){
+      const creatingShape=opts().pen.mode==='shape'&&h.session.activeLayer()?.kind!=='shape';
       const target=getTarget(h.session,false),layer=target&&target.kind!=='path'?h.session.doc.getLayer(target.layerId):null;
       if(layer&&(layer.locks.all||target?.kind==='shape'&&layer.locks.pixels)){toast('The path target is locked.');return;}
       if(!h.session.canEdit()||h.session.outputPending||h.session.closePending)return;
-      if(opts().pen.mode==='shape'&&h.session.activeLayer()?.kind!=='shape'){
+      // Admit the actual target before registering an owner; a new Shape does not edit the old mask.
+      if(!creatingShape&&target?.kind==='vectorMask'&&!access('feature:masks').enabled){toast('Vector mask editing is unavailable.');return;}
+      if(creatingShape){
         const s=h.session,layer=createShapeLayer(nextLayerName(s,'Shape'),{subpaths:[],fillRule:'nonzero'},null,s.doc.canvas.bitDepth);
         layer.fill={type:'solid',color:{...useApp.getState().fg}};const {parentId,index}=insertionPoint(s);
         const cmd=new CreateLayerCommand('Pen Shape',layer,parentId,index);cmd.do(s.doc);s.push(cmd,true);s.setActive(layer.id);

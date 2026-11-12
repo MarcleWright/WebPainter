@@ -165,6 +165,47 @@ it('P2 initial locked Shape and denied Pen access cannot start or fall through t
  try{tool.down(h,pt(10,10));tool.up();expect(path().subpaths).toHaveLength(0);expect(penSession(s)).toBeNull();}finally{dispose();}
 });
 
+it('F1 denied vector-mask admission leaves no draft and permits tool, target and output transitions',async()=>{
+ const f=await fixture('mask'),{s,other,path,tool}=f;
+ const before=clonePath(path()),entry=s.history.current.id;
+ const {installAccessPolicy}=await import('../../src/app/access');
+ const dispose=installAccessPolicy(id=>({enabled:id!=='feature:masks',visible:true}));
+ try{
+  await f.click(10,10);
+  expect(path()).toEqual(before);expect(s.history.current.id).toBe(entry);
+  expect(penSession(s)).toBeNull();expect(tool.hasPendingEdit()).toBe(false);
+  await act(async()=>editor.setTool('brush'));expect(editor.currentToolId).toBe('brush');
+  expect(s.setActive(other.id)).toBe(true);expect(s.activeLayerId).toBe(other.id);
+  expect(prepareMoveOutput(s)).toBe(true);
+  const {closeSession}=await import('../../src/app/fileOps');
+  await act(async()=>{expect(await closeSession(s,true)).toBe(true);});expect(editor.session(s.id)).toBeUndefined();
+ }finally{dispose();}
+});
+
+it('F1 denying masks after valid edits preserves the draft and can finish after permission returns',async()=>{
+ const f=await fixture('mask'),{s,tool,path}=f;await f.click(10,10);await f.click(40,10);
+ const before=clonePath(path()),owner=penSession(s),entry=s.history.current.id;
+ const {installAccessPolicy}=await import('../../src/app/access');
+ const dispose=installAccessPolicy(id=>({enabled:id!=='feature:masks',visible:true}));
+ try{
+  await f.click(60,30);expect(path()).toEqual(before);expect(penSession(s)).toBe(owner);
+  expect(tool.hasPendingEdit()).toBe(true);expect(finishPen(s)).toBe(false);expect(s.history.current.id).toBe(entry);
+ }finally{dispose();}
+ expect(finishPen(s)).toBe(true);expect(path()).toEqual(before);expect(s.history.index).toBe(1);
+});
+
+it('F1 creating a new Shape remains allowed when the old layer has a disabled vector mask',async()=>{
+ const f=await fixture('mask'),{s,l}=f;ui.setToolOptions('pen',{mode:'shape'});
+ const {installAccessPolicy}=await import('../../src/app/access');
+ const dispose=installAccessPolicy(id=>({enabled:id!=='feature:masks',visible:true}));
+ try{
+  await f.click(10,10);await f.click(40,10);
+  expect(s.activeLayer()?.kind).toBe('shape');expect(s.activeLayerId).not.toBe(l.id);
+  expect(l.vectorMask!.path.subpaths).toHaveLength(0);expect(finishPen(s)).toBe(true);
+  expect((s.activeLayer() as any).path.subpaths[0].knots).toHaveLength(2);
+ }finally{dispose();}
+});
+
 it('P2 active layer replacement/deletion commands finish the original path before changing its baseline',async()=>{
  const f=await fixture('shape'),{s,doc,l}=f;await f.click(10,10);await f.click(40,10);const {deleteLayers,newLayer}=await import('../../src/app/ops/layerOps');
  await act(async()=>deleteLayers());expect(doc.getLayer(l.id)).toBeNull();expect(s.history.entries.map(e=>e.label)).toEqual(['Open','Pen','Delete Layer']);

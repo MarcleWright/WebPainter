@@ -8,5 +8,6 @@
 | WP-FILE-002 | Open, d3a7fb1 新增回归已复现 | 另存为写盘期间编辑会跳过新路径绑定, 下一次 Ctrl+S 可能写回旧文件 | [保存与关闭可靠性任务](../ai/tasks/2026-11-06_02_save-close-reliability.md); 尚未修复 |
 | WP-EDIT-001 | Open, 已核对绑定 | Ctrl+J 固定复制整层, 不随像素选区复制到新图层, 与用户预期不符 | actions.ts:206 绑定 layer.duplicate; 现有 layer.viaCopy/layerVia(false) 读取选区, 可暂用 Layer -> New -> Layer via Copy; 未修改代码 |
 | WP-IDENTITY-001 | Deferred | fork 仍使用上游 app 名称和图标; 尚不作为新品牌发行 | [产品定位](../product/PRODUCT_BRIEF.md); 单独处理品牌和包身份 |
+| WP-UI-001 | Fixed locally, 未提交 | 关闭标尺后画板不可见：标尺 display:none 退出自动网格排布，viewport 落入 no-rulers 的 0×0 单元格，图层缩略图仍正常 | 2026-11-12 用户当前源码窗口确认；布局规则在 2a4a606 已存在。styles.css 显式固定 viewport 为第 2 行第 2 列；真实 Electron 复现 0×0→正常尺寸，独立 profile 实际应用的标尺关/开/关和 WebGPU 图像输出通过，构建通过。详见[运行验证记录](../ai/tasks/2026-11-12_01_pen-live-path-editing.md) |
 
 上游功能限制继续参考 [docs/KNOWN_LIMITATIONS.md](../../docs/KNOWN_LIMITATIONS.md), 不复制为已在本机复现的缺陷列表。完全离线、PSD 全量兼容与复杂交互尚未完成验收, 属于验证缺口, 不据此宣称必然失败。
