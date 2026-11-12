@@ -79,13 +79,13 @@ export class Editor {
       offHist();
       offSess();
     });
-    this.activate(s.id);
+    if(!this.activate(s.id))this.syncSessions();
     return s;
   }
 
-  activate(id: string): void {
-    if (this.activeId === id) return;
-    if (!finishPen(this.active)) return;
+  activate(id: string): boolean {
+    if (this.activeId === id) return true;
+    if (!finishPen(this.active)) return false;
     this.cancelTool();
     this.activeId = id;
     this.syncSessions();
@@ -93,6 +93,7 @@ export class Editor {
     ui.bump('historyRev');
     ui.bump('viewRev');
     this.updateTitle();
+    return true;
   }
 
   removeSession(id: string): void {

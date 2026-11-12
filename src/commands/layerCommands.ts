@@ -1,3 +1,4 @@
+import {finishPenLayer} from '../tools/penSession';
 /**
  * Layer structure and property commands.
  * Commands address layers by id so they stay valid across undo/redo cycles.
@@ -364,7 +365,7 @@ export function editLayer(
   record?: RecordedOp,
   Ctor: typeof ReplaceLayerCommand = ReplaceLayerCommand,
 ): ReplaceLayerCommand | null {
-  if (!doc.editingAllowed()) return null;
+  if (!doc.editingAllowed() || !finishPenLayer(doc,id)) return null;
   const l = doc.getLayer(id);
   if (!l) return null;
   const before = cloneLayer(l);

@@ -87,7 +87,7 @@ export function ChannelsPanel() {
     const on = key ? isOn(key) : keys.every(isOn);
     const single = key && isOn(key) && keys.filter(isOn).length === 1;
     return (
-      <div className={`list-item${!s.activeChannelId && (single || (!key && on)) ? ' active' : ''}`} onClick={() => { if (key) only(key); else setCh({ r: true, g: true, b: true, k: true }); s.activeChannelId = null; s.notify(); }}>
+      <div className={`list-item${!s.activeChannelId && (single || (!key && on)) ? ' active' : ''}`} onClick={() => { if(s.activeChannelId&&!finishPen(s))return;if (key) only(key); else setCh({ r: true, g: true, b: true, k: true }); s.activeChannelId = null; s.notify(); }}>
         <span onClick={(e) => { e.stopPropagation(); if (key) setCh({ [key]: !isOn(key) }); }} style={{ width: 20 }}>{on ? <Icon name="eye" size={13} /> : ''}</span>
         <span className="grow">{label}</span>
         <span className="faint">{shortcut}</span>
@@ -114,7 +114,7 @@ export function ChannelsPanel() {
         )}
         {s.doc.channels.map((c) => (
           <div key={c.id} className={`list-item${s.activeChannelId === c.id ? ' active' : ''}`} style={{ height: 40 }}
-            onClick={() => { s.activeChannelId = s.activeChannelId === c.id ? null : c.id; s.notify(); }}
+            onClick={() => { if(!finishPen(s))return;s.activeChannelId = s.activeChannelId === c.id ? null : c.id; s.notify(); }}
             onDoubleClick={() => setRenaming(c.id)}
             onContextMenu={(e) => { e.preventDefault(); openContextMenu([
               { type: 'item', label: 'Load as Selection', run: () => loadChannelAsSelection(c.id) },

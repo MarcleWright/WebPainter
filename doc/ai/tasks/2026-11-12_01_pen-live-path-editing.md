@@ -101,7 +101,7 @@
 | --- | --- | --- |
 | P1 会话与历史基础 | 当前目标/续画末端/手势 owner、共享点编辑计算、局部历史与统一 Action 路由、历史面板入口保护及主动切换结束检查；补目标/撤销测试 | 已实施并过自动门槛，独立复审/人工 Pending |
 | P2 临时编辑与反馈 | Ctrl/Alt/Ctrl+Alt、闭合统一命中/光标/高亮/预览、修饰键及 pointer 生命周期；完成连续绘制流程 | 已实施并过自动门槛，真实窗口/人工 Pending |
-| P3 集成验证 | 关联回归、生产构建、隔离当前源码窗口与人工检查；更新 owner 文档及任务证据 | Pending |
+| P3 集成验证 | 关联回归、生产构建、隔离当前源码窗口与人工检查；更新 owner 文档及任务证据 | 实施/自动/隔离窗口完成；独立复审、人工/Owner Pending |
 
 已按本轮 Owner 授权 P1→P2→P3 串行、各阶段独立本地提交。不得因本任务创建自动执行循环或自动 reviewer 记录。
 
@@ -161,4 +161,33 @@
 - R2 入口复核追加 layerOps 新建/复制/删除/组与合并/栅格化/矢量蒙版等会替换目标或切目标的 owner 检查，setWorkPath 与回放 Shape/Text 创建也先 finishPen；不是重构它们的算法。实际删除 Shape 检查历史为 Pen→Delete Layer；新建为 Pen→New Layer，避免先改历史基线再补交草稿。
 - 测试覆盖 A1 连续绘制/编辑/继续/编辑起点/闭合、Ctrl+Alt、松键手势尾段、sticky 解耦、Alt 已有柄转换、空白与 no-op、平滑柄精确拖回起点、25%/100%/200% CSS 命中与预览、按键不移动更新 cursor、文本/组合/Modal/失焦、真实 Canvas cancel/lostcapture、四类目标外部替换、初始锁定/access 和独立 Direct Selection/Convert Point 历史。
 - 验证：P-INPUT/P-MOVE 同 P1 联合集 **9 文件 149/149 通过**；typecheck 通过；再补结束 cursor 即时清理断言，钢笔定向 **25/25 通过**。原始日志 p2-input-final.log、p2-final.log 在本地忽略材料目录。真实 OS Alt/AltTab、IME、高 DPR 尚未验收，P3 继续当前源码窗口与门槛。
-- P2 提交为本节所在阶段提交，hash P3 回填；无新依赖、文档格式或渲染核心调整，未修改相邻仓库。
+- P2 提交 `aad75b1`；无新依赖、文档格式或渲染核心调整，未修改相邻仓库。
+
+### P3 集成验证与交接（2026-11-12）
+
+- 集成补强：Editor.activate 返回切换是否成功，文档标签上下文的后续命令在结束被拒绝时不执行；新文档若因旧 Pen 拒绝激活，保持旧目标且同步新标签。Shape origin/位置与路径共同校验；外部几何接管即清理，最终无路径变化时只还原仍自有的关联字段。补实例保留外部 origin 的回归。
+- 外部基线：Pen 同时记录开始时历史 anchor；正常 Panel 跳转/clear 已拒绝，绕过面板的外部 clear 若替换基线，则迟到事件只清理旧草稿，不用旧局部快照反写或追加历史，补独立回归。
+- 整层快照的有界防线：editLayer 在 clone 前只询问匹配本 doc/layer 的 Pen owner（Work/Saved Path 不受无关图层快照影响），先结束 Shape/Vector Mask 草稿，避免属性快照把未提交路径当作基线。没有改命令算法/通用 History 或建立事务系统。实际 commitAppearance 的历史顺序及两次撤销均测试；图层缩略和通道视图的主动选择先查成功，再更改视图/目标，保护拒绝不落后续动作。
+- 实际挂载补测：已有 Saved Path A 原始点 + 新子路径 + Ctrl 编辑旧点 → PathsPanel 切 B → 返回 A → 文档 Undo/Redo，恢复原基线/最终 A，B 不变；路径面板 Delete 的历史为 Pen→Delete Path，两次 Undo 分别恢复成品与原基线；mask 缩略选择、文档标签切换/迟到事件、外部删除、边界外点击不闭合、Shape origin 接管、整层属性快照均已覆盖。
+- 保存/正常关闭：实际 saveAs 与 Save-on-close 走原 FileOps/PSD exporter，IO 受控到内存；重新 importPsd 验证已完成可见路径及正常关闭前新子路径；关闭中未完成加点手势取消、不多写点。另有 encodeNative/decodeNative checkpoint，但没有改格式。初次 close 测试因夹具未提供 recovery.remove 失败，补足平台 IO 接口后通过；不是降低关闭门槛。
+- 最终 P-INPUT/P-MOVE 关联命令：`npm exec -- vitest run tests/input tests/engine/moveSelection.test.ts tests/gpu/moveOutput.test.ts tests/engine/access.test.ts tests/engine/layerAccessUI.test.tsx --reporter=dot`，**9 文件 163/163 通过**（含 tests/input/penSession.test.tsx 39 项）。`npm run build`（typecheck、renderer、Electron）通过；最终补充 Alt 返回角点 no-op、Alt 按下后无后续 move 仍断开已拖动柄的验收。日志 p3-acceptance-handoff.log、p3-build-handoff.log 在本地忽略材料区。React act/DOM fixture 的既有 LCMS 路径警告未隐去，最终无失败/未处理错误；生产窗口无 console error。
+- 当前源码生产窗口：从该 worktree 正常 main/preload/app:// 加载，独立 handoff-final-dpr1 / handoff-final-dpr2 userData/temp；Windows、Electron 44.4.5 / Chromium 152.0.7977.130，webgpu (GPU compositing)，400×300 RGB8 合成路径 fixture，无相邻业务源码或原用户 profile。两轮串行，避免互抢焦点。
+- 原生输入自动场景：三点曲线 → Ctrl 移旧锚点并中途松键 → Ctrl 拖柄、手势中按 Alt 独立且松键不重联 → Alt 收柄/原有锚点拉柄/独立拖柄 → Ctrl+Alt 锚点优先 → 松键从原末端续画 → 原生 Ctrl+Z / Ctrl+Shift+Z 局部撤销重做（文档 history 仍 0）→ 真正切焦点到同 QA 进程第二窗口，blur 取消未完成手势、迟到 up 不落点 → 空闲 Space 平移仍保留同草稿 → 25%/100%/200% CSS 起点命中、按/松 Ctrl 不移动鼠标更新 cursor → 普通闭合无重复锚点 → 一次最终 Pen 历史与文档 Undo/Redo。DPR 1、Chromium `--force-device-scale-factor=2` 两轮均 **errors=[]、Electron exit 0**，各观察到真实 window blur；后者为强制缩放窗口模拟，不冒充物理高 DPI 显示器。
+- 已查看 close-feedback.png / pen-closed.png，确认起点圈、柄与闭合边线；cursor 的 SVG CSS 值与命中有自动断言，capturePage 不包含真实 OS 鼠标位图，物理光标外观仍留人工。日志 production-handoff-dpr1.log / production-handoff-dpr2.log；截图、harness、profile 均在 `doc/material/local/pen-live-2026-11-12/`，默认不提交。
+- 窗口夹具失败与处理保留：初始固定坐标受半像素 view 原点影响，改为明确整数 CSS 测试视图；BrowserWindow.blur 本身未产生 window blur（观察计数 0），改为真实焦点 peer 窗口后计数到达，回滚/尾事件才算通过。DPR2 首次新建尺寸夹具未完成焦点/输入更新，补原生聚焦及 RAF 等待后核对实际 400×300 再执行。没有改产品命中范围或以假 DOM blur 代替原生结果。
+- P-DOC：修改文档 UTF-8 无 BOM、相对链接、本地材料忽略、上游 docs/根 README/CHANGELOG/NOTES 不变及 diff check 通过，见本地 p3-doc.log。输入/交互 owner 与短索引已更新；旧任务验收、填充、PSD 算法及品牌均未改。
+
+### 未验收项与独立复审入口
+
+| 场景 | 当前证据与门槛 |
+| --- | --- |
+| A1 | 实际 PenTool 四类目标与生产窗口 Work Path 连续 Ctrl/Alt/续画/闭合自动通过；真实作品/全部目标窗口人工 Pending |
+| A2 | App/Canvas 传播、空白/no-op、固定 owner、sticky Alt、文本/组合事件、Modal/blur 自动通过；Windows OS AltTab、真实中文 IME/候选窗口与原生菜单完整人工 **Pending / 未执行项 Inconclusive** |
+| A3 | CSS 8px 边界内外实际点击/预览、25/100/200% 与 DPR1、强制 DPR2 窗口通过；物理高 DPI/跨屏、OS 光标位图与更多缩放/旋转设备人工 **Pending** |
+| A4 | 局部 Undo/Redo/重绑/耗尽/拖动取消/分支、实际 HistoryPanel 状态与快照/toolbar 禁用及 handler guard 自动通过；完整键盘/菜单人工 **Pending** |
+| A5 | 一次最终路径编辑、Shape 独立创建、重复结束、空/返回原态、失败保留、属性历史分离自动通过；Owner 体验 **Pending** |
+| A6 | Work/Saved/Shape/Vector Mask；真实路径/图层/mask/文档入口与旧点编辑后切 B 返回 A Undo/Redo、保护拒绝、外部替换/删除/origin 接管、迟到尾事件自动通过；完整外部集成矩阵 **Pending** |
+| A7 | 锁定/access/输出/切工具、Space、实际保存/正常关闭受控 IO 与 PSD/native 重开、独立 Direct Selection/Convert Point、关联 Move 等自动通过；真实文件系统/全部格式/笔设备 **Pending** |
+| 审查/发布 | **待独立实现复审**；方案通过与自动通过均不是整体实现/人工/Owner Approved。未授权推送、合并或发布 |
+
+复审从 `2a4a606..本任务交接HEAD` 读最终源码与任务，不能只看 diff。重点入口：PenTool / PenDraft / PenSession / pathEditing；Action/editOps/inputDispatch；Session setters、Editor.activate/setTool、FileOps prepare/close、editLayer 的定向快照 guard；HistoryPanel/PathsPanel/LayersPanel/DocTabs；Canvas cancel/lostcapture 与修饰键传播；实际 penSession.test.tsx 和本地生产日志。P1 `431989f`，P2 `aad75b1`；P3 为本节所在阶段提交，hash 随后用独立文档回执回填。原有文档改动已保留，未改相邻 ADA/main_native/embedded，未推送/合并/发布。

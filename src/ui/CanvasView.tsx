@@ -74,11 +74,11 @@ function DocTabs() {
             const sess = editor.session(s.id);
             openContextMenu([
               { type: 'item', label: 'Close', run: () => closeSession(sess ?? null) },
-              { type: 'item', label: 'Close Others', run: () => { editor.activate(s.id); run('file.closeOthers'); } },
+              { type: 'item', label: 'Close Others', run: () => { if(editor.activate(s.id))run('file.closeOthers'); } },
               { type: 'item', label: 'Close All', run: () => run('file.closeAll') },
               { type: 'separator' },
-              { type: 'item', label: 'Duplicate', run: () => { editor.activate(s.id); run('file.duplicate'); } },
-              { type: 'item', label: 'Document Properties…', run: () => { editor.activate(s.id); run('image.docInfo'); } },
+              { type: 'item', label: 'Duplicate', run: () => { if(editor.activate(s.id))run('file.duplicate'); } },
+              { type: 'item', label: 'Document Properties…', run: () => { if(editor.activate(s.id))run('image.docInfo'); } },
             ], e.clientX, e.clientY);
           }}
         >

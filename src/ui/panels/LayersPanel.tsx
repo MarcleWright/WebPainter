@@ -32,7 +32,7 @@ import type { RGB } from '../../color/types';
 /** Double-click on a layer: edit its content like professional editors do. */
 export function editLayerContent(s: DocumentSession, l: Layer) {
   if (editor.session(s.id) !== s || !s.canEdit()) return;
-  s.setActive(l.id);
+  if(!s.setActive(l.id))return;
   const pickColor = (initial: RGB, apply: (layer: Layer, c: RGB) => void, label: string) =>
     ui.openDialog('colorPicker', {
       purpose: 'callback',
@@ -270,7 +270,7 @@ export function LayersPanel() {
             onClick={(e) => {
               e.stopPropagation();
               if (e.ctrlKey || e.metaKey) loadLayerTransparency(l.id, e.shiftKey && e.altKey ? 'intersect' : e.shiftKey ? 'add' : e.altKey ? 'subtract' : 'replace');
-              else { s.setActive(l.id); s.editMask = false; s.engine.setView({ maskOfLayer: null }); s.notify(); }
+              else { if((s.activeLayerId!==l.id||s.editMask)&&!finishPen(s))return;if(!s.setActive(l.id))return; s.editMask = false; s.engine.setView({ maskOfLayer: null }); s.notify(); }
             }}
           />
           {l.mask && (
@@ -286,7 +286,8 @@ export function LayersPanel() {
                   selected={isActive && s.editMask}
                   onClick={(e) => {
                     e.stopPropagation();
-                    s.setActive(l.id);
+                    if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&(s.activeLayerId!==l.id||!s.editMask)&&!finishPen(s))return;
+                    if(!s.setActive(l.id))return;
                     if (e.shiftKey) { L.setMaskProps({ enabled: !l.mask!.enabled }, 'Toggle Mask'); return; }
                     if (e.ctrlKey || e.metaKey) { loadLayerTransparency(l.id, 'replace', true); return; }
                     if (e.altKey) { s.engine.setView({ maskOfLayer: s.engine.view.maskOfLayer === l.id ? null : l.id }); return; }

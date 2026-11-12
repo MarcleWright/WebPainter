@@ -2,7 +2,8 @@
 import {act} from 'react';
 import {createRoot,type Root} from 'react-dom/client';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-vi.mock('../../src/app/platform/platform',()=>({platform:()=>({kind:'electron',bridge:null,setTitle(){},setEdited(){}})}));
+const io=vi.hoisted(()=>({kind:'electron',bridge:null,canWriteInPlace:true,setTitle(){},setEdited(){},chooseSavePath:vi.fn(),writePath:vi.fn(),confirm:vi.fn(),recovery:{remove:vi.fn()}}));
+vi.mock('../../src/app/platform/platform',()=>({platform:()=>io}));
 vi.mock('../../src/ui/Workspace',async()=>{const {CanvasView}=await import('../../src/ui/CanvasView');const {HistoryPanel,PathsPanel}=await import('../../src/ui/panels/DocPanels');const {LayersPanel}=await import('../../src/ui/panels/LayersPanel');return{Workspace:()=> <><CanvasView/><section data-history><HistoryPanel/></section><section data-paths><PathsPanel/></section><section data-layers><LayersPanel/></section></>};});
 vi.mock('../../src/ui/panels/Thumb',()=>({RasterThumb:()=>null,LayerThumb:({kind,onClick}:any)=><button data-kind={kind} onClick={onClick}>Thumbnail</button>}));
 vi.mock('../../src/ui/OptionsBar',()=>({OptionsBar:()=>null}));vi.mock('../../src/ui/Toolbar',()=>({Toolbar:()=>null}));
@@ -26,6 +27,7 @@ import {key} from './fixture';
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
 let root:Root,container:HTMLDivElement;
 beforeEach(()=>{
+ io.chooseSavePath.mockReset().mockResolvedValue('qa-pen.psd');io.writePath.mockReset().mockResolvedValue(undefined);io.confirm.mockReset().mockResolvedValue(0);io.recovery.remove.mockReset().mockResolvedValue(undefined);
  vi.stubGlobal('__APP_VERSION__','test');vi.stubGlobal('ResizeObserver',class{observe(){}disconnect(){}});vi.stubGlobal('requestAnimationFrame',()=>1);vi.stubGlobal('cancelAnimationFrame',()=>{});
  HTMLElement.prototype.setPointerCapture=()=>{};HTMLElement.prototype.releasePointerCapture=()=>{};HTMLElement.prototype.hasPointerCapture=()=>false;
  vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockImplementation(()=>new Proxy({measureText:()=>({width:10}),createImageData:(w:number,h:number)=>({data:new Uint8ClampedArray(w*h*4),width:w,height:h})},{get:(o,k)=>Reflect.get(o,k)??(()=>{})}) as any);
@@ -169,4 +171,79 @@ it('P2 active layer replacement/deletion commands finish the original path befor
  s.history.undo();expect((doc.getLayer(l.id) as any).path.subpaths[0].knots).toHaveLength(2);s.history.undo();expect((doc.getLayer(l.id) as any).path.subpaths).toHaveLength(0);s.history.redo();
  await act(async()=>{s.setActive(l.id);});await f.click(50,30);await f.click(60,30);const index=s.history.index;
  await act(async()=>newLayer());expect(s.history.entries.slice(index+1).map(e=>e.label)).toEqual(['Pen','New Layer']);expect(penSession(s)).toBeNull();
+});
+
+it('P3 actual mask selection and document switch protection preserve old draft until a successful finish',async()=>{
+ const f=await fixture(),{s,other,doc}=f;await f.click(10,10);await f.click(50,10);const a=clonePath(doc.paths[0].path);const maskButton=container.querySelector<HTMLButtonElement>('[data-layers] [data-kind=mask]')!;
+ s.editProtected=true;await act(async()=>maskButton.click());expect(s.activeLayerId).not.toBe(other.id);expect(s.editMask).toBe(false);expect(penSession(s)).toBeTruthy();s.editProtected=false;
+ await act(async()=>maskButton.click());expect(s.activeLayerId).toBe(other.id);expect(s.editMask).toBe(true);expect(s.history.index).toBe(1);s.history.undo();expect(doc.paths[0].path.subpaths).toHaveLength(0);s.history.redo();expect(doc.paths[0].path).toEqual(a);
+});
+it('P3 normal native save/close checkpoint includes completed paths; open gesture is cancelled once',async()=>{
+ const f=await fixture('saved'),{s,tool,h,doc}=f;await f.click(10,10);await f.click(50,10);await act(async()=>{tool.down(h,pt(60,50));tool.move(h,pt(70,50));});
+ const {encodeNative,decodeNative}=await import('../../src/document/native');expect(prepareMoveOutput(s)).toBe(true);const reopened=decodeNative(encodeNative(doc)).doc;expect(reopened.paths[0].path.subpaths[0].knots).toHaveLength(2);expect(s.history.index).toBe(1);expect(penSession(s)).toBeNull();
+ const {closeSession}=await import('../../src/app/fileOps');await f.click(30,50);await f.click(60,50);await act(async()=>{expect(await closeSession(s,true)).toBe(true);});expect(editor.session(s.id)).toBeUndefined();expect(doc.paths[0].path.subpaths).toHaveLength(2);
+});
+it('P3 actual Canvas switching documents drops old tails and external deletion never resurrects a path',async()=>{
+ const f=await fixture('saved'),{s,doc}=f;await f.click(10,10);await f.click(50,10);let second!:typeof s;await act(async()=>{finishPen(s);second=editor.addDocument(newDoc(96,96));editor.activate(s.id);});await f.click(20,40);await f.click(60,40);
+ const canvas=container.querySelector<HTMLElement>('.viewport')!;vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:400,height:300,right:400,bottom:300,x:0,y:0,toJSON(){}});
+ const event=(type:string,x:number,y:number)=>{const ev=new MouseEvent(type,{clientX:x,clientY:y,ctrlKey:true,button:0,buttons:1,bubbles:true,cancelable:true});Object.defineProperty(ev,'pointerId',{value:14});canvas.dispatchEvent(ev);};
+ await act(async()=>{event('pointerdown',10,10);event('pointermove',20,20);container.querySelectorAll('.doc-tab')[1].dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0}));event('pointermove',60,60);event('pointerup',60,60);});expect(editor.active).toBe(second);expect(doc.paths[0].path.subpaths[0].knots[0].x).toBe(10);expect(second.doc.paths).toHaveLength(0);
+ await act(async()=>editor.activate(s.id));await f.click(30,60);await f.click(60,60);const id=s.history.current.id;await act(async()=>{doc.paths=doc.paths.filter(p=>p.id!=='a');doc.emit({type:'paths'});event('pointerup',70,70);});expect(doc.paths.find(p=>p.id==='a')).toBeUndefined();expect(s.history.current.id).toBe(id);expect(penSession(s)).toBeNull();
+});
+
+it('P3 actual saveAs and normal Save-on-close write the visible path, which PSD import reopens',async()=>{
+ const f=await fixture('saved'),{s,tool,h}=f;await f.click(10,10);await f.click(50,10);
+ const {saveAs,closeSession}=await import('../../src/app/fileOps'),{importPsd}=await import('../../src/psd/import');
+ await act(async()=>{expect(await saveAs(s)).toBe(true);});expect(s.history.index).toBe(1);expect(penSession(s)).toBeNull();
+ let bytes=io.writePath.mock.calls.at(-1)![1];let reopened=importPsd(bytes,'qa-pen.psd').doc;expect(reopened.paths.find(p=>p.name==='Path A')?.path.subpaths[0].knots).toHaveLength(2);
+ await f.click(20,40);await f.click(60,40);await act(async()=>{tool.down(h,pt(80,80));tool.move(h,pt(90,90));expect(await closeSession(s)).toBe(true);});
+ expect(editor.session(s.id)).toBeUndefined();expect(io.confirm).toHaveBeenCalled();bytes=io.writePath.mock.calls.at(-1)![1];reopened=importPsd(bytes,'qa-pen.psd').doc;
+ expect(reopened.paths.find(p=>p.name==='Path A')?.path.subpaths.map(sp=>sp.knots.length)).toEqual([2,2]);expect(s.history.index).toBe(2);
+});
+
+it('P3 external Shape origin takeover is preserved even if the draft returned to its baseline',async()=>{
+ const f=await fixture('shape'),{l,s,tool,h}=f;await f.click(10,10);await f.click(50,10);await act(async()=>{await run('edit.undo');await run('edit.undo');});
+ const origin={kind:'custom' as const,x:7,y:8,w:20,h:30};if(l.kind!=='shape')throw Error('fixture');
+ await act(async()=>{l.origin=origin;s.doc.emit({type:'layer',layerId:l.id});tool.cancel();tool.up();});expect(l.origin).toBe(origin);expect(s.history.index).toBe(0);expect(penSession(s)).toBeNull();
+});
+
+it('P3 full-layer UI appearance command cannot snapshot a live Shape path into overlapping history',async()=>{
+ const f=await fixture('shape'),{s,l,doc}=f;await f.click(10,10);await f.click(50,10);const {commitAppearance}=await import('../../src/app/ops/layerOps');
+ await act(async()=>commitAppearance(s,l.id,'Appearance fixture',layer=>{layer.opacity=.35;}));expect(penSession(s)).toBeNull();expect(s.history.entries.map(e=>e.label)).toEqual(['Open','Pen','Appearance fixture']);
+ s.history.undo();expect((doc.getLayer(l.id) as any).path.subpaths[0].knots).toHaveLength(2);s.history.undo();expect((doc.getLayer(l.id) as any).path.subpaths).toHaveLength(0);s.history.redo();expect((doc.getLayer(l.id) as any).path.subpaths[0].knots).toHaveLength(2);
+});
+
+it('P3 existing Saved Path A edits its original points before an actual B switch; undo restores the original baseline',async()=>{
+ const f=await fixture('saved'),{doc,s,tool,h}=f;doc.paths[0].path.subpaths.push({knots:[knot(10,70),knot(40,70)],closed:false,op:'combine'});const baseline=clonePath(doc.paths[0].path);
+ await f.click(10,10);await f.click(50,10);await act(async()=>{tool.down(h,pt(10,70,{mod:true}));tool.move(h,pt(15,75));tool.up();});
+ const edited=clonePath(doc.paths[0].path);expect(edited.subpaths[0].knots[0].x).toBe(15);expect(edited.subpaths[1].knots.at(-1)?.x).toBe(50);
+ const row=(text:string)=>[...container.querySelectorAll<HTMLElement>('[data-paths] .list-item')].find(x=>x.textContent===text)!;
+ await act(async()=>row('Path B').click());expect(s.activePathId).toBe('b');expect(s.history.index).toBe(1);expect(doc.paths[1].path.subpaths).toHaveLength(0);
+ await act(async()=>{row('Path A').click();await run('edit.undo');});expect(doc.paths[0].path).toEqual(baseline);
+ await act(async()=>run('edit.redo'));expect(doc.paths[0].path).toEqual(edited);expect(penSession(s)).toBeNull();
+});
+it('P3 actual PathsPanel delete finishes A before removing it and preserves both undo steps',async()=>{
+ const f=await fixture('saved'),{doc,s}=f;await f.click(10,10);await f.click(50,10);const final=clonePath(doc.paths[0].path);
+ await act(async()=>container.querySelector<HTMLButtonElement>('[data-paths] [title="Delete path"]')!.click());expect(doc.paths.find(x=>x.id==='a')).toBeUndefined();expect(s.history.entries.map(x=>x.label)).toEqual(['Open','Pen','Delete Path']);
+ s.history.undo();expect(doc.paths.find(x=>x.id==='a')!.path).toEqual(final);s.history.undo();expect(doc.paths.find(x=>x.id==='a')!.path.subpaths).toHaveLength(0);
+});
+it.each([.25,1,2])('P3 ordinary click outside the 8 CSS px close boundary adds a point without closing at zoom %s',async zoom=>{
+ const f=await fixture(),{tool,h,path,s}=f;await f.click(10,10);await f.click(50,10);await f.click(50,50);s.view.zoom=zoom;
+ const point=pt(10+8/zoom,10,{sx:10*zoom+8,sy:10*zoom});await act(async()=>{tool.hover(h,point);tool.down(h,point);tool.up();});expect(path().subpaths[0].closed).toBe(false);expect(path().subpaths[0].knots).toHaveLength(4);expect(s.history.index).toBe(0);
+});
+
+it('P3 a bypassed external history-baseline replacement invalidates the old draft without restoring its snapshots',async()=>{
+ const f=await fixture('saved'),{s,doc,tool,h}=f;await f.click(10,10);await f.click(50,10);const visible=clonePath(doc.paths[0].path);
+ await act(async()=>{s.history.clear('External baseline');tool.move(h,pt(70,70));tool.up();tool.cancelPointer();});expect(doc.paths[0].path).toEqual(visible);expect(s.history.entries).toHaveLength(1);expect(s.history.current.label).toBe('External baseline');expect(penSession(s)).toBeNull();
+});
+
+it('P3 Alt conversion dragged back to a corner is a no-op, not a zero-length smooth point',async()=>{
+ const f=await fixture(),{tool,h,path}=f;await f.click(10,10);await f.click(50,10);await f.click(50,50);const before=clonePath(path());
+ await act(async()=>{tool.down(h,pt(10,10,{alt:true}));tool.move(h,pt(20,20));tool.move(h,pt(10,10));tool.up();});expect(path()).toEqual(before);
+ await act(async()=>run('edit.undo'));expect(path().subpaths[0].knots).toHaveLength(2);
+});
+it('P3 pressing Alt during an already moved handle unlinks it even if the pointer then stays still',async()=>{
+ const f=await fixture(),{tool,h,path}=f;await act(async()=>{tool.down(h,pt(10,10));tool.move(h,pt(20,10));tool.up();});await f.click(50,10);
+ await act(async()=>{tool.down(h,pt(20,10,{mod:true}));tool.move(h,pt(25,15,{mod:true}));tool.keyDown(h,new KeyboardEvent('keydown',{key:'Alt',altKey:true,ctrlKey:true}));tool.keyUp(h,new KeyboardEvent('keyup',{key:'Alt',ctrlKey:true}));tool.up();});expect(path().subpaths[0].knots[0].smooth).toBe(false);const final=clonePath(path());
+ await act(async()=>run('edit.undo'));expect(path().subpaths[0].knots[0].smooth).toBe(true);await act(async()=>run('edit.redo'));expect(path()).toEqual(final);
 });

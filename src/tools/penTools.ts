@@ -114,7 +114,7 @@ export class PenTool implements Tool {
         layer.fill={type:'solid',color:{...useApp.getState().fg}};const {parentId,index}=insertionPoint(s);
         const cmd=new CreateLayerCommand('Pen Shape',layer,parentId,index);cmd.do(s.doc);s.push(cmd,true);s.setActive(layer.id);
       }
-      this.draft=new PenDraft(h,this.abandon);this.detach=registerPen({session:h.session,valid:()=>!!this.draft?.valid(),abandon:this.abandon,finish:this.finish,interrupt:this.interrupt,undo:this.undo});
+      this.draft=new PenDraft(h,this.abandon);this.detach=registerPen({session:h.session,layerId:this.draft.target.kind==='path'?null:this.draft.target.layerId,valid:()=>!!this.draft?.valid(),abandon:this.abandon,finish:this.finish,interrupt:this.interrupt,undo:this.undo});
     }
     const d=this.draft;if(!d.allowed())return;
     this.hoverPt=p;
@@ -142,7 +142,7 @@ export class PenTool implements Tool {
       if(g.kind==='add'||g.kind==='convert'){
         if(g.moved){k.outX=p.x;k.outY=p.y;
           if(g.kind==='convert'||!g.independent){k.inX=2*k.x-p.x;k.inY=2*k.y-p.y;}
-          k.smooth=g.kind==='convert'||!g.independent&&!!(p.x-k.x||p.y-k.y);d.changed();}
+          k.smooth=(g.kind==='convert'||!g.independent)&&!!(p.x-k.x||p.y-k.y);d.changed();}
       }else if(g.moved){const o=g.before.path.subpaths[g.sp].knots[g.index];if(!g.independent&&!dx&&!dy)Object.assign(k,o);else movePathKnot(k,o,g.part,dx,dy,g.independent);d.changed();}
     }
     this.hoverPt=p;this.feedback(h);
@@ -158,7 +158,7 @@ export class PenTool implements Tool {
     if(!this.ensure()||!this.draft)return false;
     if(['Control','Meta','Alt','Shift'].includes(e.key)){
       if(!this.draft.allowed())return true;
-      if(e.altKey&&this.gesture)this.gesture.independent=true;
+      if(e.altKey&&this.gesture){const g=this.gesture;g.independent=true;if(g.kind==='edit'&&g.part!=='anchor'&&g.moved){this.draft.path.subpaths[g.sp].knots[g.index].smooth=false;this.draft.changed();}}
       if(this.hoverPt)this.hoverPt={...this.hoverPt,mod:e.ctrlKey||e.metaKey,alt:e.altKey,shift:e.shiftKey};
       this.feedback(h);return true;
     }
