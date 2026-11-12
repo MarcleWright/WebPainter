@@ -1,3 +1,4 @@
+import {penSession} from '../tools/penSession';
 /**
  * Action registry. Menus, keyboard shortcuts, the command palette, recorded macros and plugins
  * all invoke application functionality through these ids.
@@ -144,10 +145,10 @@ reg('file.quit', 'Exit', () => window.close(), { shortcut: 'Ctrl+Q' });
 // ---------------------------------------------------------------------------------------------
 // Edit
 // ---------------------------------------------------------------------------------------------
-reg('edit.undo', 'Undo', () => edit.undo(), { shortcut: 'Ctrl+Z', enabled: () => !!editor.active?.history.canUndo });
-reg('edit.redo', 'Redo', () => edit.redo(), { shortcut: 'Shift+Ctrl+Z', enabled: () => !!editor.active?.history.canRedo });
-reg('edit.stepBackward', 'Step Backward', () => edit.undo(), { shortcut: 'Alt+Ctrl+Z', enabled: () => !!editor.active?.history.canUndo });
-reg('edit.stepForward', 'Step Forward', () => edit.redo(), { enabled: () => !!editor.active?.history.canRedo });
+reg('edit.undo', 'Undo', () => edit.undo(), { shortcut: 'Ctrl+Z', enabled: () => !!penSession(editor.active) || !!editor.active?.history.canUndo });
+reg('edit.redo', 'Redo', () => edit.redo(), { shortcut: 'Shift+Ctrl+Z', enabled: () => !!penSession(editor.active) || !!editor.active?.history.canRedo });
+reg('edit.stepBackward', 'Step Backward', () => edit.undo(), { shortcut: 'Alt+Ctrl+Z', enabled: () => !!penSession(editor.active) || !!editor.active?.history.canUndo });
+reg('edit.stepForward', 'Step Forward', () => edit.redo(), { enabled: () => !!penSession(editor.active) || !!editor.active?.history.canRedo });
 reg('edit.cut', 'Cut', () => edit.copy(false, true), { shortcut: 'Ctrl+X', enabled: hasLayer });
 reg('edit.copy', 'Copy', () => edit.copy(false), { shortcut: 'Ctrl+C', enabled: hasLayer });
 reg('edit.copyMerged', 'Copy Merged', () => edit.copy(true), { shortcut: 'Shift+Ctrl+C', enabled: hasDoc });

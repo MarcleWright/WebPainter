@@ -1,3 +1,4 @@
+import {finishPen} from '../tools/penSession';
 /**
  * DocumentSession — one open document: model + history + renderer + view + editing state.
  */
@@ -40,11 +41,17 @@ export class DocumentSession {
   activeLayerId: LayerId | null = null;
   selectedIds = new Set<LayerId>();
   /** Paint on the active layer's mask instead of its pixels. */
-  editMask = false;
+  private _editMask: boolean = false;
+  get editMask(): boolean {return this._editMask;}
+  set editMask(value: boolean) {if(value!==this._editMask&&!finishPen(this))return;this._editMask=value;}
   /** Paint into an alpha channel (Channels panel selection). */
-  activeChannelId: string | null = null;
+  private _activeChannelId: string | null = null;
+  get activeChannelId(): string | null {return this._activeChannelId;}
+  set activeChannelId(value: string | null) {if(value!==this._activeChannelId&&!finishPen(this))return;this._activeChannelId=value;}
   /** Path targeted by pen tools / Paths panel (null = work path or active shape layer). */
-  activePathId: string | null = null;
+  private _activePathId: string | null = null;
+  get activePathId(): string | null {return this._activePathId;}
+  set activePathId(value: string | null) {if(value!==this._activePathId&&!finishPen(this))return;this._activePathId=value;}
   mode: SessionMode = { kind: 'none' };
   fitted = false;
   private savedEntryId: string;
@@ -116,7 +123,8 @@ export class DocumentSession {
     return this.doc.getLayer(this.activeLayerId);
   }
 
-  setActive(id: LayerId | null, additive = false): void {
+  setActive(id: LayerId | null, additive = false): boolean {
+    if ((id!==this.activeLayerId||this.activeChannelId) && !finishPen(this)) return false;
     if (!additive) this.selectedIds.clear();
     this.activeLayerId = id;
     if (id) this.selectedIds.add(id);
@@ -124,9 +132,11 @@ export class DocumentSession {
     if (!l?.mask) this.editMask = false;
     this.activeChannelId = null;
     this.notify();
+    return true;
   }
 
   toggleSelected(id: LayerId): void {
+    if (!finishPen(this)) return;
     if (this.selectedIds.has(id)) {
       this.selectedIds.delete(id);
       if (this.activeLayerId === id) this.activeLayerId = [...this.selectedIds].pop() ?? null;

@@ -1,3 +1,4 @@
+import {finishPen} from '../tools/penSession';
 import { snapshotDocument } from '../document/clone';
 /**
  * File operations: new / open / save / save as / save a copy / export / close / recent / place.
@@ -25,7 +26,7 @@ import { builtinProfileName, BuiltinProfileId } from '../color/icc';
 
 /** Finish only this target's Move/text; recheck after every asynchronous dialog/yield. */
 export function prepareMoveOutput(s: DocumentSession): boolean {
-  if (editor.session(s.id) !== s) return false;
+  if (editor.session(s.id) !== s || !finishPen(s,true)) return false;
   const tool = editor.currentTool;
   if (editor.active === s && tool?.id !== 'move' && tool?.id !== 'type' && tool?.busy?.()) { ui.toast('info', 'Finish the current tool before saving.'); return false; }
   const result = editor.finishMove(s);
@@ -364,6 +365,7 @@ export async function closeSession(s: DocumentSession | null = editor.active, fo
   const closing = Promise.resolve().then(async () => {
     if (s.outputPending && !(await s.outputPending)) return false;
     if (editor.session(s.id) !== s) return true;
+    if (!finishPen(s,true)) return false;
     editor.finishMove(s, false);
     if (textEditState()?.sessionId === s.id) commitTextEdit();
     s.editProtected = true; s.notify();

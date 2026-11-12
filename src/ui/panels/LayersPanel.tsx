@@ -1,3 +1,4 @@
+import {finishPen} from '../../tools/penSession';
 import {isComposing} from '../../app/inputContext';
 import {access} from '../../app/access';
 import {AccessBoundary} from '../AccessBoundary';
@@ -115,6 +116,7 @@ export function LayersPanel() {
   collect(doc.root.children);
 
   const select = (l: Layer, e: React.MouseEvent) => {
+    if((l.id!==s.activeLayerId||s.editMask||e.shiftKey||e.ctrlKey||e.metaKey)&&!finishPen(s))return;
     if (e.ctrlKey || e.metaKey) s.toggleSelected(l.id);
     else if (e.shiftKey && lastClicked.current) {
       const a = flatVisible.findIndex((x) => x.id === lastClicked.current), b = flatVisible.findIndex((x) => x.id === l.id);

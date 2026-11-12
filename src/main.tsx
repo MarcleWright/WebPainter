@@ -1,3 +1,4 @@
+import {penSession} from './tools/penSession';
 /** Renderer entry point. */
 import { requestApplicationClose } from './app/closeApplication';
 import { createRoot } from 'react-dom/client';
@@ -50,7 +51,7 @@ async function boot() {
   });
 
   const p = platform();
-  (window as unknown as { __celenneHasUnsaved?: () => boolean }).__celenneHasUnsaved = () => editor.sessions.some((s) => s.modified);
+  (window as unknown as { __celenneHasUnsaved?: () => boolean }).__celenneHasUnsaved = () => editor.sessions.some((s) => s.modified || !!penSession(s));
   p.onCloseRequested(() => { void requestApplicationClose(p); });
   p.onOpenFile((path) => void openPath(path));
   for (const f of await p.launchFiles().catch(() => [] as string[])) await openPath(f);

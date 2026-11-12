@@ -1,3 +1,4 @@
+import {finishPen} from '../tools/penSession';
 import {access} from './access';
 /**
  * Editor — the application core (framework-agnostic). Owns document sessions, the active tool,
@@ -84,6 +85,7 @@ export class Editor {
 
   activate(id: string): void {
     if (this.activeId === id) return;
+    if (!finishPen(this.active)) return;
     this.cancelTool();
     this.activeId = id;
     this.syncSessions();
@@ -95,7 +97,7 @@ export class Editor {
 
   removeSession(id: string): void {
     const s = this.session(id);
-    if (!s) return;
+    if (!s || !finishPen(s)) return;
     if (this.activeId === id) this.cancelTool();
     this.unsubs.get(id)?.();
     this.unsubs.delete(id);
@@ -231,6 +233,7 @@ export class Editor {
     }
     const prev = useApp.getState().tool;
     if (prev === id) return;
+    if (!finishPen(this.active)) return;
     // Admission hides disabled tools from normal input. Inspect only an already retained owner
     // here: asking currentTool would hide precisely the pending edit we must preserve.
     const mode = this.active?.mode.kind;

@@ -1,3 +1,4 @@
+import {penSession,interruptPen} from '../tools/penSession';
 /** Application input dispatch. Local owners run only for explicitly claimed chords. */
 import {editor} from './editor';
 import {action, run} from './actions';
@@ -61,6 +62,8 @@ function down(e: KeyboardEvent) {
     if (inputBlocked() || !toolAllowed()) {e.preventDefault(); return;}
     if (editor.currentTool?.keyDown?.(host,e)) {e.preventDefault(); return;}
   }
+  const localHistory=keymap.binding(chordFromEvent(e));
+  if(busy&&penSession(editor.active)&&localHistory?.kind==='command'&&['edit.undo','edit.redo','edit.stepBackward','edit.stepForward'].includes(localHistory.ids[0])){e.preventDefault();if(!e.repeat&&!inputBlocked()&&toolAllowed())void run(localHistory.ids[0]);return;}
   if (busy) {
     e.preventDefault();
     if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && !inputBlocked() && toolAllowed()) editor.cancelTool();
@@ -98,7 +101,7 @@ function up(e: KeyboardEvent) {
 export function installInputDispatch(): () => void {
   const removeContext = installInputContext();
   const offPointer = onInputPointerStart(cancelDigits);
-  const invalidate = () => {cancelDigits();invalidatePan();};
+  const invalidate = () => {cancelDigits();invalidatePan();interruptPen(editor.active);};
   const focus = (e: FocusEvent) => {if (isTextTarget(e.target) || e.target instanceof HTMLElement && e.target.closest('[role="dialog"],[role="menu"]')) invalidate();};
   const unsub = useApp.subscribe((state,prev) => {
     if (state.activeSessionId !== prev.activeSessionId || state.tool !== prev.tool || state.dialogs !== prev.dialogs) invalidate();

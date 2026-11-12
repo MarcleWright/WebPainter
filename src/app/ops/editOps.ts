@@ -1,3 +1,4 @@
+import {penSession} from '../../tools/penSession';
 /** Edit menu operations: history, clipboard, fill, stroke, content-aware fill, presets. */
 import { editColor, editPattern, isCmykDoc, isLabDoc, plateCount, platesToRgb, readPlates, rgbToPlates } from '../../color/plates';
 import { adoptLayers, convertRasterSpace, spaceOfDoc } from '../../color/convertDocument';
@@ -26,6 +27,7 @@ import { canvasSize, Anchor } from './imageOps';
 export function undo(): void {
   const s = need();
   if (!s) return;
+  const draft=penSession(s);if(draft){draft.undo(false);return;}
   editor.cancelTool();
   if (!s.history.undo()) ui.toast('info', 'Nothing to undo.', undefined, 1200);
 }
@@ -33,6 +35,7 @@ export function undo(): void {
 export function redo(): void {
   const s = need();
   if (!s) return;
+  const draft=penSession(s);if(draft){draft.undo(true);return;}
   editor.cancelTool();
   if (!s.history.redo()) ui.toast('info', 'Nothing to redo.', undefined, 1200);
 }
@@ -41,6 +44,7 @@ export function redo(): void {
 export function toggleLastStep(): void {
   const s = need();
   if (!s) return;
+  const draft=penSession(s);if(draft){draft.undo(false);return;}
   if (s.history.canRedo && s.history.index === s.history.entries.length - 2) s.history.redo();
   else s.history.undo();
 }
