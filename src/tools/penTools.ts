@@ -10,19 +10,14 @@ import {getTarget, livePath, PathEdit, hitKnot, movePathKnot} from './pathEditin
  */
 import type { Tool, ToolHost, ToolPointer } from './tool';
 import { opts, toast } from './helpers';
-import type { DocumentSession } from '../app/session';
 import type { PathKnot, VectorPath } from '../vector/types';
 import { clonePath, knot } from '../vector/types';
-import { LambdaCommand, ReplaceLayerCommand, CreateLayerCommand } from '../commands/layerCommands';
-import { cloneLayer } from '../document/clone';
-import { renderShapeLayer } from '../layers/appearance';
+import { CreateLayerCommand } from '../commands/layerCommands';
 import { fitSmooth, nearestSegment, splitSegment, bezierPoint } from '../vector/shapes';
 import { simplify } from '../selection/ops';
-import { newId } from '../document/ids';
 import { createShapeLayer } from '../document/layerFactory';
 import { insertionPoint, nextLayerName } from '../app/ops/common';
 import { ui, useApp } from '../app/store';
-import type { Layer } from '../document/types';
 
 function drawPath(h: ToolHost, g: CanvasRenderingContext2D, path: VectorPath | null, selected: Set<string>, showHandles: boolean) {
   if (!path) return;
@@ -72,15 +67,30 @@ export class PenTool implements Tool {
   private draft:PenDraft|null=null;
   private detach:(()=>void)|null=null;
   private spIndex=-1;
-  private gesture:{before:PenState;index:number}|null=null;
-  private hoverPt:{x:number;y:number}|null=null;
+  private gesture:{before:PenState;sp:number;index:number;kind:'add'|'edit'|'convert';part:'anchor'|'in'|'out';start:ToolPointer;independent:boolean;moved:boolean}|null=null;
+  private hoverPt:ToolPointer|null=null;
+  private selected=new Set<string>();
   hasPendingEdit(){return !!this.draft;}
   busy(){return !!this.gesture;}
-  cursor(){return 'crosshair';}
-  private reset(){this.draft?.dispose();this.draft=null;this.detach?.();this.detach=null;this.gesture=null;this.spIndex=-1;this.hoverPt=null;ui.bump('historyRev');}
+  private closing(h:ToolHost,p:ToolPointer|null=this.hoverPt){
+    const d=this.draft,sp=d?.path.subpaths[this.spIndex];
+    if(!d||!d.allowed()||!sp||sp.closed||sp.knots.length<2||this.gesture||!p||p.mod||p.alt)return false;
+    const f=h.session.view.docToScreen(sp.knots[0].x,sp.knots[0].y);return Math.hypot(f.x-p.sx,f.y-p.sy)<8;
+  }
+  cursor(h:ToolHost,p:ToolPointer|null=this.hoverPt){
+    if(!this.ensure())return 'crosshair';
+    if(this.gesture)return this.gesture.kind==='edit'?'move':this.gesture.kind==='convert'?'alias':'crosshair';
+    if(this.draft&&(p?.mod||p?.alt))return p.mod?'move':'alias';
+    if(this.closing(h,p))return 'url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2228%22 height=%2228%22%3E%3Cpath d=%22M8 0v16M0 8h16%22 stroke=%22white%22 stroke-width=%223%22/%3E%3Cpath d=%22M8 0v16M0 8h16%22 stroke=%22black%22/%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%224%22 fill=%22white%22 stroke=%22black%22/%3E%3C/svg%3E") 8 8, crosshair';
+    return 'crosshair';
+  }
+  private feedback(h:ToolHost){h.setCursor(this.cursor(h));h.redraw();}
+  private releasePointer(){if(typeof window!=='undefined')window.dispatchEvent(new Event('celenne:penInterrupted'));}
+
+  private reset(){this.draft?.host.setCursor('crosshair');this.draft?.dispose();this.draft=null;this.detach?.();this.detach=null;this.gesture=null;this.spIndex=-1;this.hoverPt=null;this.selected.clear();this.releasePointer();ui.bump('historyRev');}
   private abandon=()=>{this.reset();toast('The current path target changed; the old Pen draft has ended.');};
   private ensure(){if(this.draft&&!this.draft.valid()){this.abandon();return false;}return true;}
-  private interrupt=()=>{if(!this.ensure())return;const d=this.draft;if(d&&this.gesture){d.restore(this.gesture.before);this.spIndex=this.gesture.before.sp;}this.gesture=null;this.hoverPt=null;d?.host.redraw();};
+  private interrupt=()=>{if(!this.ensure())return;const d=this.draft;if(d&&this.gesture){d.restore(this.gesture.before);this.spIndex=this.gesture.before.sp;}this.gesture=null;this.hoverPt=null;this.selected.clear();this.releasePointer();if(d)this.feedback(d.host);};
   private finish=(output=false):boolean=>{
     if(!this.ensure())return true;const d=this.draft;if(!d)return true;
     if(!d.allowed(output)){toast('The current path cannot be finished while its target is unavailable or busy.');return false;}
@@ -94,7 +104,10 @@ export class PenTool implements Tool {
   };
   down(h:ToolHost,p:ToolPointer){
     if(!this.ensure()||!access('tool:pen').enabled)return;
+    const hadDraft=!!this.draft;
     if(!this.draft){
+      const target=getTarget(h.session,false),layer=target&&target.kind!=='path'?h.session.doc.getLayer(target.layerId):null;
+      if(layer&&(layer.locks.all||target?.kind==='shape'&&layer.locks.pixels)){toast('The path target is locked.');return;}
       if(!h.session.canEdit()||h.session.outputPending||h.session.closePending)return;
       if(opts().pen.mode==='shape'&&h.session.activeLayer()?.kind!=='shape'){
         const s=h.session,layer=createShapeLayer(nextLayerName(s,'Shape'),{subpaths:[],fillRule:'nonzero'},null,s.doc.canvas.bitDepth);
@@ -104,23 +117,67 @@ export class PenTool implements Tool {
       this.draft=new PenDraft(h,this.abandon);this.detach=registerPen({session:h.session,valid:()=>!!this.draft?.valid(),abandon:this.abandon,finish:this.finish,interrupt:this.interrupt,undo:this.undo});
     }
     const d=this.draft;if(!d.allowed())return;
+    this.hoverPt=p;
     const path=d.path,sp=path.subpaths[this.spIndex];
-    if(sp&&sp.knots.length>1){const f=h.session.view.docToScreen(sp.knots[0].x,sp.knots[0].y);if(Math.hypot(f.x-p.sx,f.y-p.sy)<8){sp.closed=true;d.changed();this.finish();return;}}
+    if(hadDraft&&(p.mod||p.alt)){
+      const hit=hitKnot(h,path,p);this.selected.clear();
+      if(hit){this.selected.add(`${hit.sp}:${hit.i}`);this.gesture={before:d.state(this.spIndex),sp:hit.sp,index:hit.i,kind:!p.mod&&hit.part==='anchor'?'convert':'edit',part:hit.part,start:p,independent:p.alt,moved:false};}
+      this.feedback(h);return;
+    }
+    if(sp?.closed){this.finish();return;}
+    if(this.closing(h,p)){sp.closed=true;d.changed();this.finish();return;}
     const before=d.state(this.spIndex);
     if(this.spIndex<0){path.subpaths.push({knots:[],closed:false,op:'combine'});this.spIndex=path.subpaths.length-1;}
-    const knots=path.subpaths[this.spIndex].knots;knots.push(knot(p.x,p.y));this.gesture={before,index:knots.length-1};d.changed();
+    const knots=path.subpaths[this.spIndex].knots;knots.push(knot(p.x,p.y));
+    this.selected.clear();this.gesture={before,sp:this.spIndex,index:knots.length-1,kind:'add',part:'anchor',start:p,independent:p.alt,moved:false};d.changed();this.feedback(h);
   }
-  move(h:ToolHost,p:ToolPointer){if(!this.ensure())return;const d=this.draft;if(!d)return;
-    if(this.gesture&&d.allowed()){const k=d.path.subpaths[this.spIndex].knots[this.gesture.index];k.outX=p.x;k.outY=p.y;if(!p.alt){k.inX=2*k.x-p.x;k.inY=2*k.y-p.y;}k.smooth=!p.alt;d.changed();}
-    this.hoverPt={x:p.x,y:p.y};h.redraw();
+  move(h:ToolHost,p:ToolPointer){
+    if(!this.ensure())return;const d=this.draft;if(!d)return;
+    const g=this.gesture;
+    if(g){
+      if(!d.allowed()){this.interrupt();return;}
+      const k=d.path.subpaths[g.sp].knots[g.index],dx=p.x-g.start.x,dy=p.y-g.start.y;
+      if(dx||dy)g.moved=true;
+      if(p.alt)g.independent=true;
+      if(g.kind==='add'||g.kind==='convert'){
+        if(g.moved){k.outX=p.x;k.outY=p.y;
+          if(g.kind==='convert'||!g.independent){k.inX=2*k.x-p.x;k.inY=2*k.y-p.y;}
+          k.smooth=g.kind==='convert'||!g.independent&&!!(p.x-k.x||p.y-k.y);d.changed();}
+      }else if(g.moved){const o=g.before.path.subpaths[g.sp].knots[g.index];if(!g.independent&&!dx&&!dy)Object.assign(k,o);else movePathKnot(k,o,g.part,dx,dy,g.independent);d.changed();}
+    }
+    this.hoverPt=p;this.feedback(h);
   }
-  hover(h:ToolHost,p:ToolPointer){if(!this.ensure())return;this.hoverPt={x:p.x,y:p.y};h.redraw();}
-  up(){if(!this.ensure())return;const d=this.draft;if(!d||!this.gesture)return;if(!d.allowed()){this.interrupt();return;}this.gesture=null;d.record(this.spIndex);}
-  keyDown(h:ToolHost,e:KeyboardEvent){if(!this.ensure()||!this.draft)return false;if(e.key==='Escape'&&this.gesture){this.interrupt();return true;}if(e.key==='Enter'||e.key==='Escape'){this.finish();h.redraw();return true;}return false;}
+  hover(h:ToolHost,p:ToolPointer){if(!this.ensure())return;this.hoverPt=p;this.feedback(h);}
+  up(){
+    if(!this.ensure())return;const d=this.draft,g=this.gesture;if(!d||!g)return;
+    if(!d.allowed()){this.interrupt();return;}
+    if(g.kind==='convert'&&!g.moved){const k=d.path.subpaths[g.sp].knots[g.index];k.inX=k.outX=k.x;k.inY=k.outY=k.y;k.smooth=false;d.changed();}
+    this.gesture=null;d.record(this.spIndex);this.feedback(d.host);
+  }
+  keyDown(h:ToolHost,e:KeyboardEvent){
+    if(!this.ensure()||!this.draft)return false;
+    if(['Control','Meta','Alt','Shift'].includes(e.key)){
+      if(!this.draft.allowed())return true;
+      if(e.altKey&&this.gesture)this.gesture.independent=true;
+      if(this.hoverPt)this.hoverPt={...this.hoverPt,mod:e.ctrlKey||e.metaKey,alt:e.altKey,shift:e.shiftKey};
+      this.feedback(h);return true;
+    }
+    if(e.key==='Escape'&&this.gesture){this.interrupt();return true;}
+    if(e.key==='Enter'||e.key==='Escape'){this.finish();h.redraw();return true;}return false;
+  }
+  keyUp(h:ToolHost,e:KeyboardEvent){if(!this.ensure()||!this.draft)return false;if(['Control','Meta','Alt','Shift'].includes(e.key)){if(this.hoverPt)this.hoverPt={...this.hoverPt,mod:e.ctrlKey||e.metaKey,alt:e.altKey,shift:e.shiftKey};this.feedback(h);return true;}return false;}
+  cancelPointer(){this.interrupt();}
   cancel(){this.finish();}
   deactivate(){this.finish();}
-  drawOverlay(h:ToolHost,g:CanvasRenderingContext2D){if(!this.ensure())return;const d=this.draft,t=d?.target??getTarget(h.session,false),path=t?livePath(h.session,t):null;drawPath(h,g,path,new Set(),true);
-    const sp=d?.path.subpaths[this.spIndex],last=sp?.knots.at(-1);if(last&&this.hoverPt&&!this.gesture){const v=h.session.view,a=v.docToScreen(last.x,last.y),c=v.docToScreen(last.outX,last.outY),b=v.docToScreen(this.hoverPt.x,this.hoverPt.y);g.save();g.strokeStyle='rgba(47,139,255,0.6)';g.beginPath();g.moveTo(a.x,a.y);g.bezierCurveTo(c.x,c.y,b.x,b.y,b.x,b.y);g.stroke();g.restore();}
+  drawOverlay(h:ToolHost,g:CanvasRenderingContext2D){
+    if(!this.ensure())return;const d=this.draft,t=d?.target??getTarget(h.session,false),path=t?livePath(h.session,t):null;
+    drawPath(h,g,path,this.selected,true);
+    const sp=d?.path.subpaths[this.spIndex],last=sp?.knots.at(-1),closing=this.closing(h);
+    if(last&&this.hoverPt&&!this.gesture){
+      const v=h.session.view,a=v.docToScreen(last.x,last.y),c=v.docToScreen(last.outX,last.outY),end=closing?sp!.knots[0]:this.hoverPt,b=v.docToScreen(end.x,end.y),incoming=closing?v.docToScreen(sp!.knots[0].inX,sp!.knots[0].inY):b;
+      g.save();g.strokeStyle='rgba(47,139,255,0.6)';g.beginPath();g.moveTo(a.x,a.y);g.bezierCurveTo(c.x,c.y,incoming.x,incoming.y,b.x,b.y);g.stroke();
+      if(closing){g.strokeStyle='#2f8bff';g.lineWidth=2;g.beginPath();g.arc(b.x,b.y,6,0,Math.PI*2);g.stroke();}g.restore();
+    }
   }
 }
 

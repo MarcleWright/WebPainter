@@ -94,3 +94,79 @@ it('P1 failed finish retains draft/target, Shape creation remains one separate h
  expect(finishPen(s)).toBe(false);expect(s.activeLayerId).toBe(id);expect(penSession(s)).toBeTruthy();push.mockRestore();expect(finishPen(s)).toBe(true);expect(s.history.index).toBe(2);
  tool.cancel();tool.deactivate();expect(s.history.index).toBe(2);s.history.undo();expect((s.activeLayer() as any).path.subpaths).toHaveLength(0);s.history.undo();expect(s.doc.getLayer(id)).toBeNull();
 });
+
+it('P2 continuous Pen Ctrl/Alt editing keeps the endpoint, frozen owner and one final document command',async()=>{
+ const f=await fixture(),{tool,h,path,s}=f;const cursor=vi.spyOn(h,'setCursor');
+ await act(async()=>{tool.down(h,pt(10,10));tool.move(h,pt(20,10));tool.up();});await f.click(50,10);await f.click(50,50);
+ await act(async()=>{tool.down(h,pt(10,10,{mod:true}));tool.move(h,pt(15,15));tool.up();});
+ let k=path().subpaths[0].knots[0];expect([k.x,k.y,k.inX,k.outX]).toEqual([15,15,5,25]);expect(path().subpaths[0].knots).toHaveLength(3);
+ await act(async()=>{tool.down(h,pt(25,15,{mod:true}));tool.move(h,pt(30,25,{mod:true}));});
+ const opposite=[k.inX,k.inY];await act(async()=>{tool.move(h,pt(35,35,{alt:true}));tool.move(h,pt(40,40));tool.up();});expect([k.inX,k.inY]).toEqual(opposite);expect(k.smooth).toBe(false);
+ await act(async()=>{tool.down(h,pt(15,15,{alt:true}));tool.up();});expect([k.inX,k.inY,k.outX,k.outY,k.smooth]).toEqual([15,15,15,15,false]);
+ await act(async()=>{tool.down(h,pt(15,15,{alt:true}));tool.move(h,pt(30,20));tool.up();});expect([k.inX,k.inY,k.outX,k.outY,k.smooth]).toEqual([0,10,30,20,true]);
+ await act(async()=>{tool.down(h,pt(30,20,{alt:true}));tool.move(h,pt(35,25));tool.up();});expect([k.inX,k.inY,k.outX,k.outY,k.smooth]).toEqual([0,10,35,25,false]);
+ await act(async()=>{tool.down(h,pt(50,50,{mod:true,alt:true}));tool.move(h,pt(55,55));tool.up();});expect(path().subpaths[0].knots.at(-1)?.x).toBe(55);
+ await f.click(70,65);expect(path().subpaths[0].knots).toHaveLength(4);expect(path().subpaths[0].knots.at(-1)?.x).toBe(70);expect(s.history.index).toBe(0);
+ await act(async()=>{tool.down(h,pt(15,15,{mod:true}));tool.move(h,pt(20,20));tool.up();tool.hover(h,pt(20,20));});expect(tool.cursor(h)).toContain('%3Ccircle');
+ await act(async()=>{tool.down(h,pt(20,20));tool.up();});expect(path().subpaths[0].closed).toBe(true);expect(path().subpaths[0].knots).toHaveLength(4);expect(s.history.index).toBe(1);expect(penSession(s)).toBeNull();expect(tool.cursor(h)).toBe('crosshair');expect(cursor).toHaveBeenLastCalledWith('crosshair');
+});
+it.each([.25,1,2])('P2 close feedback and hit use the same 8 CSS px at zoom %s',async zoom=>{
+ const f=await fixture(),{tool,h,path,s}=f;await f.click(10,10);await f.click(50,10);await f.click(50,50);s.view.zoom=zoom;
+ const point=(offset:number,extra:Partial<ToolPointer>={})=>pt(10+offset/zoom,10,{sx:10*zoom+offset,sy:10*zoom,...extra});
+ const curve=vi.fn(),arc=vi.fn(),g=new Proxy({bezierCurveTo:curve,arc},{get:(o,k)=>Reflect.get(o,k)??(()=>{})}) as any;
+ tool.hover(h,point(7.9));expect(tool.cursor(h)).toContain('%3Ccircle');tool.drawOverlay(h,g);expect(curve.mock.calls.at(-1)?.slice(-2)).toEqual([10*zoom,10*zoom]);expect(arc).toHaveBeenCalled();
+ tool.hover(h,point(8));expect(tool.cursor(h)).toBe('crosshair');
+ tool.hover(h,point(0,{mod:true}));expect(tool.cursor(h)).toBe('move');tool.down(h,point(0,{mod:true}));tool.up();expect(path().subpaths[0].closed).toBe(false);
+ tool.hover(h,point(7.9));tool.down(h,point(7.9));tool.up();expect(path().subpaths[0].closed).toBe(true);expect(path().subpaths[0].knots).toHaveLength(3);
+});
+it('P2 blank temporary edit, no-op corner/drag and returning a moved anchor do not add local history',async()=>{
+ const f=await fixture(),{tool,h,path}=f;await f.click(10,10);await f.click(50,10);await f.click(50,50);
+ const before=clonePath(path());await act(async()=>{
+   for(const extra of [{mod:true},{alt:true},{mod:true,alt:true}]){tool.down(h,pt(80,80,extra));tool.move(h,pt(90,90));tool.up();}
+   tool.down(h,pt(10,10,{alt:true}));tool.up();tool.down(h,pt(50,10,{mod:true}));tool.move(h,pt(60,20));tool.move(h,pt(50,10));tool.up();
+ });expect(path()).toEqual(before);await act(async()=>run('edit.undo'));expect(path().subpaths[0].knots).toHaveLength(2);
+});
+it('P2 modifiers refresh cursor without pointer movement; text/IME and Modal/blur clear only unfinished gesture',async()=>{
+ const f=await fixture(),{tool,h,path,s}=f;await f.click(10,10);await f.click(50,10);await f.click(50,50);
+ const canvas=container.querySelector<HTMLElement>('.viewport')!;tool.hover(h,pt(10,10));
+ await act(async()=>key(canvas,'Control',{ctrlKey:true}));expect(canvas.style.cursor).toBe('move');
+ await act(async()=>canvas.dispatchEvent(new KeyboardEvent('keyup',{key:'Control',bubbles:true})));expect(canvas.style.cursor).toContain('%3Ccircle');
+ const input=document.createElement('input');container.append(input);await act(async()=>{input.focus();key(input,'Control',{ctrlKey:true});input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));key(input,'Escape');});expect(penSession(s)).toBeTruthy();expect(path().subpaths[0].knots).toHaveLength(3);
+ await act(async()=>{input.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));input.blur();tool.down(h,pt(10,10,{mod:true}));tool.move(h,pt(20,20));window.dispatchEvent(new Event('blur'));tool.move(h,pt(60,60));tool.up();});expect(path().subpaths[0].knots[0].x).toBe(10);expect(penSession(s)).toBeTruthy();
+ await act(async()=>{tool.down(h,pt(10,10,{alt:true}));tool.move(h,pt(20,10));ui.openDialog('about');tool.move(h,pt(60,60));tool.up();});expect(path().subpaths[0].knots[0].outX).toBe(10);expect(s.history.index).toBe(0);expect(penSession(s)).toBeTruthy();input.remove();
+});
+it.each(['pointercancel','lostpointercapture'])('P2 actual Canvas %s cancels Pen gesture exactly once, including late tails',async event=>{
+ const f=await fixture(),{path,s}=f;await f.click(10,10);await f.click(50,10);await f.click(50,50);const canvas=container.querySelector<HTMLElement>('.viewport')!;
+ vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,width:400,height:300,right:400,bottom:300,x:0,y:0,toJSON(){}});
+ const pointer=(type:string,x:number,y:number,ctrl=false)=>{const ev=new MouseEvent(type,{clientX:x,clientY:y,bubbles:true,cancelable:true,button:0,buttons:type==='pointerup'?0:1,ctrlKey:ctrl});Object.defineProperty(ev,'pointerId',{value:11});canvas.dispatchEvent(ev);};
+ await act(async()=>{pointer('pointerdown',10,10,true);pointer('pointermove',20,20);pointer(event,20,20);pointer('pointerup',20,20);pointer('pointermove',70,70);});expect(path().subpaths[0].knots[0].x).toBe(10);expect(path().subpaths[0].knots).toHaveLength(3);expect(s.history.index).toBe(0);
+ await act(async()=>run('edit.undo'));expect(path().subpaths[0].knots).toHaveLength(2);
+});
+it.each(['work','saved','shape','mask'])('P2 %s target edit never writes a different finished path; external replacement keeps new state',async kind=>{
+ const f=await fixture(kind),{tool,h,path,doc,s,l}=f;await f.click(10,10);await f.click(50,10);const current=path();doc.paths.push({id:'other-finished',name:'Other finished',kind:'saved',path:{subpaths:[{knots:[knot(80,80),knot(90,90)],closed:false,op:'combine'}],fillRule:'nonzero'}});
+ await act(async()=>{tool.down(h,pt(80,80,{mod:true}));tool.move(h,pt(85,85));tool.up();});expect(doc.paths.at(-1)!.path.subpaths[0].knots[0].x).toBe(80);expect(current.subpaths[0].knots[0].x).toBe(10);
+ const replacement={subpaths:[],fillRule:'evenodd' as const};await act(async()=>{tool.down(h,pt(10,10,{mod:true}));tool.move(h,pt(20,20));if(kind==='shape'&&l.kind==='shape')l.path=replacement;else if(kind==='mask')l.vectorMask={...l.vectorMask!,path:replacement};else doc.paths.find(p=>p.path===current)!.path=replacement;doc.emit({type:'paths'});tool.move(h,pt(70,70));tool.up();tool.cancelPointer();});expect(penSession(s)).toBeNull();expect(s.history.index).toBe(0);expect(path()).toBe(replacement);
+});
+
+it('P2 smooth handle return is exactly a no-op and independent tools retain their own history',async()=>{
+ const f=await fixture(),{tool,h,path,s}=f;
+ await act(async()=>{tool.down(h,pt(10,10));tool.move(h,pt(20,10));tool.up();});await f.click(50,10);await f.click(50,50);
+ const before=clonePath(path());await act(async()=>{tool.down(h,pt(20,10,{mod:true}));tool.move(h,pt(30,35));tool.move(h,pt(20,10));tool.up();});expect(path()).toEqual(before);
+ await act(async()=>run('edit.undo'));expect(path().subpaths[0].knots).toHaveLength(2);await act(async()=>{run('edit.redo');finishPen(s);});
+ const {PathSelectTool,AnchorTool}=await import('../../src/tools/penTools'),direct=new PathSelectTool('directSelect'),anchor=new AnchorTool('convertPoint');
+ const index=s.history.index;direct.down(h,pt(10,10));direct.move(h,pt(15,15));direct.up();expect(s.history.index).toBe(index+1);expect(path().subpaths[0].knots[0].x).toBe(15);
+ anchor.down(h,pt(15,15));anchor.up();expect(s.history.index).toBe(index+2);expect(path().subpaths[0].knots[0].smooth).toBe(false);
+});
+it('P2 initial locked Shape and denied Pen access cannot start or fall through to adding',async()=>{
+ const f=await fixture('shape'),{l,tool,h,path,s}=f;l.locks.all=true;tool.down(h,pt(10,10));tool.up();expect(penSession(s)).toBeNull();expect(path().subpaths).toHaveLength(0);l.locks.all=false;
+ const {installAccessPolicy}=await import('../../src/app/access');const dispose=installAccessPolicy(()=>({enabled:false,visible:true}));
+ try{tool.down(h,pt(10,10));tool.up();expect(path().subpaths).toHaveLength(0);expect(penSession(s)).toBeNull();}finally{dispose();}
+});
+
+it('P2 active layer replacement/deletion commands finish the original path before changing its baseline',async()=>{
+ const f=await fixture('shape'),{s,doc,l}=f;await f.click(10,10);await f.click(40,10);const {deleteLayers,newLayer}=await import('../../src/app/ops/layerOps');
+ await act(async()=>deleteLayers());expect(doc.getLayer(l.id)).toBeNull();expect(s.history.entries.map(e=>e.label)).toEqual(['Open','Pen','Delete Layer']);
+ s.history.undo();expect((doc.getLayer(l.id) as any).path.subpaths[0].knots).toHaveLength(2);s.history.undo();expect((doc.getLayer(l.id) as any).path.subpaths).toHaveLength(0);s.history.redo();
+ await act(async()=>{s.setActive(l.id);});await f.click(50,30);await f.click(60,30);const index=s.history.index;
+ await act(async()=>newLayer());expect(s.history.entries.slice(index+1).map(e=>e.label)).toEqual(['Pen','New Layer']);expect(penSession(s)).toBeNull();
+});

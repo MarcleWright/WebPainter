@@ -55,6 +55,7 @@ function down(e: KeyboardEvent) {
   if (useApp.getState().dialogs.length || document.querySelector('[role="dialog"],[role="menu"]')) return;
   const host = editor.hostFactory?.();
   if (editor.hasPendingToolInteraction() && !toolAllowed()) {e.preventDefault();return;}
+  if(host&&editor.currentTool?.id==='pen'&&['Control','Meta','Alt','Shift'].includes(e.key)&&!inputBlocked()&&toolAllowed()){if(editor.currentTool.keyDown?.(host,e)){e.preventDefault();return;}}
   const busy = !!editor.currentTool?.busy?.();
   // Local confirmation/cancellation and point removal retain ownership even while busy.
   // Move arrows wait until the active pointer transaction ends.

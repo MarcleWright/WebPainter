@@ -123,6 +123,7 @@ export function CanvasView() {
   const ants = useRef<AntsCache | null>(null);
   const pointerDown = useRef(false);
   const lastPointer = useRef<ToolPointer | null>(null);
+  const capture = useRef<{element:HTMLElement;id:number}|null>(null);
   const guideDrag = useRef<{ id: string | null; orientation: 'horizontal' | 'vertical'; start: number } | null>(null);
   const panDrag = useRef<{ x: number; y: number; session: NonNullable<typeof editor.active>; pointer: number } | null>(null);
   const pointerSession = useRef<typeof editor.active>(null);
@@ -588,10 +589,22 @@ export function CanvasView() {
     setInputPointerBusy(true);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     activeTool.current = t;
+    capture.current={element:e.target as HTMLElement,id:e.pointerId};
     t.down?.(h, p);
     overlayDirty.current = true;
   };
   const activeTool = useRef<Tool | null>(null);
+
+  useEffect(()=>{
+    const clear=()=>{
+      if(activeTool.current?.id!=='pen')return;
+      pointerDown.current=false;pointerSession.current=null;activeTool.current=null;setInputPointerBusy(false);
+      const own=capture.current;capture.current=null;
+      if(own?.element.hasPointerCapture?.(own.id))own.element.releasePointerCapture(own.id);
+      overlayDirty.current=true;
+    };
+    window.addEventListener('celenne:penInterrupted',clear);return()=>window.removeEventListener('celenne:penInterrupted',clear);
+  },[]);
 
   // The cursor position feeds the status bar and Info panel (which samples the composite), so it is
   // published at most once per frame and only when the pixel under the pointer changes.
@@ -687,6 +700,12 @@ export function CanvasView() {
     if (p) t?.up?.(h, p);
     else t?.cancel?.(h);
     overlayDirty.current = dirty.current = true;
+  };
+
+  const onPointerCancel = (e:React.PointerEvent) => {
+    const tool=activeTool.current,h=host();
+    if(pointerDown.current&&tool?.cancelPointer&&h){tool.cancelPointer(h);pointerDown.current=false;pointerSession.current=null;activeTool.current=null;capture.current=null;setInputPointerBusy(false);overlayDirty.current=dirty.current=true;}
+    else onPointerUp(e);
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
@@ -857,8 +876,8 @@ export function CanvasView() {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onLostPointerCapture={(e) => { if (pointerDown.current) onPointerUp(e); }}
+          onPointerCancel={onPointerCancel}
+          onLostPointerCapture={(e) => { if (pointerDown.current) onPointerCancel(e); }}
           onPointerLeave={() => { ui.set((s) => ({ cursor: { ...s.cursor, inside: false } })); overlayDirty.current = true; }}
           onDoubleClick={onDoubleClick}
           onWheel={onWheel}

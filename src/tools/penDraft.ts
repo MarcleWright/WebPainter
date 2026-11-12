@@ -49,7 +49,7 @@ export class PenDraft {
   }
   allowed(output=false):boolean {
     const s=this.session,t=this.target,l=t.kind==='path'?null:s.doc.getLayer(t.layerId);
-    return this.valid()&&s.canEdit()&&(output||!s.outputPending&&!s.closePending)&&access('tool:pen').enabled&&(!l||!l.locks.all&&(t.kind==='vectorMask'||!l.locks.pixels));
+    return this.valid()&&s.canEdit()&&(output||!s.outputPending&&!s.closePending)&&access('tool:pen').enabled&&(t.kind!=='vectorMask'||access('feature:masks').enabled)&&(!l||!l.locks.all&&(t.kind==='vectorMask'||!l.locks.pixels));
   }
   changed(){this.expected=JSON.stringify(this.path);this.writing=true;try{this.edit.changed();}finally{this.writing=false;}const l=this.target.kind==='path'?null:this.doc.getLayer(this.target.layerId);if(l)this.geometry={x:l.x,y:l.y};this.host.redraw();ui.bump('historyRev');}
   state(sp:number):PenState{return {path:clonePath(this.path),sp};}

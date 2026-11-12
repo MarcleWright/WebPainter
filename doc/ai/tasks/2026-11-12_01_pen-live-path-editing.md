@@ -100,7 +100,7 @@
 | 阶段 | 范围与阶段结果 | 状态 |
 | --- | --- | --- |
 | P1 会话与历史基础 | 当前目标/续画末端/手势 owner、共享点编辑计算、局部历史与统一 Action 路由、历史面板入口保护及主动切换结束检查；补目标/撤销测试 | 已实施并过自动门槛，独立复审/人工 Pending |
-| P2 临时编辑与反馈 | Ctrl/Alt/Ctrl+Alt、闭合统一命中/光标/高亮/预览、修饰键及 pointer 生命周期；完成连续绘制流程 | Pending |
+| P2 临时编辑与反馈 | Ctrl/Alt/Ctrl+Alt、闭合统一命中/光标/高亮/预览、修饰键及 pointer 生命周期；完成连续绘制流程 | 已实施并过自动门槛，真实窗口/人工 Pending |
 | P3 集成验证 | 关联回归、生产构建、隔离当前源码窗口与人工检查；更新 owner 文档及任务证据 | Pending |
 
 已按本轮 Owner 授权 P1→P2→P3 串行、各阶段独立本地提交。不得因本任务创建自动执行循环或自动 reviewer 记录。
@@ -149,4 +149,16 @@
 - 目标/创建说明：Work/Saved Path、Shape、Vector Mask 的局部/文档历史及属性保留均有 fixture；空 Work Path 沿既有 getTarget 创建后保留，可供零点 redo，不新增重复目标；新 Shape 保留原独立 CreateLayer 历史，最终 Pen 编辑另一步，重复结束不重复创建/提交。完整 UI 模式与属性矩阵留待 P3/人工。
 - 验证：新增实际 App/HistoryPanel/PathsPanel/LayersPanel/Canvas 文档标签 10 项（含四类目标、重绑 Action、零点、保护拒绝、外部替换、失败提交与 Shape 创建）。`npm exec -- vitest run tests/input tests/engine/moveSelection.test.ts tests/gpu/moveOutput.test.ts tests/engine/access.test.ts tests/engine/layerAccessUI.test.tsx --reporter=dot`：**9 文件 134/134 通过**；typecheck 通过。日志本地忽略目录 `doc/material/local/pen-live-2026-11-12/p1-input.log`。
 - 首轮挂载测试暴露结束后无显式 owner UI 通知，已补释放后的 historyRev；夹具把图层 mousedown 写成 click 及缺失 ImageData，已改为实际 mousedown、仅隔离缩略绘制。最初 7/9 后为最终通过；既有 wasm 路径/React act 警告保留，不以这些警告代替失败分析。
-- P1 提交为本节所在提交，hash 后续阶段回填；Ctrl/Alt 临时操作、闭合视觉与完整 pointer 清理在 P2 完成，真实窗口/IME/DPR 和 Owner 验收 Pending。
+- P1 提交 `431989f`；Ctrl/Alt 临时操作、闭合视觉与完整 pointer 清理在 P2 完成，真实窗口/IME/DPR 和 Owner 验收 Pending。
+
+### P2 实施与验证（2026-11-12）
+
+- 当前草稿内 Ctrl 临时直接选择，Alt 点击锚点收柄、从锚点拖动成对拉柄、拖既有柄单侧编辑；Ctrl+Alt 锚点按直接选择、柄按独立编辑。closest 屏幕命中复用原 hitKnot，重合锚点/柄的同距离命中保留 anchor 优先；只检索当前 PathTarget，不命中其他已完成路径。空白编辑点击只清临时选择。
+- pointerdown 冻结 kind/目标点与柄、原点/快照；续画 spIndex 独立，临时选择旧点不改变末端。拖动中松 Ctrl/Alt 不换 owner；方向柄 Alt 解耦为单向 sticky，之后松 Alt 不恢复联动；普通新增点拉柄也避免解除后跳回。Alt 原有柄锚点可拖动，不在 down 提交收柄。共享几何同样用于独立 Direct Selection，未调用独立工具提交。
+- closing 一个判定共同拥有 cursor/hover/预览/实际 down：普通 Pen、当前开放子路径>1点、无手势、8 CSS px 内。圆圈 cursor、起点圈及 rubber-band 终点一致；闭合预览使用首点入柄。Ctrl/Alt 优先不显示闭合，不重复添加首点；结束即时清 cursor/选择/hover。
+- 仅 Pen 修饰键在已有 App owner 准入后转发，keydown/keyup 不移动鼠标也更新 cursor；文本/IME/菜单/Modal/access/保存保护仍优先，不 setTool、不改工具组选项。空闲 Space 保留原 pan，忙碌时不接管手势。
+- Pen 专用 interruption 事件只清 Canvas 原 Pen capture/activeTool/pointerBusy；Modal/失焦/文本或组合开始取消未完成手势、保留局部栈。新增可选 cancelPointer，只有 Pen 实现；Canvas pointercancel/lostcapture 对 Pen 先取消且不先 up。普通 Pen 加点手势同样取消（这是配套行为变化），其他工具继续原有 up 约定。迟到尾事件不落新点。
+- R2 入口复核追加 layerOps 新建/复制/删除/组与合并/栅格化/矢量蒙版等会替换目标或切目标的 owner 检查，setWorkPath 与回放 Shape/Text 创建也先 finishPen；不是重构它们的算法。实际删除 Shape 检查历史为 Pen→Delete Layer；新建为 Pen→New Layer，避免先改历史基线再补交草稿。
+- 测试覆盖 A1 连续绘制/编辑/继续/编辑起点/闭合、Ctrl+Alt、松键手势尾段、sticky 解耦、Alt 已有柄转换、空白与 no-op、平滑柄精确拖回起点、25%/100%/200% CSS 命中与预览、按键不移动更新 cursor、文本/组合/Modal/失焦、真实 Canvas cancel/lostcapture、四类目标外部替换、初始锁定/access 和独立 Direct Selection/Convert Point 历史。
+- 验证：P-INPUT/P-MOVE 同 P1 联合集 **9 文件 149/149 通过**；typecheck 通过；再补结束 cursor 即时清理断言，钢笔定向 **25/25 通过**。原始日志 p2-input-final.log、p2-final.log 在本地忽略材料目录。真实 OS Alt/AltTab、IME、高 DPR 尚未验收，P3 继续当前源码窗口与门槛。
+- P2 提交为本节所在阶段提交，hash P3 回填；无新依赖、文档格式或渲染核心调整，未修改相邻仓库。

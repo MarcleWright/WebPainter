@@ -52,6 +52,8 @@ export interface Tool {
   keyUp?(h: ToolHost, e: KeyboardEvent): boolean;
   /** Cancels an in-progress interaction (Esc, tool switch). */
   cancel?(h: ToolHost): void;
+  /** Optional gesture-only cancellation; tools without it keep their existing pointer-up convention. */
+  cancelPointer?(h: ToolHost): void;
   /** Commits an in-progress interaction (Enter). */
   commit?(h: ToolHost): void;
   cursor?(h: ToolHost, p: ToolPointer | null): string;

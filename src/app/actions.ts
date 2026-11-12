@@ -1,4 +1,4 @@
-import {penSession} from '../tools/penSession';
+import {penSession,finishPen} from '../tools/penSession';
 /**
  * Action registry. Menus, keyboard shortcuts, the command palette, recorded macros and plugins
  * all invoke application functionality through these ids.
@@ -513,7 +513,7 @@ reg('edit.freeTransformApply', 'Apply Transform', async (a) => {
 }, { ...replayOnly, enabled: hasLayer });
 reg('shape.create', 'Create Shape', (a) => {
   const s = editor.active;
-  if (!s || !a?.path) return;
+  if (!s || !a?.path || !finishPen(s)) return;
   const l = createShapeLayer(nextLayerName(s, String(a.name ?? 'Shape').replace(/\s+\d+$/, '')), structuredClone(a.path as never), (a.origin as never) ?? null, s.doc.canvas.bitDepth);
   if (a.fill) l.fill = structuredClone(a.fill as never);
   if (a.stroke) l.stroke = structuredClone(a.stroke as never);
@@ -525,7 +525,7 @@ reg('shape.create', 'Create Shape', (a) => {
 reg('type.create', 'Create Text', (a) => {
   const s = editor.active;
   const text = a?.text as { text?: string } | undefined;
-  if (!s || !text?.text) return;
+  if (!s || !text?.text || !finishPen(s)) return;
   const l = createTextLayer(text.text, s.doc.canvas.bitDepth, 0, 0);
   l.text = structuredClone(text as never);
   l.name = text.text.slice(0, 40);

@@ -1,3 +1,4 @@
+import {finishPen} from '../../tools/penSession';
 import {access} from '../access';
 /** Layer menu / Layers panel operations. Every change is recorded as an undoable command. */
 import { plateCount } from '../../color/plates';
@@ -54,6 +55,7 @@ import { emptyEffects, normalizeEffects } from '../../effects/types';
 // ---------------------------------------------------------------------------------------------
 export function newLayer(name?: string): void {
   if(!(access('action:layer.new').enabled))return;
+  if(!finishPen(editor.active))return;
   const s = need();
   if (!s) return;
   const l = createPixelLayer(name ?? nextLayerName(s), s.doc.canvas.bitDepth);
@@ -64,6 +66,7 @@ export function newLayer(name?: string): void {
 
 export function newGroup(fromSelection = false): void {
   if(!(access('action:layer.'+(fromSelection?'groupLayers':'newGroup')).enabled))return;
+  if(!finishPen(editor.active))return;
   const s = need();
   if (!s) return;
   const g = createGroupLayer(nextLayerName(s, 'Group'));
@@ -96,6 +99,7 @@ export function topLevelSelection(s: DocumentSession): Layer[] {
 
 export function duplicateLayers(): void {
   if(!(access('action:layer.duplicate').enabled))return;
+  if(!finishPen(editor.active))return;
   const s = need();
   if (!s) return;
   const layers = topLevelSelection(s);
@@ -116,6 +120,7 @@ export function duplicateLayers(): void {
 
 export function deleteLayers(): void {
   if(!(access('action:layer.delete').enabled))return;
+  if(!finishPen(editor.active))return;
   const s = need();
   if (!s) return;
   const layers = topLevelSelection(s);
@@ -237,6 +242,7 @@ export function arrange(dir: 'front' | 'forward' | 'backward' | 'back'): void {
 
 export function ungroup(): void {
   if(!(access('action:layer.ungroup').enabled))return;
+  if(!finishPen(editor.active))return;
   const r = needLayer();
   if (!r || r.l.kind !== 'group') return;
   const { s } = r;
@@ -290,6 +296,7 @@ function renderLayers(s: DocumentSession, layers: Layer[], region?: Rect): { ras
 
 export function mergeDown(): void {
   if(!(access('action:layer.mergeDown').enabled))return;
+  if(!finishPen(editor.active))return;
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
@@ -311,6 +318,7 @@ export function mergeDown(): void {
 }
 
 export function mergeLayers(layers: Layer[], name?: string): void {
+  if(!finishPen(editor.active))return;
   const s = need();
   if (!s || !layers.length) return;
   const visible = layers.filter((l) => l.visible);
@@ -328,6 +336,7 @@ export function mergeLayers(layers: Layer[], name?: string): void {
 
 export function mergeVisible(): void {
   if(!(access('action:layer.mergeVisible').enabled))return;
+  if(!finishPen(editor.active))return;
   const s = need();
   if (!s) return;
   const visible = s.doc.root.children.filter((l) => l.visible);
@@ -337,6 +346,7 @@ export function mergeVisible(): void {
 
 export function flattenImage(): void {
   if(!(access('action:image.flatten').enabled))return;
+  if(!finishPen(editor.active))return;
   const s = need();
   if (!s) return;
   const hidden = s.doc.allLayers().filter((l) => !l.visible).length;
@@ -365,6 +375,7 @@ export function flattenImage(): void {
 // ---------------------------------------------------------------------------------------------
 export function addMask(mode: 'revealAll' | 'hideAll' | 'revealSelection' | 'hideSelection' = 'revealAll'): void {
   if(!(access('action:layer.addMask').enabled&&access('action:layer.mask.'+mode).enabled))return;
+  if(!finishPen(editor.active))return;
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
@@ -406,6 +417,7 @@ export function addMask(mode: 'revealAll' | 'hideAll' | 'revealSelection' | 'hid
 
 export function deleteMask(apply = false): void {
   if(!(access('action:layer.'+(apply?'applyMask':'deleteMask')).enabled))return;
+  if(!finishPen(editor.active))return;
   const r = needLayer();
   if (!r || !r.l.mask) return;
   const { s, l } = r;
@@ -465,6 +477,7 @@ export function invertMask(): void {
 
 export function addVectorMask(fromPath = true): void {
   if(!(access('action:layer.addVectorMask').enabled))return;
+  if(!finishPen(editor.active))return;
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
@@ -481,6 +494,7 @@ export function addVectorMask(fromPath = true): void {
 
 export function deleteVectorMask(): void {
   if(!(access('action:layer.deleteVectorMask').enabled))return;
+  if(!finishPen(editor.active))return;
   const r = needLayer();
   if (!r || !r.l.vectorMask) return;
   r.s.push(new SetVectorMaskCommand('Delete Vector Mask', r.l.id, r.l.vectorMask, null));
@@ -491,6 +505,7 @@ export function deleteVectorMask(): void {
 // ---------------------------------------------------------------------------------------------
 export function newAdjustmentLayer(type: AdjustmentType, clip = false): void {
   if(!(access('action:layer.newAdjustment').enabled&&access('action:layer.newAdjustment.'+type).enabled))return;
+  if(!finishPen(editor.active))return;
   if(!access('adjustment:'+type).enabled)return;
   const s = need();
   if (!s) return;
@@ -507,6 +522,7 @@ export function newAdjustmentLayer(type: AdjustmentType, clip = false): void {
 
 export function newFillLayer(fill: FillContent): void {
   if(!(access('action:layer.newFill').enabled&&access('action:layer.newFill.'+fill.type).enabled))return;
+  if(!finishPen(editor.active))return;
   if(!access('fill:'+fill.type).enabled)return;
   const s = need();
   if (!s) return;
@@ -524,6 +540,7 @@ export function newFillLayer(fill: FillContent): void {
 // ---------------------------------------------------------------------------------------------
 export function rasterize(what: 'layer' | 'style' = 'layer'): void {
   if(!(access('action:layer.'+(what==='style'?'rasterizeStyle':'rasterize')).enabled))return;
+  if(!finishPen(editor.active))return;
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
@@ -589,6 +606,7 @@ export function convertToSmartObject(): void {
   if(!access('action:layer.convertToSmartObject').enabled||!access('feature:smartObject').enabled)return;
   const s = need();
   if (!s) return;
+  if(!finishPen(s))return;
   const layers = topLevelSelection(s);
   if (!layers.length) return;
   let bounds: Rect | null = null;
@@ -749,6 +767,7 @@ export function layerVia(cut: boolean): void {
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
+  if(!finishPen(s))return;
   if (!hasRaster(l) || l.kind !== 'pixel') {
     ui.toast('info', 'Layer via Copy/Cut requires a pixel layer.');
     return;
