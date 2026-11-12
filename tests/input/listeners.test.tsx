@@ -471,3 +471,33 @@ it('P3 modal: Tab wraps in the top shell and document switch drops captured navi
  await act(async()=>{next=inputSession();point('pointermove',180);point('pointerup',180);backdrop.dispatchEvent(new WheelEvent('wheel',{clientX:100,clientY:100,deltaY:20,bubbles:true,cancelable:true}));});
  expect(session.view.panX).toBe(original);expect(next.session.view.panX).toBe(0);expect(next.session.view.panY).toBe(0);expect(next.session.history.canUndo).toBe(false);
 });
+
+it.each(['ok','cancel','ordinary'])('F2 default Space stays with focused %s button and never arms backdrop pan',async(kind)=>{
+ let confirmed=0,closed=0,ordinary=0;const {session}=await mount(<Modal title="F2 default buttons" onOk={()=>confirmed++} onClose={()=>closed++}><button data-ordinary onClick={()=>ordinary++}>Ordinary</button></Modal>);
+ const canvas=container.querySelector<HTMLElement>('.viewport')!,backdrop=container.querySelector('.modal-backdrop')!;
+ vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,right:400,bottom:300,width:400,height:300,x:0,y:0,toJSON(){}});
+ const selector=kind==='ok'?'.modal-foot .primary':kind==='cancel'?'.modal-foot > .btn:not(.primary)':'[data-ordinary]';
+ const button=container.querySelector<HTMLButtonElement>(selector)!;expect(keymap.binding('Space')?.ids[0]).toBe('input.pan');button.focus();
+ let down!:KeyboardEvent,repeat!:KeyboardEvent,up!:KeyboardEvent;
+ await act(async()=>{
+   down=key(button,' ',{code:'Space'});repeat=key(button,' ',{code:'Space',repeat:true});
+   pointer(backdrop,'pointerdown',100,100);pointer(backdrop,'pointermove',140,120);pointer(backdrop,'pointerup',140,120);
+   up=new KeyboardEvent('keyup',{key:' ',code:'Space',bubbles:true,cancelable:true});button.dispatchEvent(up);
+ });
+ expect(down.defaultPrevented).toBe(false);expect(repeat.defaultPrevented).toBe(false);expect(up.defaultPrevented).toBe(false);
+ expect(session.view.panX).toBe(0);expect(session.view.panY).toBe(0);expect(session.history.canUndo).toBe(false);
+ // jsdom has no native keyboard activation. Native Space -> one click is checked in production smoke.
+ expect(confirmed+closed+ordinary).toBe(0);
+});
+it.each(['Enter','Escape'])('F2 modal %s precedes a rebound held key on non-text navigation',async(value)=>{
+ let confirmed=0,closed=0;const {session}=await mount(<Modal title="F2 precedence" onOk={()=>confirmed++} onClose={()=>closed++}><div data-nav tabIndex={0}>Navigation</div></Modal>);
+ keymap.set('input.pan',[value]);const nav=container.querySelector('[data-nav]')!;await act(async()=>{key(nav,value);await new Promise(r=>setTimeout(r,5));});
+ expect(confirmed).toBe(value==='Enter'?1:0);expect(closed).toBe(value==='Escape'?1:0);expect(session.view.panX).toBe(0);
+});
+it('F2 rebound held F6 still pans from a non-text modal region',async()=>{
+ const {session}=await mount(<Modal title="F2 rebound pan" onClose={()=>{}}><div data-nav tabIndex={0}>Navigation</div></Modal>);
+ const canvas=container.querySelector<HTMLElement>('.viewport')!,backdrop=container.querySelector('.modal-backdrop')!;
+ vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,right:400,bottom:300,width:400,height:300,x:0,y:0,toJSON(){}});
+ keymap.set('input.pan',['F6']);await act(async()=>{key(container.querySelector('[data-nav]')!,'F6',{code:'F6'});pointer(backdrop,'pointerdown',100,100);pointer(backdrop,'pointermove',130,110);pointer(backdrop,'pointerup',130,110);window.dispatchEvent(new KeyboardEvent('keyup',{key:'F6',code:'F6'}));});
+ expect(session.view.panX).toBe(30);expect(session.view.panY).toBe(10);expect(session.history.canUndo).toBe(false);
+});

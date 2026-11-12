@@ -199,8 +199,8 @@ Owner 已选择公共透明模态背景及受控画布交互；移动轮廓来�
 
 | 修复 | 状态 | 提交/验证 |
 | --- | --- | --- |
-| F1 羽化挖空语义与独立数值验收 | 已修复，待独立复审 | 本节所在 F1 提交；定向 30/30、typecheck 通过；hash 在 F2 回填 |
-| F2 控件 Space 与 held 导航归属 | Pending | 待 coder 执行 |
+| F1 羽化挖空语义与独立数值验收 | 已修复，待独立复审 | `4fe3c42`；定向 30/30、typecheck 通过 |
+| F2 控件 Space 与 held 导航归属 | 已修复，待独立复审 | 本节所在 F2 提交；最终 190/190、构建及原生窗口按钮 Space 检查通过；hash 提交后回填 |
 
 ### F1 执行记录（2026-11-12）
 
@@ -210,3 +210,15 @@ Owner 已选择公共透明模态背景及受控画布交互；移动轮廓来�
 - 命令：`npm exec -- vitest run tests/engine/moveSelection.test.ts tests/engine/moveSelectionReference.test.ts tests/gpu/floatingSelection.test.ts --reporter=dot`，3 文件 **30/30 通过**；`npm run typecheck`、`git diff --check` 通过。保留既有低 Alpha、外部接管及失败回滚检查。原始日志：本地忽略目录 `doc/material/local/dialog-selection-fixes-2026-11-12/f1-final.log`。
 - 首轮新增 GPU 重叠断言误把 compositeRead 的预乘 RGBA 当成直通道（28/29）；核对现有 compositor 接口后用固定预乘期望 [.5,0,0,.5; .5,0,.25,.75; 0,0,.25,.25] 修正测试，再加 GPU 非重叠例后为上述 30/30。没有改产品合成接口或放宽数值门槛。
 - owner 规则同步纠正 INTERACTION_RULES、INTERACTIVE_PREVIEW 与 PhotoCraft 对照；P1–P3 旧过程保留为历史。F1 实现复审、真实作品/4K/IME 和 Owner 体验仍 Pending；F2 接续实施，最终关联集/构建/文档门槛在两项完成后执行。
+
+### F2 执行记录与最终交接（2026-11-12）
+
+- Modal 只调整 held 分支顺序：局部已消费/IME、Tab、模态 Enter/Esc、文本及控件激活/导航先处理；剩余有效 held 才可导航。默认绑定、App/Canvas 架构、其他工具与中键/滚轮不移焦规则均不改。未触及填充性能、旧 R4 或保存关闭主线。
+- 新增实际 App/Modal/Canvas DOM 传播用例 6 项：默认 Space 分别聚焦 OK、Cancel、普通按钮，keydown、repeat、keyup 不 preventDefault；按住时背景左拖不平移、不产生历史。测试不手工 click 证明浏览器激活，明确 jsdom 没有该默认行为。另覆盖重绑 held 的 Enter/Esc 仍由 Modal 确认/取消优先，以及非文本区域 F6 held 导航正例。原默认非文本 Space、文本/IME、局部消费、控件导航、自定义绑定和栈/失焦/popup 回归保留。
+- 首轮新 DOM 测试前置断言误用 Binding.id（实际为 ids[0]），导致 3 失败/66 通过及 typecheck 阻断；改正测试 API 后，最终集合通过。产品代码仅为上述必要分发排序，不因测试放宽默认事件准入。
+- 原生键盘检查：当前源码 `npm run build` 后，正常 main/preload/app://，独立 `doc/material/local/dialog-selection-fixes-2026-11-12/space-userData` 和 space-temp，Windows、Electron 44.4.5 / Chromium 152.0.7977.130，运行时 webgpu (GPU compositing)。先创建活动文档，确保 Modal held 准入真实有效；再打开真实 New Document，分别聚焦普通 Swap、Cancel、Create（公共 OK）按钮，通过 Electron sendInputEvent 发送两次 Space keydown/一次 keyup。三组均 keydown/keyup defaultPrevented=false、**native click=1**；Swap 只交换一次尺寸且不提交，Cancel 不新建文档，Create 仅新建一份；原背景文档 history/view 不变。非文本弹窗 shell 的默认 Space+原生左拖仍平移，松 Space 后尾段继续由 pan 拥有，最终 (36,18)，不新增编辑历史。没有手工 dispatch click 代替被验按钮的键盘激活。
+- 原生窗口结果：`native-space.log` errors=[]、Electron exit 0；查看本地截图 space-swap.png / space-held-navigation.png。窗口日志重复 keydown 的 repeat 标记为 false，不把它称为真实 OS 长按自动重复验收；DOM 已覆盖 repeat=true。原生输入/有限截图是自动集成证据，真实 IME 与完整人工矩阵仍 Pending。
+- 最终验证命令（去重联合）：`npm exec -- vitest run tests/input tests/engine/moveSelection.test.ts tests/engine/moveSelectionReference.test.ts tests/gpu/floatingSelection.test.ts tests/gpu/compositor.test.ts tests/gpu/moveOutput.test.ts tests/engine/access.test.ts tests/engine/layerAccessUI.test.tsx --reporter=dot`，涵盖 P-INPUT/P-MOVE/reference/真实 WebGPU floatingSelection/compositor，**11 文件 190/190 通过**；GPU/CPU compositor 最大差异报告 1.49e-6。`npm run build`（typecheck、renderer、Electron）通过。原始日志 regression-final.log、build-final.log、native-space.log 均在上述本地忽略材料目录；177/177 不用作修复后证据。
+- P-DOC：UTF-8 无 BOM、修改文档相对链接、材料忽略、上游 docs/根 README/CHANGELOG/NOTES 未改及 git diff --check 通过，详见本地 doc-check.log。修复时 F1 owner Alpha 规则、F2 输入规则及短索引已更新，旧 P1–P3 过程保留。
+- 交独立复审：以 `f1e54b9..本轮交接HEAD` 检查两项限定修复，并结合原完整实现源码/任务；重点查显式固定数值是否独立、GPU 预乘/直通道容差、零位移私有预览丢弃，以及默认控件 Space 与重绑 held 的 owner 顺序。F1 `4fe3c42`；F2 hash 在独立文档回执中回填。修复状态为**待独立复审**，不自行宣称实现/Owner 整体验收 Approved。
+- 人工缺口继续保留：A1 16 调整/五类预览逐项颜色，A2–A4 中文 IME/候选窗口/完整原生控件与双层栈/焦点，真实复杂作品、4K 中/大选区持续跟手与完整设备矩阵、Owner 体验均 **Pending / 未执行项 Inconclusive**。本轮未重跑 4K 体验、不报告 FPS；旧 R4 仍延期。未修改相邻仓库，未推送/合并/发布。

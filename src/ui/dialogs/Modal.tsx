@@ -70,7 +70,6 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
       if (!controls.length || next < 0 || next >= controls.length) {e.preventDefault();(controls[e.shiftKey ? controls.length-1 : 0] ?? ref.current)?.focus();}
       return;
     }
-    if (!isTextTarget(e.target) && keymap.binding(chordFromEvent(e.nativeEvent))?.kind==='held' && valid() && !popup()) {e.preventDefault();if(!e.repeat)held.current=e.code||e.key;return;}
     const target = e.target instanceof Element ? e.target : null;
     const control = target?.closest('button,a[href],[role="button"],[role="checkbox"],[role="radio"],[role="switch"],[role="slider"],[role="spinbutton"],[role="combobox"],[role="listbox"],[role="option"],[role="textbox"],[role="menuitem"]');
     if (e.key === 'Escape') {e.preventDefault();if (!e.repeat) onClose();return;}
@@ -91,6 +90,8 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
     const controlNavigation = [' ','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key);
     const textLikeControl = control?.matches('[role="textbox"],[role="combobox"],[role="listbox"],[role="option"],[role="menuitem"]');
     if (e.key === 'Tab' || isTextTarget(e.target) || textLikeControl || control && controlNavigation) return;
+    // Only keys unclaimed by text, modal confirmation or native controls may hold navigation.
+    if (!isTextTarget(e.target) && keymap.binding(chordFromEvent(e.nativeEvent))?.kind==='held' && valid() && !popup()) {e.preventDefault();if(!e.repeat)held.current=e.code||e.key;return;}
     const bound = keymap.lookup(chordFromEvent(e.nativeEvent));
     if (bound && MODAL_VIEW.has(bound)) {e.preventDefault(); void run(bound);}
   };
