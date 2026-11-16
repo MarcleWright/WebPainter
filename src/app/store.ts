@@ -28,6 +28,7 @@ export interface ProgressState {
   label: string;
   fraction: number | null;
   cancel?: () => void;
+  immediate?: boolean;
 }
 
 export interface Toast {
@@ -168,9 +169,9 @@ export const ui = {
     useApp.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
   },
   /** Starts a progress indicator; returns an updater. */
-  progress(label: string, cancel?: () => void): { update: (f: number | null, label?: string) => void; done: () => void } {
+  progress(label: string, cancel?: () => void, immediate = false): { update: (f: number | null, label?: string) => void; done: () => void } {
     const id = seq++;
-    useApp.setState((s) => ({ progress: [...s.progress, { id, label, fraction: null, cancel }] }));
+    useApp.setState((s) => ({ progress: [...s.progress, { id, label, fraction: null, cancel, immediate }] }));
     return {
       update: (f, l) => useApp.setState((s) => ({ progress: s.progress.map((p) => (p.id === id ? { ...p, fraction: f, label: l ?? p.label } : p)) })),
       done: () => useApp.setState((s) => ({ progress: s.progress.filter((p) => p.id !== id) })),

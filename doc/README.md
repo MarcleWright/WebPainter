@@ -7,11 +7,13 @@
 | 你想了解 | 主要文档 |
 | --- | --- |
 | 项目面向谁、与 ADA 的关系 | [产品定位](product/PRODUCT_BRIEF.md) |
-| 嵌入端口、首版工具及 native 规格输入 | [Embedded Port v1](architecture/EMBEDDED_PORT_V1.md), 03A 已实施待 review，native 未实施 |
-| ADA 首版接什么、以后怎样扩展 | [集成架构](architecture/ADA_INTEGRATION.md)，03A/03C 有限原型，正式闭环未实施 |
-| ADA 共用工作与承载方案如何拆任务 | [父任务 03 与 03A-03F](ai/tasks/2026-11-06_03_ada-integration-architecture.md#ordered-subtasks-and-dependencies), 03C 有限原型 review Approved、Owner 已选 iframe，其余未实施 |
+| 快捷键统一、PS 常用绑定与分阶段实施 | [输入约定](design/KEYBOARD_INPUT.md)、[快捷键任务 P1-P5](ai/tasks/2026-11-10_01_shortcut-unification.md), R1–R3 review 已通过（Owner 确认）；R4 延期，人工/Owner Pending |
+| 嵌入端口、首版工具及 native 规格输入 | [Embedded Port v1](architecture/EMBEDDED_PORT_V1.md), 现行 port3/native1/policy1；新包待B独立review后构建 |
+| ADA 首版接什么、以后怎样扩展 | [集成架构](architecture/ADA_INTEGRATION.md)，iframe配套闭环已有有限技术证据，人工/设备验收仍Pending |
+| ADA 共用工作与承载方案如何拆任务 | [父任务 03 与 03A-03F](ai/tasks/2026-11-06_03_ada-integration-architecture.md#ordered-subtasks-and-dependencies), 历史阶段任务及配套证据；Owner已选iframe |
 | WP 独立版、嵌入分支与 ADA 如何更新 | [分支和更新路线](architecture/ADA_INTEGRATION.md#21-仓库分支和更新路线), 已建 integration/embedded 并有阶段提交，未发布 |
 | 为什么优化 4K、先做什么、怎样算有效 | [产品性能方向](product/PERFORMANCE_DIRECTION.md) |
+| 当前Move/Ctrl+T预览、后台确认与输出交接 | [交互预览架构](architecture/INTERACTIVE_PREVIEW.md) |
 | 拖动时看什么、什么时候落定、怎样撤销 | [交互约定](design/INTERACTION_RULES.md) |
 | 原有结构与 fork 的边界 | [架构入口](architecture/ARCHITECTURE_OVERVIEW.md) |
 | 预览与正式数据如何分工 | [交互预览主线](architecture/INTERACTIVE_PREVIEW.md) |
@@ -23,6 +25,9 @@
 | 本地运行和远程配置 | [开发环境](engineering/DEV_SETUP.md) |
 | 怎样验证、哪些还没有验证 | [验证约定](engineering/TESTING.md) |
 | 当前已知缺口 | [已知问题](engineering/KNOWN_ISSUES.md) |
+| Ctrl+Enter 路径转选区三键、共享入口与草稿结束 | [路径转选区任务](ai/tasks/2026-11-12_02_path-selection-shortcuts.md)，P1–P3、F1–F2 及文字工具隐藏路径补漏复审 Approved；IME/设备/人工与 Owner Pending |
+| 钢笔未闭合路径 Ctrl/Alt 即时编辑与闭合提示 | [钢笔任务](ai/tasks/2026-11-12_01_pen-live-path-editing.md)，方案复审通过后 P1–P3 已实施，待独立实现复审；完整 IME/窗口/DPR 与 Owner Pending |
+| 透明调整窗口、受控画布导航与移动选区贴合 | [交互对齐任务](ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md)，P1–P3 原实现审查 Changes Requested；限定 F1–F2 已修复并补测，待独立复审，人工/Owner Pending |
 | 后续 AI 如何继续 | [当前上下文](ai/AI_CONTEXT.md)、[协作规则](ai/AI_WORKFLOW.md)、[进展索引](ai/DEV_LOG.md) |
 | 原始证据 | [材料入口](material/README.md) |
 
@@ -41,4 +46,4 @@
 - **建议 / 待验证**: 后续候选方案和指标, 不代表用户已授权实施。
 - **已实现 / 已验收**: 必须各有代码和相应验证证据。
 
-Task 02 已按受限性能优化原型判为 Go: 自动检查、独立复审与用户实际试用支持其可用性。完整人工场景和正式化验证仍有未覆盖项; 默认接入已实现但复审要求修复保存/关闭问题, 关联任务及人工与发布验收见上表。品牌替换及正式 ADA 作品闭环未实施；03A/03C 有限原型状态见上表。
+Task 02 已按受限性能优化原型判为 Go: 自动检查、独立复审与用户实际试用支持其可用性。完整人工场景和正式化验证仍有未覆盖项; 默认接入已实现但复审要求修复保存/关闭问题, 关联任务及人工与发布验收见上表。品牌替换未实施；ADA作品闭环有限技术证据及人工限制见现行端口/03D任务。

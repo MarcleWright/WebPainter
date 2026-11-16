@@ -1,3 +1,4 @@
+import {penSession,finishPen} from '../tools/penSession';
 /**
  * Action registry. Menus, keyboard shortcuts, the command palette, recorded macros and plugins
  * all invoke application functionality through these ids.
@@ -8,6 +9,7 @@ import { ui, useApp } from './store';
 import * as file from './fileOps';
 import * as layer from './ops/layerOps';
 import * as sel from './ops/selectOps';
+import {makePathSelection,pathSelectionContext,PATH_SELECTION_ACTIONS} from './ops/pathSelectionOps';
 import * as img from './ops/imageOps';
 import * as mode from './ops/modeOps';
 import { DEFAULT_BITMAP, DEFAULT_INDEXED, type BitmapOptions, type IndexedOptions } from '../color/indexed';
@@ -33,6 +35,8 @@ export interface Action {
   id: string;
   label: string;
   shortcut?: string;
+  /** Primary then alternate defaults. User arrays replace the complete list. */
+  shortcuts?: string[];
   run: (args?: Record<string, unknown>) => unknown;
   visible?: () => boolean;
   enabled?: () => boolean;
@@ -82,6 +86,7 @@ export async function run(id: string, args?: Record<string, unknown>): Promise<v
 
 const hasDoc = () => !!editor.active;
 const hasLayer = () => !!editor.active?.activeLayer();
+const canFill = () => hasLayer() && !edit.fillBlockReason();
 const hasSel = () => !!editor.active && !editor.active.doc.selection.isEmpty();
 const activeKind = () => editor.active?.activeLayer()?.kind;
 const dialog = (type: string, props?: Record<string, unknown>) => () => {
@@ -95,6 +100,21 @@ function reg(id: string, label: string, run: Action['run'], extra: Partial<Actio
 // ---------------------------------------------------------------------------------------------
 // File
 // ---------------------------------------------------------------------------------------------
+// Public input operations use the existing registry so overrides release their original keys.
+reg('color.reset', 'Default Foreground / Background', () => {editor.setForeground({r:0,g:0,b:0});editor.setBackground({r:1,g:1,b:1});}, {shortcut:'D'});
+reg('color.swap', 'Swap Foreground / Background', () => {const {fg,bg}=useApp.getState();editor.setForeground(bg);editor.setBackground(fg);}, {shortcut:'X'});
+for (const direction of [-1,1]) {
+  const suffix = direction < 0 ? 'decrease' : 'increase', key = direction < 0 ? '[' : ']';
+  reg(`brush.size.${suffix}`, `${direction < 0 ? 'Decrease' : 'Increase'} Brush Size`, () => {
+    const b=useApp.getState().brush, step=b.size<10?1:b.size<50?5:b.size<100?10:b.size<300?25:50;
+    ui.setBrush({size:Math.max(1,Math.min(5000,b.size+direction*step))});editor.hostFactory?.()?.redraw();
+  }, {shortcut:key});
+  reg(`brush.hardness.${suffix}`, `${direction < 0 ? 'Decrease' : 'Increase'} Brush Hardness`, () => {
+    ui.setBrush({hardness:Math.max(0,Math.min(1,useApp.getState().brush.hardness+direction*0.25))});editor.hostFactory?.()?.redraw();
+  }, {shortcut:`Shift+${key}`});
+}
+reg('view.togglePanels', 'Show / Hide Panels', () => window.dispatchEvent(new CustomEvent('celenne:togglePanels')), {shortcut:'Tab'});
+
 reg('file.new', 'New…', dialog('newDocument'), { shortcut: 'Ctrl+N' });
 reg('file.open', 'Open…', () => file.openDialog(), { shortcut: 'Ctrl+O' });
 reg('file.openPath', 'Open Recent', (a) => file.openPath(String(a?.path)));
@@ -126,10 +146,10 @@ reg('file.quit', 'Exit', () => window.close(), { shortcut: 'Ctrl+Q' });
 // ---------------------------------------------------------------------------------------------
 // Edit
 // ---------------------------------------------------------------------------------------------
-reg('edit.undo', 'Undo', () => edit.undo(), { shortcut: 'Ctrl+Z', enabled: () => !!editor.active?.history.canUndo });
-reg('edit.redo', 'Redo', () => edit.redo(), { shortcut: 'Shift+Ctrl+Z', enabled: () => !!editor.active?.history.canRedo });
-reg('edit.stepBackward', 'Step Backward', () => edit.undo(), { shortcut: 'Alt+Ctrl+Z', enabled: () => !!editor.active?.history.canUndo });
-reg('edit.stepForward', 'Step Forward', () => edit.redo(), { enabled: () => !!editor.active?.history.canRedo });
+reg('edit.undo', 'Undo', () => edit.undo(), { shortcut: 'Ctrl+Z', enabled: () => !!penSession(editor.active) || !!editor.active?.history.canUndo });
+reg('edit.redo', 'Redo', () => edit.redo(), { shortcut: 'Shift+Ctrl+Z', enabled: () => !!penSession(editor.active) || !!editor.active?.history.canRedo });
+reg('edit.stepBackward', 'Step Backward', () => edit.undo(), { shortcut: 'Alt+Ctrl+Z', enabled: () => !!penSession(editor.active) || !!editor.active?.history.canUndo });
+reg('edit.stepForward', 'Step Forward', () => edit.redo(), { enabled: () => !!penSession(editor.active) || !!editor.active?.history.canRedo });
 reg('edit.cut', 'Cut', () => edit.copy(false, true), { shortcut: 'Ctrl+X', enabled: hasLayer });
 reg('edit.copy', 'Copy', () => edit.copy(false), { shortcut: 'Ctrl+C', enabled: hasLayer });
 reg('edit.copyMerged', 'Copy Merged', () => edit.copy(true), { shortcut: 'Shift+Ctrl+C', enabled: hasDoc });
@@ -137,9 +157,9 @@ reg('edit.paste', 'Paste', (a) => edit.paste((a?.mode as 'normal') ?? 'normal'),
 reg('edit.pasteInPlace', 'Paste in Place', () => edit.paste('inPlace'), { shortcut: 'Shift+Ctrl+V', enabled: hasDoc });
 reg('edit.pasteInto', 'Paste Into', () => edit.paste('into'), { shortcut: 'Alt+Shift+Ctrl+V', enabled: hasSel });
 reg('edit.clear', 'Clear', () => edit.clear(), { shortcut: 'Delete', enabled: hasLayer });
-reg('edit.fill', 'Fill…', (a) => (a ? edit.fill(a as never) : ui.openDialog('fill')), { shortcut: 'Shift+F5', enabled: hasLayer });
-reg('edit.fillForeground', 'Fill with Foreground', () => edit.fill({ use: 'foreground', mode: 'normal', opacity: 1, preserveTransparency: false }), { shortcut: 'Alt+Backspace', enabled: hasLayer });
-reg('edit.fillBackground', 'Fill with Background', () => edit.fill({ use: 'background', mode: 'normal', opacity: 1, preserveTransparency: false }), { shortcut: 'Ctrl+Backspace', enabled: hasLayer });
+reg('edit.fill', 'Fill…', (a) => (a ? edit.fill(a as never) : ui.openDialog('fill')), { shortcut: 'Shift+F5', shortcuts: ['Shift+F5','Shift+Backspace','Shift+Delete'], enabled: canFill });
+reg('edit.fillForeground', 'Fill with Foreground', () => edit.fill({ use: 'foreground', mode: 'normal', opacity: 1, preserveTransparency: false }), { shortcut: 'Alt+Backspace', shortcuts: ['Alt+Backspace','Alt+Delete'], enabled: canFill });
+reg('edit.fillBackground', 'Fill with Background', () => edit.fill({ use: 'background', mode: 'normal', opacity: 1, preserveTransparency: false }), { shortcut: 'Ctrl+Backspace', shortcuts: ['Ctrl+Backspace','Ctrl+Delete'], enabled: canFill });
 reg('edit.stroke', 'Stroke…', dialog('stroke'), { enabled: hasSel });
 reg('edit.contentAwareFill', 'Content-Aware Fill', () => edit.contentAwareFill(), { enabled: hasSel });
 reg('edit.generativeFill', 'Generative Fill…', () => edit.generativeFill(), { enabled: hasSel });
@@ -164,12 +184,39 @@ reg('file.runScript', 'Run Script', (a) => runPluginScript(String(a?.id ?? '')),
 reg('edit.commandPalette', 'Search Commands…', dialog('commandPalette'), { shortcut: 'Ctrl+F' });
 
 async function startTransform(kind?: string) {
+  const target = editor.active, doc = target?.doc, tool = editor.currentToolId, mode = target?.mode, layer = target?.activeLayer();
   const { beginTransform } = await import('../tools/transformTool');
+  if (!target || editor.active !== target || target.doc !== doc || editor.currentToolId !== tool || target.mode !== mode || target.activeLayer() !== layer || !!target.outputPending || !!target.closePending || !target.canEdit() || !access('action:edit.freeTransform').enabled || useApp.getState().dialogs.length) return;
   beginTransform(kind as never);
 }
 async function quickTransform(kind: string) {
-  const { quickTransformLayer } = await import('../tools/transformTool');
-  quickTransformLayer(kind as never);
+  const target = editor.active;
+  if (!target) return;
+  const doc = target.doc, layers = target.selectedLayers(), selected = new Set(target.selectedIds);
+  const active = target.activeLayer(), mode = target.mode, tool = editor.currentToolId;
+  const mask = target.editMask, channel = target.activeChannelId, entry = target.history.current.id;
+  const unchanged = () => editor.active === target && editor.session(target.id) === target && target.doc === doc
+    && target.activeLayer() === active && target.mode === mode && editor.currentToolId === tool
+    && target.editMask === mask && target.activeChannelId === channel && target.history.current.id === entry
+    && target.selectedIds.size === selected.size && [...selected].every(id => target.selectedIds.has(id))
+    && layers.length === target.selectedLayers().length && layers.every(l => doc.getLayer(l.id) === l);
+  // A request is invalidated permanently, including A→B→A before the import continuation.
+  // These observers live only for this quick-transform request, not a command queue.
+  let cancelled = false;
+  const invalidate = () => {cancelled = true;};
+  const offTarget = target.on(() => {if (!unchanged()) invalidate();});
+  const offUI = useApp.subscribe(() => {if (!unchanged() || useApp.getState().dialogs.length) invalidate();});
+  if (typeof window !== 'undefined') window.addEventListener('pointerdown', invalidate, true);
+  try {
+    const { quickTransformLayer } = await import('../tools/transformTool');
+    const final = action(`edit.transform.${kind}`);
+    if (cancelled || !unchanged() || !target.canEdit() || target.outputPending || target.closePending
+      || editor.currentTool?.busy?.() || useApp.getState().dialogs.length || !final || final.comingSoon || final.enabled?.() === false) return;
+    quickTransformLayer(kind as never);
+  } finally {
+    offTarget();offUI();
+    if (typeof window !== 'undefined') window.removeEventListener('pointerdown', invalidate, true);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -200,7 +247,7 @@ reg('image.revealAll', 'Reveal All', () => img.revealAll(), { enabled: hasDoc })
 reg('image.flatten', 'Flatten Image', () => layer.flattenImage(), { enabled: hasDoc });
 reg('image.docInfo', 'Document Properties…', dialog('docInfo'), { enabled: hasDoc });
 for (const t of Object.keys(ADJUSTMENT_LABELS) as AdjustmentType[]) {
-  reg(`image.adjust.${t}`, `${ADJUSTMENT_LABELS[t]}…`, (a) => (a?.adjustment ? img.applyPixelAdjustment(a.adjustment as never) : ui.openDialog('adjustment', { type: t, destructive: true })), { enabled: () => activeKind() === 'pixel' });
+  reg(`image.adjust.${t}`, `${ADJUSTMENT_LABELS[t]}…`, (a) => (a?.adjustment ? img.applyPixelAdjustment(a.adjustment as never) : ui.openDialog('adjustment', { type: t, destructive: true })), { shortcut: ({hueSaturation:'Ctrl+U',curves:'Ctrl+M',levels:'Ctrl+L',colorBalance:'Ctrl+B'} as Partial<Record<AdjustmentType,string>>)[t], enabled: () => activeKind() === 'pixel' });
 }
 reg('image.adjust.desaturate', 'Desaturate', () => img.applyPixelAdjustment({ ...defaultAdjustment('hueSaturation'), master: { hue: 0, saturation: -100, lightness: 0 } } as never), { shortcut: 'Shift+Ctrl+U', enabled: () => activeKind() === 'pixel' });
 reg('image.adjust.invertPixels', 'Invert', () => img.applyPixelAdjustment({ type: 'invert' }), { shortcut: 'Ctrl+I', enabled: () => activeKind() === 'pixel' });
@@ -212,7 +259,15 @@ reg('layer.new', 'New Layer', () => layer.newLayer(), { shortcut: 'Shift+Ctrl+N'
 reg('layer.newGroup', 'New Group', () => layer.newGroup(false), { enabled: hasDoc });
 reg('layer.groupLayers', 'Group Layers', () => layer.newGroup(true), { shortcut: 'Ctrl+G', enabled: hasLayer });
 reg('layer.ungroup', 'Ungroup Layers', () => layer.ungroup(), { shortcut: 'Shift+Ctrl+G', enabled: () => activeKind() === 'group' });
-reg('layer.duplicate', 'Duplicate Layer', () => layer.duplicateLayers(), { shortcut: 'Ctrl+J', enabled: hasLayer });
+reg('layer.duplicate', 'Duplicate Layer', () => layer.duplicateLayers(), { enabled: hasLayer });
+reg('layer.copyContext', '复制选区或图层', () => {
+  const s = editor.active;
+  if (!s || !s.canEdit()) {ui.toast('info', 'This document is busy saving or closing.');return;}
+  const target = s.selectedLayers().length === 1 && s.activeLayer()?.kind === 'pixel' && !s.doc.selection.isEmpty() ? 'layer.viaCopy' : 'layer.duplicate';
+  const command = action(target);
+  if (!command || command.enabled?.() === false) {ui.toast('info', `${command?.label ?? target} is unavailable for the current target.`);return;}
+  return run(target);
+}, {shortcut:'Ctrl+J', enabled:hasLayer});
 reg('layer.viaCopy', 'Layer via Copy', () => layer.layerVia(false), { enabled: hasLayer });
 reg('layer.viaCut', 'Layer via Cut', () => layer.layerVia(true), { shortcut: 'Shift+Ctrl+J', enabled: hasLayer });
 reg('layer.delete', 'Delete Layer', () => layer.deleteLayers(), { enabled: hasLayer });
@@ -298,6 +353,11 @@ reg('type.matchFont', 'Match Font…', dialog('matchFont'), { enabled: hasDoc })
 // Select
 // ---------------------------------------------------------------------------------------------
 reg('select.all', 'All', () => sel.selectAll(), { shortcut: 'Ctrl+A', enabled: hasDoc });
+for(const [op,shortcut,label] of [
+  ['replace','Ctrl+Enter','Make Path Selection'],
+  ['add','Ctrl+Shift+Enter','Add Path to Selection'],
+  ['subtract','Ctrl+Alt+Enter','Subtract Path from Selection'],
+] as const)reg(PATH_SELECTION_ACTIONS[op],label,args=>makePathSelection(op,args),{shortcut,enabled:pathSelectionContext,category:'Path'});
 reg('select.deselect', 'Deselect', () => sel.deselect(), { shortcut: 'Ctrl+D', enabled: hasSel });
 reg('select.reselect', 'Reselect', () => sel.reselect(), { shortcut: 'Shift+Ctrl+D', enabled: hasDoc });
 reg('select.inverse', 'Inverse', () => sel.inverse(), { shortcut: 'Shift+Ctrl+I', enabled: hasDoc });
@@ -459,7 +519,7 @@ reg('edit.freeTransformApply', 'Apply Transform', async (a) => {
 }, { ...replayOnly, enabled: hasLayer });
 reg('shape.create', 'Create Shape', (a) => {
   const s = editor.active;
-  if (!s || !a?.path) return;
+  if (!s || !a?.path || !finishPen(s)) return;
   const l = createShapeLayer(nextLayerName(s, String(a.name ?? 'Shape').replace(/\s+\d+$/, '')), structuredClone(a.path as never), (a.origin as never) ?? null, s.doc.canvas.bitDepth);
   if (a.fill) l.fill = structuredClone(a.fill as never);
   if (a.stroke) l.stroke = structuredClone(a.stroke as never);
@@ -471,7 +531,7 @@ reg('shape.create', 'Create Shape', (a) => {
 reg('type.create', 'Create Text', (a) => {
   const s = editor.active;
   const text = a?.text as { text?: string } | undefined;
-  if (!s || !text?.text) return;
+  if (!s || !text?.text || !finishPen(s)) return;
   const l = createTextLayer(text.text, s.doc.canvas.bitDepth, 0, 0);
   l.text = structuredClone(text as never);
   l.name = text.text.slice(0, 40);

@@ -1,4 +1,5 @@
 /** Painting and retouching tools built on the brush engine and stroke operations. */
+import { BatchedPaintOp } from '../brush/batchedPaintOp';
 import type { Tool, ToolHost, ToolPointer } from './tool';
 import type { ToolId, BrushSettings } from './toolTypes';
 import { opts, toast } from './helpers';
@@ -49,6 +50,7 @@ export class PaintTool implements Tool {
   private cloneOffset: { dx: number; dy: number } | null = null;
   private pending: Rect | null = null;
   private raf = 0;
+  private coverageBuffer = new Float32Array(0);
   private hostRef: ToolHost | null = null;
 
   constructor(readonly id: ToolId, private kind: Kind) {}
@@ -145,6 +147,15 @@ export class PaintTool implements Tool {
 
   /** Creates the stroke operation for one plate (null when the stroke cannot start). */
   private buildOp(s: DocumentSession, p: ToolPointer, ctx: StrokeContext, original: TiledRaster, res: ResolvedTarget, layer: Layer | null, fg: RGB, bg: RGB, composite: (r: Rect) => Float32Array, plate: number): StrokeOp | null {
+    const b = this.brush!;
+    if ((this.kind === 'brush' || (this.kind === 'eraser' && opts().eraser.mode === 'brush')) &&
+        this.target?.kind === 'layer' && layer?.kind === 'pixel' && layer.blendMode === 'normal' &&
+        s.doc.canvas.colorMode === 'rgb' && ctx.target.raster.depth === 8 && ctx.target.raster.fill === 0 &&
+        !ctx.selection && !ctx.lockAlpha && !layer.mask && !layer.vectorMask &&
+        b.blendMode === 'normal' && b.tip === 'round' && b.texture === 'none' && b.count === 1 &&
+        !b.scatter && !b.airbrush && b.size <= 512 && !b.dynamics.sizeFromVelocity && !b.dynamics.sizeJitter) {
+      return new BatchedPaintOp(ctx, fg, this.kind === 'eraser');
+    }
     switch (this.kind) {
       case 'brush':
       case 'pencil':
@@ -217,14 +228,19 @@ export class PaintTool implements Tool {
 
   private applyDabs(h: ToolHost, dabs: Dab[]) {
     if (!this.op || !this.brush) return;
-    for (const d of dabs) {
-      const r = dabBounds(d);
-      const cov = dabCoverage(d, r, this.brush, this.tip);
-      // Each op may scale its coverage copy by the selection.
-      for (let k = this.ops.length - 1; k >= 0; k--) this.ops[k].apply(d, k ? cov.slice() : cov, r);
-      this.pending = union(this.pending, r);
-      this.strokeDirty = union(this.strokeDirty, r);
-    }
+    const batch = this.op instanceof BatchedPaintOp ? this.op : null;
+    if (dabs.length > 1) batch?.beginBatch();
+    try {
+      for (const d of dabs) {
+        const r = dabBounds(d);
+        if (batch && this.coverageBuffer.length < r.w * r.h) this.coverageBuffer = new Float32Array(r.w * r.h);
+        const cov = dabCoverage(d, r, this.brush, this.tip, batch ? this.coverageBuffer : undefined);
+        // Each op may scale its coverage copy by the selection.
+        for (let k = this.ops.length - 1; k >= 0; k--) this.ops[k].apply(d, k ? cov.slice() : cov, r);
+        this.pending = union(this.pending, r);
+        this.strokeDirty = union(this.strokeDirty, r);
+      }
+    } finally { if (dabs.length > 1) batch?.endBatch(); }
     this.flush(h);
   }
 
@@ -247,6 +263,14 @@ export class PaintTool implements Tool {
     if (!this.emitter) return h.redraw();
     this.applyDabs(h, this.emitter.move(this.sample(p)));
     this.lastPoint = { x: p.x, y: p.y };
+    h.redraw();
+  }
+
+  moveBatch(h: ToolHost, points: ToolPointer[]): void {
+    if (!(this.op instanceof BatchedPaintOp) || !this.emitter) { for (const p of points) this.move(h, p); return; }
+    const dabs: Dab[] = [];
+    for (const p of points) { dabs.push(...this.emitter.move(this.sample(p))); this.hoverPos = { sx: p.sx, sy: p.sy }; this.lastPoint = { x: p.x, y: p.y }; }
+    this.applyDabs(h, dabs);
     h.redraw();
   }
 
@@ -293,30 +317,12 @@ export class PaintTool implements Tool {
   private reset() {
     if (this.airTimer) clearInterval(this.airTimer);
     this.airTimer = null;
+    this.coverageBuffer = new Float32Array(0);
     this.emitter = null;
     this.op = null;
     this.ops = [];
     this.target = null;
     this.before = null;
-  }
-
-  keyDown(_h: ToolHost, e: KeyboardEvent): boolean {
-    const b = useApp.getState().brush;
-    if (e.key === ']' || e.key === '[') {
-      if (e.shiftKey) ui.setBrush({ hardness: Math.max(0, Math.min(1, b.hardness + (e.key === ']' ? 0.25 : -0.25))) });
-      else {
-        const step = b.size < 10 ? 1 : b.size < 50 ? 5 : b.size < 100 ? 10 : b.size < 300 ? 25 : 50;
-        ui.setBrush({ size: Math.max(1, Math.min(5000, b.size + (e.key === ']' ? step : -step))) });
-      }
-      return true;
-    }
-    // Number keys set opacity (1 = 10% … 0 = 100%).
-    if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.altKey) {
-      const v = e.key === '0' ? 1 : Number(e.key) / 10;
-      if (this.kind === 'brush' || this.kind === 'pencil' || this.kind === 'eraser' || this.kind === 'cloneStamp') ui.setBrush({ opacity: v });
-      return true;
-    }
-    return false;
   }
 
   drawOverlay(h: ToolHost, g: CanvasRenderingContext2D) {

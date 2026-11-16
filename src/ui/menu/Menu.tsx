@@ -1,4 +1,5 @@
 import { portalTarget } from '../surface';
+import {isComposing} from '../../app/inputContext';
 import {access} from '../../app/access';
 /** Popup menus: application menu bar, context menus and submenus (keyboard navigable). */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -66,6 +67,7 @@ export function PopupMenu({ items, x, y, onClose, parentWidth = 0 }: { items: Po
     it.run();
   };
   const onKey = (e: React.KeyboardEvent) => {
+    if (isComposing(e)) return;
     e.stopPropagation();
     const selectable = items.map((it, i) => (it.type !== 'separator' && !('disabled' in it && it.disabled) ? i : -1)).filter((i) => i >= 0);
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(selectable[(selectable.indexOf(active) + 1) % selectable.length] ?? -1); }
@@ -130,6 +132,8 @@ export function ContextMenuHost() {
 }
 
 export function MenuBar() {
+  const [, refreshBindings] = useState(0);
+  useEffect(() => keymap.on(() => refreshBindings(n => n+1)), []);
   const [open, setOpen] = useState<{ id: string; x: number; y: number } | null>(null);
   useApp((s) => s.docRev);
   useApp((s) => s.historyRev);
@@ -160,7 +164,7 @@ export function MenuBar() {
               setOpen({ id: m.id, x: r.left, y: r.bottom + 2 });
             }
           }}
-          onKeyDown={(e) => {
+          onKeyDown={(e) => { if (isComposing(e)) return;
             if (e.key === 'Enter' || e.key === 'ArrowDown') {
               const r = e.currentTarget.getBoundingClientRect();
               setOpen({ id: m.id, x: r.left, y: r.bottom + 2 });
@@ -171,7 +175,7 @@ export function MenuBar() {
         </div>
       ))}
       <div className="spacer" />
-      <div className="search" onMouseDown={(e) => { e.stopPropagation(); run('edit.commandPalette'); }} title="Search commands (Ctrl+F)">
+      <div className="search" onMouseDown={(e) => { e.stopPropagation(); run('edit.commandPalette'); }} title={`Search commands${keymap.bindingsFor('edit.commandPalette')[0] ? ` (${keymap.bindingsFor('edit.commandPalette')[0]})` : ''}`}>
         ⌕ Search commands
       </div>
       {menu && open && createPortal(<PopupMenu key={menu.id} items={resolve(menu.items)} x={open.x} y={open.y} onClose={() => setOpen(null)} />, portalTarget())}

@@ -96,7 +96,7 @@ export const MENUS: Menu[] = [
     label: 'Layer',
     items: [
       sub('New', [a('layer.new'), a('layer.newGroup'), a('layer.groupLayers'), sep, a('layer.viaCopy'), a('layer.viaCut')]),
-      a('layer.duplicate'), a('layer.delete'),
+      a('layer.copyContext'), a('layer.duplicate'), a('layer.delete'),
       sep, sub('Layer Style', [a('layer.style'), sep, a('layer.copyStyle'), a('layer.pasteStyle'), a('layer.clearStyle'), a('layer.rasterizeStyle')]),
       sep, sub('New Fill Layer', [a('layer.newFill.solid'), a('layer.newFill.gradient'), a('layer.newFill.pattern')]),
       sub('New Adjustment Layer', adjustmentItems('layer.newAdjustment')),

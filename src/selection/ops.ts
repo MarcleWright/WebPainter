@@ -272,14 +272,14 @@ export function colorRange(img: LazyImage, canvas: Rect, mode: ColorRangeMode, s
 // Contours (marching squares) — marching ants and selection → path
 // ---------------------------------------------------------------------------------------------
 /**
- * Traces iso-contours at 0.5 of a coverage grid. Returns polylines in grid coordinates
+ * Traces iso-contours of a coverage grid (default threshold 0.5). Returns polylines in grid coordinates
  * (multiply by the level scale and add the origin to get document coordinates).
  */
-export function traceContours(v: Float32Array, w: number, h: number): number[][] {
+export function traceContours(v: Float32Array, w: number, h: number, threshold = .5): number[][] {
   // Pad with zeros so all contours close.
   const W = w + 2, H = h + 2;
   const g = new Uint8Array(W * H);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) g[(y + 1) * W + x + 1] = v[y * w + x] >= 0.5 ? 1 : 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) g[(y + 1) * W + x + 1] = v[y * w + x] >= threshold ? 1 : 0;
   // Edge segments between cell corners, keyed for chaining.
   const segs = new Map<number, number>();
   const key = (x: number, y: number) => y * (W * 2 + 2) + x;

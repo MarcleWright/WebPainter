@@ -1,7 +1,7 @@
 import { portalTarget } from './surface';
 import {access} from '../app/access';
 /** Left toolbar with flyout tool groups and color chips. */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, ui } from '../app/store';
 import { editor } from '../app/editor';
@@ -12,6 +12,9 @@ import { rgbCss } from '../color/convert';
 import { run } from '../app/actions';
 
 export function Toolbar() {
+  const [,refreshBindings] = useState(0);
+  useEffect(() => keymap.on(() => refreshBindings(n => n+1)), []);
+  const hint = (label: string, id: string) => {const key=keymap.bindingsFor(id)[0];return key ? `${label} (${key})` : label;};
   const tool = useApp((s) => s.tool);
   const groupTool = useApp((s) => s.groupTool);
   const fg = useApp((s) => s.fg);
@@ -73,14 +76,14 @@ export function Toolbar() {
         <div className="chip fg" style={{ background: rgbCss(fg) }} title="Foreground color" onClick={() => ui.openDialog('colorPicker', { purpose: 'foreground' })} />
       </div>
       <div className="row" style={{ gap: 2 }}>
-        <button className="icon-btn" title="Default colors (D)" onClick={() => ui.set({ fg: { r: 0, g: 0, b: 0 }, bg: { r: 1, g: 1, b: 1 } })}>
+        <button className="icon-btn" title={hint('Default colors','color.reset')} onClick={() => run('color.reset')}>
           <Icon name="reset" size={13} />
         </button>
-        <button className="icon-btn" title="Swap colors (X)" onClick={() => ui.set((s) => ({ fg: s.bg, bg: s.fg }))}>
+        <button className="icon-btn" title={hint('Swap colors','color.swap')} onClick={() => run('color.swap')}>
           <Icon name="swap" size={13} />
         </button>
       </div>
-      <button className={`tool-btn${quickMask ? ' active' : ''}`} title="Edit in Quick Mask Mode (Q)" onClick={() => run('select.quickMask')}>
+      <button className={`tool-btn${quickMask ? ' active' : ''}`} title={hint('Edit in Quick Mask Mode','select.quickMask')} onClick={() => run('select.quickMask')}>
         <Icon name="mask" />
       </button>
       {flyout &&
@@ -102,7 +105,7 @@ export function Toolbar() {
                   <Icon name={t.id} />
                   <span className="label">{t.label}</span>
                   {t.comingSoon && <span className="soon">Coming Soon</span>}
-                  {t.shortcut && <span className="kbd">{t.shortcut}</span>}
+                  {keymap.bindingsFor(`tool:${t.id}`)[0] && <span className="kbd">{keymap.bindingsFor(`tool:${t.id}`)[0]}</span>}
                 </div>
               ))}
             </div>

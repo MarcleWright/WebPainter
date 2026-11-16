@@ -1,3 +1,10 @@
+import { planTransforms, type TransformInput, type TransformPlan } from '../image-engine/transformPlan';
+import { startTransformTask, TransformWorkerUnavailable, type TransformTask, type TransformMetrics } from './transformTask';
+import { gpuCompositor } from '../rendering/renderEngine';
+import type { GpuCompositor } from '../gpu/compositor';
+import { affinePreviewLevel, type LayerOverride } from '../rendering/compositor';
+import { blendIfActive } from '../rendering/blendIf';
+import { hasEnabledEffect } from '../effects/types';
 import {access} from '../app/access';
 /**
  * Free Transform (Ctrl+T) and quick transforms.
@@ -25,7 +32,7 @@ import type { Rect } from '../image-engine/rect';
 import { union } from '../image-engine/rect';
 import { layerContentBounds } from '../rendering/bounds';
 import { rasterContentBounds } from '../rendering/bounds';
-import { warpRaster } from '../image-engine/resample';
+import { warpRaster, warpSampleContext } from '../image-engine/resample';
 import { warpLayerRaster, transformLayer } from '../app/ops/imageOps';
 import { CompositeCommand, ReplaceLayerCommand, TransformLayerCommand } from '../commands/layerCommands';
 import { updateAppearance } from '../layers/appearance';
@@ -52,6 +59,12 @@ interface FloatState {
 
 interface State {
   session: DocumentSession;
+  previewError?:string;
+  lastValid?:{M:Affine;quad:Quad|null};
+  job?: { id:string; task:TransformTask; token:symbol };
+  sourceKeys?: Map<LayerId, {raster: TiledRaster; version: number; rev: number}>;
+  gpuDisabled?: boolean;
+  gpuSources?: Map<TiledRaster, GpuCompositor>;
   ids: LayerId[];
   base: Rect;
   M: Affine;
@@ -67,6 +80,9 @@ interface State {
 }
 
 let st: State | null = null;
+let operationCounter=0;
+let lastTransformMetrics:TransformMetrics|null=null;
+export function transformDiagnostics():TransformMetrics|null{return lastTransformMetrics;}
 
 export function transformState(): Readonly<State> | null {
   return st;
@@ -126,10 +142,51 @@ function maskAsRgba(m: { raster: TiledRaster }): { raster: TiledRaster; bounds: 
   return { raster: tmp, bounds: mb };
 }
 
-function updatePreview(s: State): void {
+function releaseSources(s: State): void {
+  for (const [r,g] of s.gpuSources ?? []) if (!g.disposed) g.releaseAffine(r);
+  s.gpuSources?.clear();
+}
+function sourceChanged(s: State): boolean {
+  return !!s.sourceKeys && [...s.sourceKeys].some(([id,k]) => {
+    const l=s.session.doc.getLayer(id); return !l || !hasRaster(l) || l.raster!==k.raster || l.raster.version!==k.version || l.rev!==k.rev;
+  });
+}
+function gpuFor(s: State, src: Layer & {raster:TiledRaster}): GpuCompositor | null {
+  const doc=s.session.doc, gpu=gpuCompositor(), M=s.M;
+  if(s.gpuDisabled || !gpu || gpu.disposed || s.float || s.selOnly || s.warp || s.ids.length!==1 ||
+     doc.canvas.colorMode!=='rgb' || doc.canvas.bitDepth!==8 || !doc.selection.isEmpty() || !src.visible ||
+     (!s.quad && (Math.abs(M[0]*M[2]+M[1]*M[3])>1e-7 || Math.abs(M[0]*M[3]-M[1]*M[2])<1e-8)) ||
+     doc.root.children.length>3 || gpu.viewSupported(doc,s.session.engine.view))return null;
+  if(doc.root.mask || doc.root.vectorMask || doc.root.opacity!==1 || hasEnabledEffect(doc.root.effects))return null;
+  if(!doc.root.children.every(l=>l.kind==='pixel' && l.blendMode==='normal' && l.opacity===1 && l.fillOpacity===1 &&
+     !l.mask && !l.vectorMask && !l.clipping && !hasEnabledEffect(l.effects) && !blendIfActive(l.advanced.blendIf) &&
+     l.advanced.channels.every(Boolean) && l.advanced.knockout==='none'))return null;
+  const b=rasterContentBounds(src.raster);
+  return b && src.raster.depth===8 && src.raster.fill===0 && (s.quad?gpu.canPrepareProjective(b,s.session.engine.lastVisible?.tiles.length??32):gpu.canPrepareAffine(b,s.session.engine.lastVisible?.tiles.length??32))?gpu:null;
+}
+
+function updatePreview(s: State, recoverLast=false): void {
   if (s.selOnly) return; // outline only (drawn by the overlay)
   const eng = s.session.engine;
-  const H = homography(s);
+  const changed=sourceChanged(s);
+  if(changed) {
+    s.gpuDisabled=true; releaseSources(s);
+    for(const id of s.ids){const live=s.session.doc.getLayer(id);if(live)s.originals.set(id,cloneLayer(live));}
+    s.sourceKeys=undefined;
+  }
+  if(!s.sourceKeys && !s.float) {
+    s.sourceKeys=new Map();
+    for(const id of s.ids){const l=s.session.doc.getLayer(id);if(l && hasRaster(l))s.sourceKeys.set(id,{raster:l.raster,version:l.raster.version,rev:l.rev});}
+  }
+  let geometry=s;
+  if(!s.warp){
+    try{commitInputs(s);s.previewError=undefined;s.lastValid={M:[...s.M] as Affine,quad:s.quad?.map(p=>({...p})) as Quad??null};}
+    catch(error){s.previewError=String(error);if(!recoverLast||!s.lastValid)return;geometry={...s,...s.lastValid};try{commitInputs(geometry);}catch{return;}}
+  }
+  geometry={...geometry,M:[...geometry.M] as Affine,quad:geometry.quad?.map(p=>({...p})) as Quad??null};
+  const qualification=geometry;
+  const overrides=new Map<LayerId,LayerOverride>();
+  const H = homography(geometry);
   const inv = invertH(H);
   const mesh = s.warp ? sampleMesh(warpMap(s)) : null;
   const base = s.base;
@@ -141,7 +198,8 @@ function updatePreview(s: State): void {
     // CMYK: each plate previews from its own raster (bounds from plate 0).
     const cmyk = isCmykDoc(s.session.doc);
     const plateOf = (r: TiledRaster, plate: number) => (plate && cmyk ? ensureCompanion(r) : r);
-    eng.setOverride(l.id, skip ? null : {
+    if(skip)continue;
+    const ov: LayerOverride = {
       includesMask: !s.float,
       read: (r, level, plate = 0) => {
         const sc = 1 << level;
@@ -179,21 +237,44 @@ function updatePreview(s: State): void {
         }
         return px;
       },
-    }, null);
+    };
+    const src=orig;
+    const gpu=src?gpuFor(qualification,src):null;
+    if(gpu && src) {
+      const bounds=rasterContentBounds(src.raster)!;
+      const inverse=multiplyH([1,0,-src.x,0,1,-src.y,0,0,1],inv);
+      ov.gpu={affine:{raster:src.raster,bounds,inverse,device:gpu.device,projective:!!geometry.quad}};
+      s.gpuSources??=new Map();s.gpuSources.set(src.raster,gpu);
+      ov.prepare=(level,budget)=>{
+        if(gpuCompositor()!==gpu || gpu.disposed)return true;
+        if(!geometry.quad)return gpu.prepareAffine(src.raster,bounds,affinePreviewLevel(inverse,level),budget);
+        const started=performance.now(),sc=1<<level,invDisplay=multiplyH(inverse,[sc,0,0,0,sc,0,0,0,1]);
+        const needed=new Set<number>(),size=eng.levelSize(level);
+        for(const [tx,ty]of eng.lastVisible?.tiles??[]){const r={x:tx*256,y:ty*256,w:Math.min(256,size.w-tx*256),h:Math.min(256,size.h-ty*256)};const sampling=warpSampleContext(bounds,invDisplay,r);if(sampling)needed.add(sampling.level);}
+        for(const mip of needed)if(!gpu.prepareAffine(src.raster,bounds,mip,Math.max(0,budget-(performance.now()-started))))return false;
+        return true;
+      };
+    }
+    const rev=s.session.doc.rev;
+    ov.interaction={valid:()=>st===s && editor.session(s.session.id)===s.session && !sourceChanged(s) &&
+      s.session.doc.rev===rev && (!gpu || (gpuCompositor()===gpu && !gpu.disposed && !!src && gpuFor(qualification,src)===gpu)),
+      abort:()=>{if(st!==s)return;s.gpuDisabled=true;releaseSources(s);updatePreview(s,true);}};
+    overrides.set(l.id,ov);
   }
-  eng.invalidateAll();
+  const lostQualification=!!s.gpuSources?.size && ![...overrides.values()].some(ov=>!!ov.gpu?.affine);
+  if(lostQualification)releaseSources(s);
+  eng.setPreviewOverrides(overrides,false,changed || lostQualification);
 }
 
 function clearPreview(s: State): void {
   if (s.selOnly) return;
-  const ids = s.float ? [s.float.layerId] : s.ids.flatMap((id) => rasterLayers(s.originals.get(id)!).map((l) => l.id));
-  for (const id of ids) s.session.engine.setOverride(id, null, null);
-  s.session.engine.invalidateAll();
+  s.session.engine.setPreviewOverrides(new Map(),true);
+  releaseSources(s);
 }
 
 export function beginTransform(kind: TransformKind = 'free'): void {
   const s = editor.active;
-  if (!s) return;
+  if (!s || !s.canEdit() || s.outputPending || s.closePending) return;
   if (st) {
     if (kind === 'warp' && !st.warp) setWarpMode();
     return;
@@ -279,6 +360,7 @@ export function beginTransformSelection(): void {
 
 /** Switches the running transform to warp mode (the current transform becomes the envelope). */
 export function setWarpMode(): void {
+  if(st?.job)return;
   if(!access('feature:warp').enabled)return;
   const s = st;
   if (!s || s.warp) return;
@@ -293,6 +375,7 @@ export function setWarpMode(): void {
 
 /** Applies a warp preset (options bar) to the running warp. */
 export function setWarpPreset(p: WarpPreset): void {
+  if(st?.job)return;
   const s = st;
   if (!s || !s.warp) return;
   s.warp = { grid: p.style === 'none' ? rectGrid(s.base) : presetGrid(p, s.base), preset: p };
@@ -307,6 +390,7 @@ export function warpState(): { preset: WarpPreset | null } | null {
 export function cancelTransform(): void {
   const s = st;
   if (!s) return;
+  s.job?.task.cancel();
   clearPreview(s);
   if (s.float) {
     const l = s.session.doc.getLayer(s.float.layerId) as Layer & { raster: TiledRaster } | null;
@@ -329,18 +413,121 @@ function transformMask(s: State, mask: TiledRaster, mesh: Float64Array | null, H
   return out;
 }
 
+function commitInputs(s:State):TransformPlan[]{
+  if(s.warp)throw Error('Envelope transform capacity cannot be verified by this bounded path');
+  const inputs:TransformInput[]=[];
+  const add=(r:TiledRaster,x:number,y:number)=>{
+    const bounds=rasterContentBounds(r)??(r.channels===1?r.tileBounds():null);
+    if(!bounds)return;
+    if(r.fill!==0)throw Error('Unbounded fill cannot be admitted for this transform');
+    inputs.push({bounds,x,y,channels:r.channels,depth:r.depth,bytes:r.tiles.size*r.tileLength*r.depth/8});
+    if(r.companion)add(r.companion,x,y);
+  };
+  if(s.selOnly)add(s.selOnly.mask,0,0);
+  else if(s.float){add(s.float.float,0,0);const l=s.session.doc.getLayer(s.float.layerId);if(l&&hasRaster(l))add(l.raster,l.x,l.y);const sel=new TiledRaster(1,8);sel.restore(s.float.selBefore);add(sel,0,0);}
+  else for(const id of s.ids){
+    const root=s.originals.get(id)!;
+    if(root.kind!=='pixel'&&root.kind!=='group'&&root.kind!=='video')throw Error('Dynamic appearance capacity cannot be verified for this transform');
+    for(const l of rasterLayers(root))if(hasRaster(l)){if(l.kind!=='pixel'&&l.kind!=='video')throw Error('Dynamic appearance capacity cannot be verified');add(l.raster,l.x,l.y);if(l.mask)add(l.mask.raster,l.mask.x,l.mask.y);}
+  }
+  const plans=planTransforms(homography(s),inputs,s.quad);
+  // Floating CPU placement holds both full destination read buffers at once.
+  return s.float?planTransforms(homography(s),inputs,s.quad,plans[0].output.w*plans[0].output.h*32):plans;
+}
+function backgroundSource(s:State):(Layer&{raster:TiledRaster;x:number;y:number})|null{
+  if(s.float||s.selOnly||s.warp||s.ids.length!==1||s.session.doc.canvas.colorMode!=='rgb'||s.session.doc.canvas.bitDepth!==8)return null;
+  const l=s.originals.get(s.ids[0]);
+  return l?.kind==='pixel'&&s.session.doc.getLayer(l.id)?.parent?.id==='root'&&l.raster.depth===8&&!l.raster.companion&&l.raster.fill===0&&!l.mask&&!l.vectorMask&&!l.clipping&&!hasEnabledEffect(l.effects)&&l.blendMode==='normal'&&l.opacity===1&&l.fillOpacity===1&&!blendIfActive(l.advanced.blendIf)&&l.advanced.channels.every(Boolean)&&l.advanced.knockout==='none'?l:null;
+}
+function finishTransform(s:State):void{
+  s.session.mode={kind:'none'};if(st===s)st=null;
+  try{clearPreview(s);s.session.notify();ui.bump('viewRev');}catch(error){releaseSources(s);ui.toast('warning','Transform completed; a display notification failed.',String(error));}
+}
+function restoreFailedCommit(s:State,root:ReturnType<typeof cloneLayer>,selection:RasterSnapshot,entry:string,error:unknown):boolean{
+  if(s.session.history.current.id!==entry){ui.toast('warning','Transform committed, but a notification failed.',String(error));return true;}
+  s.session.doc.root=root as typeof s.session.doc.root;s.session.doc.selection.restore(selection);
+  s.session.doc.emit({type:'structure'},{type:'selection'});updatePreview(s);s.session.notify();
+  ui.toast('error','Transform failed; retry or press Escape.',String(error));return false;
+}
 export function commitTransform(): void {
-  const s = st;
-  if (!s) return;
+  const s=st;if(!s||s.job||editor.session(s.session.id)!==s.session||!s.session.canEdit()||s.session.outputPending||s.session.closePending)return;
+  lastTransformMetrics=null;
+  if(sourceChanged(s))updatePreview(s);
+  const admitStart=performance.now();
+  let plans:TransformPlan[];
+  try{plans=commitInputs(s);}catch(error){ui.toast('error','Transform cannot be confirmed.',String(error));return;}
+  const admitMs=performance.now()-admitStart;
+  const source=backgroundSource(s);
+  const identity=!s.quad&&!s.warp&&s.M.every((v,i)=>Math.abs(v-[1,0,0,1,0,0][i])<1e-9);
+  if(identity||!source||typeof Worker==='undefined'){
+    if(!identity)ui.toast('info','Using standard transform processing; the app may pause.');
+    const doc=s.session.doc,root=cloneLayer(doc.root),selection=doc.selection.snapshot(),entry=s.session.history.current.id;
+    const token=s.session.acquireEditProtection('transform');
+    try{
+      try{applyTransform(s,token);}catch(error){if(!restoreFailedCommit(s,root,selection,entry,error))return;}
+      finishTransform(s);
+    }finally{s.session.releaseEditProtection(token);s.session.notify();}
+    return;
+  }
+  const session=s.session,doc=session.doc,revision=doc.rev,H=homography(s),entry=session.history.current.id;
+  const snapshotStart=performance.now();
+  const root=cloneLayer(doc.root),selection=doc.selection.snapshot(),token=session.acquireEditProtection('transform'),id=`transform-${++operationCounter}`;
+  const live=doc.getLayer(source.id);if(!live||!hasRaster(live)){session.releaseEditProtection(token);return;}
+  const sourceRaster=live.raster,sourceVersion=live.raster.version,sourceRev=live.rev;
+  let cancelTask=()=>{};
+  const p=ui.progress('Preparing transform…',()=>cancelTask(),true);
+  const task=startTransformTask(source.raster,plans[0],id,f=>p.update(f,`Applying transform… ${Math.round(f*100)}%`));
+  cancelTask=()=>task.cancel();
+  task.metrics.snapshotMs=performance.now()-snapshotStart;task.metrics.admitMs=admitMs;
+  const job={id,task,token};s.job=job;
+  const cancel=()=>{if(st===s&&s.job===job)cancelTransform();else task.cancel();};session.cancelTransformTask=cancel;
+  let pending!:Promise<boolean>;
+  pending=(async()=>{
+    let committed=false;
+    try{
+      let result:TiledRaster;
+      try{result=await task.promise;}
+      catch(error){
+        if(error instanceof TransformWorkerUnavailable&&st===s&&s.job===job){
+          task.metrics.backend='cpu-fallback';
+          ui.toast('warning','Background processing is unavailable; applying the transform may pause the app.',String(error));
+          try{applyTransform(s,token);}catch(failure){if(!restoreFailedCommit(s,root,selection,entry,failure))return false;}
+          committed=true;finishTransform(s);return true;
+        }
+        throw error;
+      }
+      const current=doc.getLayer(source.id);
+      if(st!==s||s.job!==job||editor.session(session.id)!==session||editor.active!==session||doc.rev!==revision||!current||!hasRaster(current)||current.raster!==sourceRaster||current.raster.version!==sourceVersion||current.rev!==sourceRev)throw Error('Transform source changed; result discarded');
+      const start=performance.now(),after=cloneLayer(source);
+      after.raster=result;after.x=plans[0].output.x;after.y=plans[0].output.y;after.rev++;
+      try{
+        session.pushProtected(new CompositeCommand('Free Transform',[new TransformLayerCommand('Free Transform',source,after)],{action:'edit.freeTransformApply',args:{matrix:Array.from(H),affine:!s.quad||isAffineQuad(s.quad)}}),token);
+      }catch(error){if(!restoreFailedCommit(s,root,selection,entry,error))return false;}
+      task.metrics.installMs=performance.now()-start;committed=true;finishTransform(s);return true;
+    }catch(error){
+      if(st===s){updatePreview(s);ui.toast(task.metrics.cancelled?'info':'error',task.metrics.cancelled?'Transform cancelled; preview retained.':'Transform failed; retry or press Escape.',String(error));}
+      return false;
+    }finally{
+      lastTransformMetrics={...task.metrics};
+      if(s.job===job)s.job=undefined;
+      session.releaseEditProtection(token);
+      if(session.transformPending===pending)session.transformPending=null;
+      if(session.cancelTransformTask===cancel)session.cancelTransformTask=null;
+      p.done();if(editor.session(session.id)===session){try{session.notify();}catch(error){ui.toast('warning','Transform ended; a notification failed.',String(error));}}
+      if(!committed&&st===s)ui.bump('viewRev');
+    }
+  })();
+  session.transformPending=pending;session.notify();ui.bump('viewRev');
+}
+
+function applyTransform(s: State,token?:symbol): void {
+  const push=(cmd:Parameters<DocumentSession['push']>[0],alreadyApplied=false)=>token?s.session.pushProtected(cmd,token,alreadyApplied):s.session.push(cmd,alreadyApplied);
   const doc = s.session.doc;
   const H = homography(s);
   const mesh = s.warp && !isIdentityGrid(s.warp.grid, s.base) ? sampleMesh(warpMap(s)) : null;
   const isAffine = !s.quad || isAffineQuad(s.quad);
   const identity = s.warp ? !mesh : !s.quad && s.M.every((v, i) => Math.abs(v - [1, 0, 0, 1, 0, 0][i]) < 1e-9);
   const label = s.selOnly ? 'Transform Selection' : s.warp ? 'Warp' : 'Free Transform';
-  clearPreview(s);
-  s.session.mode = { kind: 'none' };
-  st = null;
   if (identity) {
     if (s.float) {
       const l = doc.getLayer(s.float.layerId) as Layer & { raster: TiledRaster };
@@ -354,7 +541,7 @@ export function commitTransform(): void {
   }
   if (s.selOnly) {
     doc.selection.restore(transformMask(s, s.selOnly.mask, mesh, H).snapshot());
-    s.session.push(new RasterEditCommand(label, { kind: 'selection' }, s.selOnly.before, doc.selection.snapshot(), null), true);
+    push(new RasterEditCommand(label, { kind: 'selection' }, s.selOnly.before, doc.selection.snapshot(), null), true);
     doc.emit({ type: 'selection' });
     s.session.notify();
     ui.bump('viewRev');
@@ -381,7 +568,7 @@ export function commitTransform(): void {
     selMask.restore(s.float.selBefore);
     doc.selection.restore(transformMask(s, selMask, mesh, H).snapshot());
     const selAfter = doc.selection.snapshot();
-    s.session.push(new CompositeCommand(label, [new RasterEditCommand(label, { kind: 'layer', layerId: l.id }, s.float.before, after, null), new RasterEditCommand(label, { kind: 'selection' }, s.float.selBefore, selAfter, null)]), true);
+    push(new CompositeCommand(label, [new RasterEditCommand(label, { kind: 'layer', layerId: l.id }, s.float.before, after, null), new RasterEditCommand(label, { kind: 'selection' }, s.float.selBefore, selAfter, null)]), true);
     doc.emit({ type: 'structure' }, { type: 'selection' });
     return;
   }
@@ -396,7 +583,7 @@ export function commitTransform(): void {
       cmds.push(new TransformLayerCommand(label, before, after));
     }
     if (skipped.size) ui.toast('info', `${[...skipped].join(', ')} ${skipped.size === 1 ? 'was' : 'were'} not warped. Use Type ▸ Warp Text… for text, or convert the layer to a smart object first.`);
-    s.session.push(new CompositeCommand(label, cmds));
+    push(new CompositeCommand(label, cmds));
     s.session.notify();
     return;
   }
@@ -412,7 +599,7 @@ export function commitTransform(): void {
     cmds.push(new TransformLayerCommand('Free Transform', before, after));
   }
   const cmd = new CompositeCommand('Free Transform', cmds, { action: 'edit.freeTransformApply', args: { matrix: Array.from(H), affine: isAffine } });
-  s.session.push(cmd);
+  push(cmd);
   s.session.notify();
 }
 
@@ -473,6 +660,17 @@ function applyWarp(s: DocumentSession, l: Layer, base: Rect, grid: WarpGrid, mes
 /** Applies a document-space homography to layers as one history step (macro replay). */
 export function transformLayersByMatrix(session: DocumentSession, ids: LayerId[], H: Homography, affine: boolean): boolean {
   if (!session.canEdit()) return false;
+  try{
+    const inputs:TransformInput[]=[];
+    for(const id of ids){const l=session.doc.getLayer(id);if(!l)continue;
+      if(l.kind!=='pixel'&&l.kind!=='video'&&l.kind!=='group')throw Error('Dynamic transform capacity cannot be verified');
+      for(const r of rasterLayers(l))if(hasRaster(r))for(const part of [{raster:r.raster,x:r.x,y:r.y},...(r.mask?[r.mask]:[])]){
+        if(part.raster.fill!==0||part.raster.companion)throw Error('Transform source capacity cannot be verified');
+        const bounds=rasterContentBounds(part.raster);if(bounds)inputs.push({bounds,x:part.x,y:part.y,channels:part.raster.channels,depth:part.raster.depth,bytes:part.raster.tiles.size*part.raster.tileLength*part.raster.depth/8});
+      }
+    }
+    planTransforms(H,inputs);
+  }catch(error){ui.toast('error','Transform cannot be confirmed.',String(error));return false;}
   const cmds: ReplaceLayerCommand[] = [];
   for (const id of ids) {
     const live = session.doc.getLayer(id);
@@ -642,7 +840,7 @@ export class TransformController implements Tool {
   }
 
   down(_h: ToolHost, p: ToolPointer) {
-    if (!st) return;
+    if (!st || st.job) return;
     const hdl = handleAt(st, p.sx, p.sy, p.x, p.y);
     if (!hdl) return;
     this.drag = { h: hdl, start: p, M: [...st.M] as Affine, quad: st.quad ? (st.quad.map((q) => ({ ...q })) as Quad) : null, ref: { ...st.ref }, grid: st.warp ? st.warp.grid.map((q) => ({ ...q })) : null };
@@ -651,7 +849,7 @@ export class TransformController implements Tool {
   move(h: ToolHost, p: ToolPointer) {
     const d = this.drag;
     const s = st;
-    if (!d || !s) return;
+    if (!d || !s || s.job) return;
     const dx = p.x - d.start.x, dy = p.y - d.start.y;
     if (s.warp && d.grid && (d.h.kind === 'warpPoint' || d.h.kind === 'surface')) {
       const g0 = d.grid;
@@ -740,7 +938,8 @@ export class TransformController implements Tool {
     h.redraw();
   }
 
-  up() {
+  up(h: ToolHost, p: ToolPointer) {
+    if(this.drag)this.move(h,p);
     this.drag = null;
     ui.bump('viewRev');
   }
@@ -757,6 +956,7 @@ export class TransformController implements Tool {
 
   cancel() {
     this.drag = null;
+    cancelTransform();
   }
 
   drawOverlay(h: ToolHost, g: CanvasRenderingContext2D) {
@@ -840,7 +1040,7 @@ export function transformNumbers(): { x: number; y: number; w: number; h: number
 /** Sets numeric transform values (from the options bar). */
 export function setTransformNumbers(v: { x?: number; y?: number; w?: number; h?: number; angle?: number; skew?: number }): void {
   const s = st;
-  if (!s || s.quad || s.warp) return;
+  if (!s || s.job || s.quad || s.warp) return;
   const cur = transformNumbers()!;
   const cx = s.base.x + s.base.w / 2, cy = s.base.y + s.base.h / 2;
   const nx = v.x ?? cur.x, ny = v.y ?? cur.y;

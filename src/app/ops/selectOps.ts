@@ -1,3 +1,6 @@
+import {Selection} from '../../selection/selection';
+import {editor} from '../editor';
+import {RasterEditCommand} from '../../commands/rasterCommands';
 /** Select menu operations. Every selection change is an undoable raster command. */
 import { ui, useApp } from '../store';
 import type { DocumentSession } from '../session';
@@ -179,20 +182,48 @@ export function toggleQuickMask(): void {
 // ---------------------------------------------------------------------------------------------
 // Paths ↔ selection
 // ---------------------------------------------------------------------------------------------
-export function pathToSelection(path: VectorPath, op: SelectionOp = 'replace', featherPx = 0): void {
-  const s = need();
-  if (!s) return;
-  const pb = pathBounds(path);
-  if (!pb) return;
-  const r = intersect(pb, s.doc.bounds);
-  if (isEmpty(r)) return;
-  const cov = rasterizePath(path, r);
-  changeSelection(s, 'Make Selection', () => {
-    const m = new TiledRaster(1, 8, 0);
-    m.writeFloat(r, cov);
-    combineRaster(s.doc.selection, m, op, s.doc.bounds);
-    if (featherPx > 0) feather(s.doc.selection, s.doc.bounds, featherPx);
-  });
+/** Compare effective document coverage without allocating a canvas-sized image. */
+function samePathSelection(a: import('../../selection/selection').Selection, b: import('../../selection/selection').Selection, canvas: import('../../image-engine/rect').Rect): boolean {
+  if(a.isEmpty()!==b.isEmpty())return false;
+  const ab=a.bounds(canvas),bb=b.bounds(canvas);
+  if(!ab&&!bb)return true;
+  const r=ab&&bb?{x:Math.min(ab.x,bb.x),y:Math.min(ab.y,bb.y),w:Math.max(ab.x+ab.w,bb.x+bb.w)-Math.min(ab.x,bb.x),h:Math.max(ab.y+ab.h,bb.y+bb.h)-Math.min(ab.y,bb.y)}:(ab??bb)!;
+  for(let y=r.y;y<r.y+r.h;y+=256)for(let x=r.x;x<r.x+r.w;x+=256){
+    const tile={x,y,w:Math.min(256,r.x+r.w-x),h:Math.min(256,r.y+r.h-y)},av=a.read(tile),bv=b.read(tile);
+    for(let i=0;i<av.length;i++)if(av[i]!==bv[i])return false;
+  }
+  return true;
+}
+
+/** Raster helper. UI/Actions enter through pathSelectionOps, which binds the target/session. */
+export function pathToSelection(path: VectorPath, op: SelectionOp = 'replace', featherPx = 0, s: DocumentSession|null = editor.active, canApply:()=>boolean=()=>true): 'changed'|'unchanged'|'rejected' {
+  if(!s||!s.canEdit()||!canApply())return 'rejected';
+  const pb=pathBounds(path);if(!pb)return 'rejected';
+  const selection=s.doc.selection,mask=selection.mask,version=mask.version,before=selection.snapshot();
+  const m=new TiledRaster(1,8,0),r=intersect(pb,s.doc.bounds);
+  // An empty intersection is a valid zero-coverage path, not an invalid request.
+  if(!isEmpty(r))m.writeFloat(r,rasterizePath(path,r));
+  m.compact(); // Valid degenerate geometry can rasterize to all zeroes inside its bounds.
+  const next=new Selection();next.restore(before);combineRaster(next,m,op,s.doc.bounds);
+  if(featherPx>0)feather(next,s.doc.bounds,featherPx); // Legacy helper only; the Action owner accepts zero.
+  if(!canApply()||s.doc.selection!==selection||selection.mask!==mask||mask.version!==version)return 'rejected';
+  if(samePathSelection(selection,next,s.doc.bounds))return 'unchanged';
+  const after=next.snapshot(),command=new RasterEditCommand('Make Selection',{kind:'selection'},before,after,null);
+  let expected=version;
+  try{
+    if(!canApply()||s.doc.selection!==selection||selection.mask!==mask||mask.version!==version)return 'rejected';
+    mask.restore(after);expected=mask.version;s.push(command,true);
+    if(s.history.current.command!==command)throw new Error('Selection history was not accepted.');
+  }catch(error){
+    if(s.history.current.command!==command){
+      if(s.doc.selection===selection&&selection.mask===mask&&mask.version===expected)mask.restore(before);
+      throw error;
+    }
+    console.warn('Path selection committed; a history observer failed:',error);
+  }
+  lastSelection.set(s.id,next.isEmpty()?before:after);
+  try{s.doc.emit({type:'selection'});}catch(error){console.warn('Path selection committed; a selection observer failed:',error);}
+  return 'changed';
 }
 
 export function selectionToPath(tolerance = 2): VectorPath | null {

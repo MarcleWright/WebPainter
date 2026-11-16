@@ -1,3 +1,5 @@
+import {finishPen,penSession,penHistoryAllowed} from '../../tools/penSession';
+import {isComposing} from '../../app/inputContext';
 /** History, Channels and Paths panels. */
 import { editColor } from '../../color/plates';
 import { useState } from 'react';
@@ -7,7 +9,10 @@ import { Icon } from '../icons';
 import { RasterThumb } from './Thumb';
 import { openContextMenu } from '../menu/Menu';
 import { LambdaCommand } from '../../commands/layerCommands';
-import { loadChannelAsSelection, saveSelectionToChannel, pathToSelection, selectionToPath } from '../../app/ops/selectOps';
+import { loadChannelAsSelection, saveSelectionToChannel, selectionToPath } from '../../app/ops/selectOps';
+import {canPathSelection,pathSelectionContext} from '../../app/ops/pathSelectionOps';
+import {run} from '../../app/actions';
+import {editor} from '../../app/editor';
 import { newId } from '../../document/ids';
 import { TiledRaster } from '../../image-engine/tiledRaster';
 import { ui, useApp } from '../../app/store';
@@ -28,14 +33,16 @@ export function HistoryPanel() {
   const [renaming, setRenaming] = useState<string | null>(null);
   if (!s) return <div className="panel"><div className="empty">No document</div></div>;
   const h = s.history;
+  const blocked=!!penSession(s);
+  const history=(fn:()=>unknown)=>{if(penHistoryAllowed(s))fn();};
   return (
     <div className="panel">
       <div className="list" style={{ flex: 1, overflow: 'auto' }}>
         {h.snapshots.map((sn) => (
-          <div key={sn.id} className="list-item" onClick={() => h.restoreSnapshot(sn.id)} onContextMenu={(e) => { e.preventDefault(); openContextMenu([{ type: 'item', label: 'Rename Snapshot', run: () => setRenaming(sn.id) }, { type: 'item', label: 'Delete Snapshot', run: () => h.deleteSnapshot(sn.id) }], e.clientX, e.clientY); }} title="Click to restore this snapshot (undoable)">
+          <div key={sn.id} className="list-item" aria-disabled={blocked} onClick={() => history(()=>h.restoreSnapshot(sn.id))} onContextMenu={(e) => { e.preventDefault(); openContextMenu([{ type: 'item', label: 'Rename Snapshot', run: () => setRenaming(sn.id) }, { type: 'item', label: 'Delete Snapshot', run: () => h.deleteSnapshot(sn.id) }], e.clientX, e.clientY); }} title="Click to restore this snapshot (undoable)">
             <Icon name="snapshot" size={14} />
             {renaming === sn.id ? (
-              <input className="txt" autoFocus defaultValue={sn.name} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { h.renameSnapshot(sn.id, e.target.value); setRenaming(null); }} />
+              <input className="txt" autoFocus defaultValue={sn.name} onKeyDown={(e) => { if (isComposing(e)) return; e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { h.renameSnapshot(sn.id, e.target.value); setRenaming(null); }} />
             ) : (
               <span className="grow">{sn.name}</span>
             )}
@@ -43,21 +50,22 @@ export function HistoryPanel() {
         ))}
         {h.snapshots.length > 0 && <div className="menu-sep" />}
         {h.entries.map((e, i) => (
-          <div key={e.id} className={`list-item${i === h.index ? ' active' : i > h.index ? ' future' : ''}`} onClick={() => h.goto(i)} onDoubleClick={() => setRenaming(e.id)} title={new Date(e.time).toLocaleTimeString()}>
+          <div key={e.id} className={`list-item${i === h.index ? ' active' : i > h.index ? ' future' : ''}`} aria-disabled={blocked} onClick={() => history(()=>h.goto(i))} onDoubleClick={() => setRenaming(e.id)} title={new Date(e.time).toLocaleTimeString()}>
             <span style={{ width: 14 }}>{i === h.index ? '▸' : ''}</span>
             {renaming === e.id ? (
-              <input className="txt" autoFocus defaultValue={e.label} onKeyDown={(ev) => { ev.stopPropagation(); if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} onBlur={(ev) => { h.renameEntry(e.id, ev.target.value); setRenaming(null); }} />
+              <input className="txt" autoFocus defaultValue={e.label} onKeyDown={(ev) => { if (isComposing(ev)) return; ev.stopPropagation(); if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} onBlur={(ev) => { h.renameEntry(e.id, ev.target.value); setRenaming(null); }} />
             ) : (
               <span className="grow">{e.label}</span>
             )}
           </div>
         ))}
       </div>
+      {blocked&&<div className="faint">Please finish the current path before operating document history.</div>}
       <div className="panel-toolbar">
         <span className="faint">{h.entries.length} states · {(h.memoryBytes() / 1048576).toFixed(1)} MB</span>
         <div className="spacer" />
-        <IconButton icon="snapshot" title="Create new snapshot" onClick={() => h.createSnapshot()} />
-        <IconButton icon="trash" title="Clear history (keeps current state)" onClick={() => h.clear('Current State')} />
+        <IconButton icon="snapshot" title="Create new snapshot" disabled={blocked} onClick={() => history(()=>h.createSnapshot())} />
+        <IconButton icon="trash" title="Clear history (keeps current state)" disabled={blocked} onClick={() => history(()=>h.clear('Current State'))} />
       </div>
     </div>
   );
@@ -82,7 +90,7 @@ export function ChannelsPanel() {
     const on = key ? isOn(key) : keys.every(isOn);
     const single = key && isOn(key) && keys.filter(isOn).length === 1;
     return (
-      <div className={`list-item${!s.activeChannelId && (single || (!key && on)) ? ' active' : ''}`} onClick={() => { if (key) only(key); else setCh({ r: true, g: true, b: true, k: true }); s.activeChannelId = null; s.notify(); }}>
+      <div className={`list-item${!s.activeChannelId && (single || (!key && on)) ? ' active' : ''}`} onClick={() => { if(s.activeChannelId&&!finishPen(s))return;if (key) only(key); else setCh({ r: true, g: true, b: true, k: true }); s.activeChannelId = null; s.notify(); }}>
         <span onClick={(e) => { e.stopPropagation(); if (key) setCh({ [key]: !isOn(key) }); }} style={{ width: 20 }}>{on ? <Icon name="eye" size={13} /> : ''}</span>
         <span className="grow">{label}</span>
         <span className="faint">{shortcut}</span>
@@ -109,7 +117,7 @@ export function ChannelsPanel() {
         )}
         {s.doc.channels.map((c) => (
           <div key={c.id} className={`list-item${s.activeChannelId === c.id ? ' active' : ''}`} style={{ height: 40 }}
-            onClick={() => { s.activeChannelId = s.activeChannelId === c.id ? null : c.id; s.notify(); }}
+            onClick={() => { if(!finishPen(s))return;s.activeChannelId = s.activeChannelId === c.id ? null : c.id; s.notify(); }}
             onDoubleClick={() => setRenaming(c.id)}
             onContextMenu={(e) => { e.preventDefault(); openContextMenu([
               { type: 'item', label: 'Load as Selection', run: () => loadChannelAsSelection(c.id) },
@@ -134,7 +142,7 @@ export function ChannelsPanel() {
             </span>
             <RasterThumb raster={c.raster} width={s.doc.width} height={s.doc.height} size={30} />
             {renaming === c.id ? (
-              <input className="txt" autoFocus defaultValue={c.name} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { setChannels('Rename Channel', s.doc.channels.map((x) => (x.id === c.id ? { ...x, name: e.target.value || x.name } : x))); setRenaming(null); }} />
+              <input className="txt" autoFocus defaultValue={c.name} onKeyDown={(e) => { if (isComposing(e)) return; e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { setChannels('Rename Channel', s.doc.channels.map((x) => (x.id === c.id ? { ...x, name: e.target.value || x.name } : x))); setRenaming(null); }} />
             ) : (
               <span className="grow">{c.kind === 'spot' && <span className="swatch-dot" style={{ display: 'inline-block', width: 9, height: 9, marginRight: 5, borderRadius: 2, border: '1px solid var(--border)', background: `rgb(${c.color.r * 255},${c.color.g * 255},${c.color.b * 255})` }} />}{c.name}{c.kind === 'spot' && s.doc.canvas.colorMode !== 'multichannel' ? ' (spot)' : ''}</span>
             )}
@@ -156,19 +164,23 @@ export function ChannelsPanel() {
 }
 
 export function PathsPanel() {
+  useHistoryRev(); // Pen local steps change target admission without a document history push.
   const s = useSession();
   const [renaming, setRenaming] = useState<string | null>(null);
   useApp((st) => st.docRev);
   if (!s) return <div className="panel"><div className="empty">No document</div></div>;
   const d = s.doc;
   const active = d.paths.find((p) => p.id === s.activePathId) ?? null;
+  const blankBlocked=()=>editor.active!==s||!pathSelectionContext()||useApp.getState().dialogs.length>0
+    ||isComposing({key:'',target:document.activeElement});
   const setPaths = (label: string, fn: (paths: typeof d.paths) => typeof d.paths) => {
+    if(!finishPen(s))return;
     const before = structuredClone(d.paths);
     const after = fn(structuredClone(d.paths));
     s.push(new LambdaCommand(label, (doc) => { doc.paths = structuredClone(after); doc.emit({ type: 'paths' }); }, (doc) => { doc.paths = structuredClone(before); doc.emit({ type: 'paths' }); }));
   };
   const fillOrStroke = (stroke: boolean) => {
-    if (!active) return;
+    if (!active || !finishPen(s)) return;
     const target = s.paintTarget(useApp.getState().quickMask);
     if (!target) { ui.toast('info', s.paintBlockReason(false) ?? 'Select a pixel layer.'); return; }
     const fg = useApp.getState().fg;
@@ -198,12 +210,18 @@ export function PathsPanel() {
   };
   return (
     <div className="panel">
-      <div className="list" style={{ flex: 1, overflow: 'auto' }}>
+      <div className="list" style={{ flex: 1, overflow: 'auto' }}
+        onMouseDown={e=>{if(e.target===e.currentTarget&&e.button===0&&blankBlocked())e.preventDefault();}}
+        onClick={e=>{
+          if(e.target!==e.currentTarget||e.button!==0||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||blankBlocked()||!s.activePathId)return;
+          // The existing setter owns idle Pen finish/failure; never finish a second time here.
+          s.activePathId=null;if(s.activePathId===null)s.notify();
+        }}>
         {s.activeLayer()?.vectorMask && <div className="list-item faint"><Icon name="pen" size={13} /><span className="grow">{s.activeLayer()!.name} Vector Mask</span></div>}
         {d.paths.map((p) => (
           <div key={p.id} className={`list-item${active?.id === p.id ? ' active' : ''}`} onClick={() => { s.activePathId = p.id; s.notify(); }} onDoubleClick={() => (p.kind === 'work' ? setPaths('Save Path', (ps) => ps.map((x) => (x.id === p.id ? { ...x, kind: 'saved', name: `Path ${ps.filter((y) => y.kind !== 'work').length + 1}` } : x))) : setRenaming(p.id))}
             onContextMenu={(e) => { e.preventDefault(); openContextMenu([
-              { type: 'item', label: 'Make Selection', run: () => pathToSelection(p.path) },
+              { type: 'item', entry:'action:path.toSelection', label: 'Make Selection', disabled:!canPathSelection('replace',{target:{kind:'path',pathId:p.id}}), run: () => {void run('path.toSelection',{target:{kind:'path',pathId:p.id}});} },
               { type: 'item', label: 'Fill Path', run: () => { s.activePathId = p.id; fillOrStroke(false); } },
               { type: 'item', label: 'Stroke Path', run: () => { s.activePathId = p.id; fillOrStroke(true); } },
               { type: 'separator' },
@@ -213,7 +231,7 @@ export function PathsPanel() {
             ], e.clientX, e.clientY); }}>
             <Icon name="pen" size={13} />
             {renaming === p.id ? (
-              <input className="txt" autoFocus defaultValue={p.name} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { setPaths('Rename Path', (ps) => ps.map((x) => (x.id === p.id ? { ...x, name: e.target.value || x.name } : x))); setRenaming(null); }} />
+              <input className="txt" autoFocus defaultValue={p.name} onKeyDown={(e) => { if (isComposing(e)) return; e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { setPaths('Rename Path', (ps) => ps.map((x) => (x.id === p.id ? { ...x, name: e.target.value || x.name } : x))); setRenaming(null); }} />
             ) : (
               <span className="grow" style={{ fontStyle: p.kind === 'work' ? 'italic' : undefined }}>{p.name}{p.kind === 'clipping' ? ' (clipping)' : ''}</span>
             )}
@@ -224,8 +242,8 @@ export function PathsPanel() {
       <div className="panel-toolbar">
         <IconButton icon="pathFill" title="Fill path with foreground color" disabled={!active} onClick={() => fillOrStroke(false)} />
         <IconButton icon="pathStroke" title="Stroke path with brush size" disabled={!active} onClick={() => fillOrStroke(true)} />
-        <IconButton icon="channelToSelection" title="Load path as a selection" disabled={!active} onClick={() => active && pathToSelection(active.path)} />
-        <IconButton icon="selectionToChannel" title="Make work path from selection" disabled={d.selection.isEmpty()} onClick={() => { const p = selectionToPath(); if (p) setWorkPath(s, p, 'Make Work Path'); }} />
+        <IconButton icon="channelToSelection" title="Load path as a selection" disabled={!canPathSelection('replace',active?{target:{kind:'path',pathId:active.id}}:undefined)} onClick={() => {void run('path.toSelection',active?{target:{kind:'path',pathId:active.id}}:undefined);}} />
+        <IconButton icon="selectionToChannel" title="Make work path from selection" disabled={d.selection.isEmpty()} onClick={() => { if(!finishPen(s))return;const p = selectionToPath(); if (p) setWorkPath(s, p, 'Make Work Path'); }} />
         <div className="spacer" />
         <IconButton icon="newLayer" title="Create new path" onClick={() => { const id = newId('path'); setPaths('New Path', (ps) => [...ps, { id, name: `Path ${ps.filter((x) => x.kind !== 'work').length + 1}`, kind: 'saved', path: { subpaths: [], fillRule: 'nonzero' } }]); s.activePathId = id; }} />
         <IconButton icon="trash" title="Delete path" disabled={!active} onClick={() => active && setPaths('Delete Path', (ps) => ps.filter((x) => x.id !== active.id))} />

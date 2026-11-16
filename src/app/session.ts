@@ -1,3 +1,4 @@
+import {finishPen,readPenSession} from '../tools/penSession';
 /**
  * DocumentSession — one open document: model + history + renderer + view + editing state.
  */
@@ -29,7 +30,20 @@ export class DocumentSession {
   readonly history: History;
   outputPending: Promise<boolean> | null = null;
   closePending: Promise<boolean> | null = null;
-  editProtected = false;
+  private legacyProtection = false;
+  private editOwners = new Map<symbol,string>();
+  get editProtected():boolean { return this.legacyProtection || this.editOwners.size>0; }
+  set editProtected(value:boolean) { this.legacyProtection=value; }
+  /** A transform's completion is a stable authority boundary for file requests. */
+  transformPending: Promise<boolean> | null = null;
+  cancelTransformTask: (()=>void) | null = null;
+  acquireEditProtection(owner:string):symbol { const token=Symbol(owner);this.editOwners.set(token,owner);return token; }
+  releaseEditProtection(token:symbol):void { this.editOwners.delete(token); }
+  pushProtected(cmd:Command,token:symbol,alreadyApplied=false):void {
+    if(!this.ownsCommit(token))throw Error('Transform no longer owns document protection');
+    this.history.push(cmd,alreadyApplied,token);
+  }
+  private ownsCommit(token:symbol):boolean { return !this.disposed&&!this.legacyProtection&&this.editOwners.size===1&&this.editOwners.get(token)==='transform'; }
   private disposed = false;
   canEdit(): boolean { return !this.editProtected && !this.disposed; }
 
@@ -40,11 +54,37 @@ export class DocumentSession {
   activeLayerId: LayerId | null = null;
   selectedIds = new Set<LayerId>();
   /** Paint on the active layer's mask instead of its pixels. */
-  editMask = false;
+  private _editMask: boolean = false;
+  get editMask(): boolean {return this._editMask;}
+  set editMask(value: boolean) {if(value!==this._editMask&&!finishPen(this))return;this._editMask=value;}
   /** Paint into an alpha channel (Channels panel selection). */
-  activeChannelId: string | null = null;
+  private _activeChannelId: string | null = null;
+  get activeChannelId(): string | null {return this._activeChannelId;}
+  set activeChannelId(value: string | null) {if(value!==this._activeChannelId&&!finishPen(this))return;this._activeChannelId=value;}
   /** Path targeted by pen tools / Paths panel (null = work path or active shape layer). */
-  activePathId: string | null = null;
+  private _activePathId: string | null = null;
+  get activePathId(): string | null {return this._activePathId;}
+  set activePathId(value: string | null) {
+    if(value!==this._activePathId&&!finishPen(this))return;
+    this._activePathId=value;
+    if(value&&this.doc.paths.some(p=>p.id===value&&p.kind==='work'))this.hiddenWorkPath=null;
+  }
+  /** Session-only display state: never part of document snapshots, dirty state or files. */
+  private hiddenWorkPath: {entry:DocumentSession['doc']['paths'][number];content:string}|null=null;
+  private workPathContent(p:DocumentSession['doc']['paths'][number]):string {
+    return JSON.stringify([p.path.fillRule,p.path.subpaths.map(s=>[s.closed,s.op,s.knots.map(k=>[k.x,k.y,k.inX,k.inY,k.outX,k.outY,k.smooth])])]);
+  }
+  isWorkPathHidden(p:DocumentSession['doc']['paths'][number]):boolean {
+    return p.kind==='work'&&this.hiddenWorkPath?.entry===p&&this.hiddenWorkPath.content===this.workPathContent(p);
+  }
+  /** Success-only cleanup after the conversion owner has already finished Pen and rechecked identity. */
+  completeDocumentPathSelection():void {
+    if(readPenSession(this))return;
+    const work=this.doc.paths.find(p=>p.kind==='work');
+    this.hiddenWorkPath=work?{entry:work,content:this.workPathContent(work)}:null;
+    this._activePathId=null;
+    try{this.notify();}catch(error){console.warn('Path selection display updated; a session observer failed:',error);}
+  }
   mode: SessionMode = { kind: 'none' };
   fitted = false;
   private savedEntryId: string;
@@ -56,7 +96,7 @@ export class DocumentSession {
     initialLabel = 'Open',
   ) {
     this.history = new History(doc, initialLabel);
-    this.history.canMutate = () => this.canEdit();
+    this.history.canMutate = owner => this.canEdit() || !!owner && this.ownsCommit(owner);
     doc.editingAllowed = () => this.canEdit();
     this.engine = new RenderEngine(doc);
     this.savedEntryId = this.history.current.id;
@@ -116,7 +156,8 @@ export class DocumentSession {
     return this.doc.getLayer(this.activeLayerId);
   }
 
-  setActive(id: LayerId | null, additive = false): void {
+  setActive(id: LayerId | null, additive = false): boolean {
+    if ((id!==this.activeLayerId||this.activeChannelId) && !finishPen(this)) return false;
     if (!additive) this.selectedIds.clear();
     this.activeLayerId = id;
     if (id) this.selectedIds.add(id);
@@ -124,9 +165,11 @@ export class DocumentSession {
     if (!l?.mask) this.editMask = false;
     this.activeChannelId = null;
     this.notify();
+    return true;
   }
 
   toggleSelected(id: LayerId): void {
+    if (!finishPen(this)) return;
     if (this.selectedIds.has(id)) {
       this.selectedIds.delete(id);
       if (this.activeLayerId === id) this.activeLayerId = [...this.selectedIds].pop() ?? null;
@@ -183,7 +226,9 @@ export class DocumentSession {
   }
 
   dispose(): void {
+    this.cancelTransformTask?.();
     this.disposed = true;
+    this.hiddenWorkPath=null;
     if (this.offloadTimer) clearTimeout(this.offloadTimer);
     this.unsub.forEach((u) => u());
     this.engine.dispose();

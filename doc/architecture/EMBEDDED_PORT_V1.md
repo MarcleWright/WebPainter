@@ -11,6 +11,12 @@
 
 源码/固定包及实测见[当前03D任务](../ai/tasks/2026-11-06_03D_ada-document-workflow.md)。v2/v1 以下均为原时点历史，不追认旧包测试，不代表独立review或Owner验收通过。
 
+### Main integration lifecycle (2026-11-16, stage B implementation pending independent review)
+
+Pen拥有者在松开指针后仍表示未完成草稿；state.busy和后台native/recovery准入同时检查Pen owner与transformPending，UI historyRev通知补齐草稿结束唤醒。后台入口不结束Pen/transform。显式save/saveAndCapture/composite输出先占用唯一output槽，等待原transform成功，再由原prepareMoveOutput结束Pen/Move/text；失败返回false或拒绝，未确认preview仍拒绝输出。捕获使用独立owner token，释放不恢复旧布尔保护。port/native/policy版本不变。
+
+native上限有限接纳path.toSelection/addToSelection/subtractFromSelection，与layer.copyContext/工具入口一样交现有access准入；不以visible授予执行。WP没有Profile或renew入口，宿主同实例transport续期保持现有端口/会话及在途operation/checkpoint；真正Profile/epoch业务组合必须由ADA阶段C测试，WP测试不能替代。
+
 ## Historical Port v2 / Native v1
 
 2026-11-06 03B后端口升级为 **2**，nativeVersion=**1**，下方v1为历史合同。`nativeVersion:1`宿主以native为事实保存，open解析同一通用codec；`captureNative`只捕获native+PNG+history checkpoint、不标clean；`saveAndCapture`从同一受保护快照输出两份内容，经host.save确认后核对代次/会话/entry才markSaved。`save`和核心关闭Save门复用该路径；失败保留dirty、关闭Cancel不移除会话。Resource可带recovered标记（打开后dirty）和通用source id/hash（内嵌像素/来源，不解释平台身份）。`addResource`经原CreateLayerCommand加图层/撤销，`exportPsd`经既有exporter独立输出，不移动保存点。

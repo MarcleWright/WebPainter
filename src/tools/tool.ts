@@ -44,6 +44,8 @@ export interface Tool {
   deactivate?(h: ToolHost): void;
   down?(h: ToolHost, p: ToolPointer): void;
   move?(h: ToolHost, p: ToolPointer): void;
+  /** One synchronous input delivery; every sample is retained in order. */
+  moveBatch?(h: ToolHost, points: ToolPointer[]): void;
   up?(h: ToolHost, p: ToolPointer): void;
   /** Pointer moves with no button pressed. */
   hover?(h: ToolHost, p: ToolPointer): void;
@@ -52,6 +54,8 @@ export interface Tool {
   keyUp?(h: ToolHost, e: KeyboardEvent): boolean;
   /** Cancels an in-progress interaction (Esc, tool switch). */
   cancel?(h: ToolHost): void;
+  /** Optional gesture-only cancellation; tools without it keep their existing pointer-up convention. */
+  cancelPointer?(h: ToolHost): void;
   /** Commits an in-progress interaction (Enter). */
   commit?(h: ToolHost): void;
   cursor?(h: ToolHost, p: ToolPointer | null): string;
@@ -59,4 +63,6 @@ export interface Tool {
   drawOverlay?(h: ToolHost, g: CanvasRenderingContext2D): void;
   /** True while the tool is dragging/drawing (blocks tool switching side effects). */
   busy?(): boolean;
+  /** Uncommitted local edit between pointer sequences (e.g. pen points). */
+  hasPendingEdit?(): boolean;
 }

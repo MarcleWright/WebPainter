@@ -1,3 +1,4 @@
+import {readPenSession} from '../tools/penSession';
 import {textEditState,onTextEdit} from '../tools/typeTool';
 import {MENUS} from '../app/menus';
 import {checkpointOutput} from './checkpoint-output';
@@ -15,7 +16,7 @@ import { findImporter, exporters } from '../formats/registry';
 import { registerTools } from '../tools/registry';
 import { keymap } from '../app/shortcuts';
 import { installTextEngine } from '../app/textEngine';
-import { ui } from '../app/store';
+import { ui,useApp } from '../app/store';
 import type { EmbeddedEditor, HostPort, Operation, Output } from './contract';
 
 let active = false;
@@ -33,7 +34,8 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
   let generation = ++nextGeneration, sequence = 0, binding = '', disposed = false, opening = false;
   let offSession = () => {};
   let change=0,historyRevision=0;
-  const busy=()=>boundary.busy()||!!editor.active?.outputPending||!!editor.currentTool?.busy?.()||!!textEditState()||editor.active?.mode.kind!=='none';
+  const busyWithoutOutput=()=>boundary.busy()||!!editor.active?.transformPending||!!readPenSession(editor.active)||!!editor.currentTool?.busy?.()||!!textEditState()||editor.active?.mode.kind!=='none';
+  const busy=()=>!!editor.active?.outputPending||busyWithoutOutput();
   const assertLive = () => { if (disposed) throw new Error('Editor disposed'); };
   const operation = (): Operation => ({ generation, operationId: `${generation}:${++sequence}`, binding });
   const valid = (op: Operation) => !disposed && op.generation === generation && op.binding === binding;
@@ -48,6 +50,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
     catch (e) { try { host.error({ generation, message: String(e) }); } catch { /* Observers do not own edits. */ } }
   };
   const stopBoundary=boundary.subscribe(notify),stopTextState=onTextEdit(notify);
+  const stopToolState=useApp.subscribe((state,prev)=>{if(state.historyRev!==prev.historyRev||state.tool!==prev.tool)notify();});
   const unsupported = async (): Promise<never> => { throw new Error('Capability unavailable in embedded mode'); };
   const services: Platform = {
     kind: 'browser', canWriteInPlace: true, bridge: null,
@@ -87,32 +90,43 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
     }
   }
   keymap.rebuild();
-  async function capture(format:'png'|'psd'='png'): Promise<Output> {
-    assertLive();
-    const s = editor.active;
-    if (opening || !s || s.outputPending || s.closePending || !prepareMoveOutput(s)) throw new Error('Editor busy or unavailable');
-    const op = operation();
-    s.editProtected = true; s.notify();
-    const pending = Promise.resolve().then(async () => {
-      const checkpoint = snapshotDocument(s.doc);
-      const bytes = await exporters.find(x => x.id === format)!.export(checkpoint, {});
-      if (!valid(op) || editor.session(s.id) !== s) throw new Error('Stale capture');
-      return { ...op, format, bytes };
-    });
-    s.outputPending = pending.then(() => true, () => false);
-    try { return await pending; }
-    finally { s.outputPending = null; s.editProtected = false; s.notify(); }
+  async function awaitAuthority(s: NonNullable<typeof editor.active>) {
+    const transform=s.transformPending;
+    if(transform && !(await transform))throw Error('Transform was not committed; confirm or cancel the retained preview');
+    if(editor.session(s.id)!==s)throw Error('Stale output session');
   }
-  async function nativeCheckpoint(publish:boolean, closing=false,requirePreview=true,background=false):Promise<Output> {
+  async function capture(format:'png'|'psd'='png'): Promise<Output> {
+    assertLive();const s=editor.active;
+    if(opening||!s||s.outputPending||s.closePending)throw Error('Editor busy or unavailable');
+    const op=operation();
+    const pending=Promise.resolve().then(async()=>{
+      await awaitAuthority(s);
+      if(!prepareMoveOutput(s))throw Error('Editor busy or unavailable');
+      const protection=s.acquireEditProtection('embedded-capture');s.notify();
+      try {
+        const checkpoint=snapshotDocument(s.doc);
+        const bytes=await exporters.find(x=>x.id===format)!.export(checkpoint,{});
+        if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale capture');
+        return {...op,format,bytes};
+      }finally{s.releaseEditProtection(protection);s.notify();}
+    });
+    s.outputPending=pending.then(()=>true,()=>false);s.notify();
+    try{return await pending;}finally{s.outputPending=null;s.notify();}
+  }
+  async function nativeCheckpoint(publish:boolean,closing=false,requirePreview=true,background=false):Promise<Output> {
     assertLive();const s=editor.active;
     if(background&&s&&busy())throw Error('Checkpoint deferred: operation in progress');
-    if(host.nativeVersion!==1 || opening || !s || s.outputPending || (s.closePending&&!closing) || (background?busy():!prepareMoveOutput(s)))throw Error('Native editor busy or unavailable');
-    s.history.seal();
-    const op=operation(),entry=s.history.current.id,revision=s.doc.rev,protectedBefore=s.editProtected;
-    const captureStart=performance.now();s.editProtected=true;
-    let checkpoint:ReturnType<typeof snapshotDocument>;
-    try{checkpoint=snapshotDocument(s.doc);}finally{s.editProtected=protectedBefore;s.notify();performance.measure('wp:checkpoint:snapshot-lock',{start:captureStart,duration:performance.now()-captureStart});}
+    if(host.nativeVersion!==1||opening||!s||s.outputPending||(s.closePending&&!closing))throw Error('Native editor busy or unavailable');
+    // Reserve before waiting: concurrent output cannot take a different checkpoint.
+    const op=operation();
     const pending=Promise.resolve().then(async()=>{
+      if(!background)await awaitAuthority(s);
+      if(background?busyWithoutOutput():!prepareMoveOutput(s))throw Error('Native editor busy or unavailable');
+      s.history.seal();
+      const entry=s.history.current.id,revision=s.doc.rev;
+      const captureStart=performance.now(),protection=s.acquireEditProtection('embedded-checkpoint');
+      let checkpoint:ReturnType<typeof snapshotDocument>;
+      try{checkpoint=snapshotDocument(s.doc);}finally{s.releaseEditProtection(protection);s.notify();performance.measure('wp:checkpoint:snapshot-lock',{start:captureStart,duration:performance.now()-captureStart});}
       const encoded=await checkpointOutput(checkpoint,requirePreview?'generation':'native');
       if(encoded.preview&&encoded.preview.byteLength>32*1024*1024)throw Error('Composite preview exceeds 32 MiB portable limit');
       const output:Output={...op,format:'wpnative',...encoded,...(!requirePreview?{transfer:true as const}:{}),checkpoint:entry};
@@ -161,7 +175,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
     async addResource(token) {
       assertLive();const s=editor.active;
       if(opening||!s||s.outputPending||s.closePending||!s.canEdit())throw Error('Editor busy');
-      const op=operation();s.editProtected=true;s.notify();
+      const op=operation();const protection=s.acquireEditProtection('embedded-resource');s.notify();
       const pending=(async()=>{
         const resource=await host.readResource(op,token),importer=findImporter(resource.bytes,resource.name);
         if(resource.source && (!resource.source.id || !/^[a-f0-9]{64}$/.test(resource.source.hash)))throw Error('Invalid immutable resource source');
@@ -172,10 +186,10 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
         const layer=cloneLayer(layers[0],true);adoptLayers(s.doc,spaceOfDoc(result.doc),[layer]);
         if(resource.source)layer.metadata.custom={source:{...resource.source}};
         // The owner-held reservation protects the async read; release only for this command.
-        s.editProtected=false;s.push(new CreateLayerCommand('Add image resource',layer,null,s.doc.root.children.length));s.editProtected=true;s.setActive(layer.id);
+        s.releaseEditProtection(protection);s.push(new CreateLayerCommand('Add image resource',layer,null,s.doc.root.children.length));s.setActive(layer.id);
       })();
       s.outputPending=pending.then(()=>true,()=>false);s.notify();
-      try{await pending;}finally{s.outputPending=null;s.editProtected=false;s.notify();}
+      try{await pending;}finally{s.outputPending=null;s.releaseEditProtection(protection);s.notify();}
     },
     async command(command) {
       assertLive();
@@ -193,7 +207,7 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
     destroy() {
       assertLive();
       if (editor.sessions.length) throw new Error('Request close before destroy');
-      disposed = true; generation = ++nextGeneration; offSession(); stopText(); stopBoundary(); stopTextState();
+      disposed = true; generation = ++nextGeneration; offSession(); stopText(); stopBoundary(); stopTextState(); stopToolState();
       editor.hostFactory = null; editor.clipboard = null;
       editor.releaseToolInstances();
       for (const a of original) register(a);

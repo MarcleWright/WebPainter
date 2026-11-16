@@ -1,3 +1,7 @@
+import {access} from '../app/access';
+import {PenDraft,type PenState} from './penDraft';
+import {registerPen} from './penSession';
+import {getTarget, livePath, PathEdit, hitKnot, movePathKnot} from './pathEditing';
 /**
  * Pen tool family: Pen, Freeform Pen, Add/Delete Anchor, Convert Point, Path Selection,
  * Direct Selection. Edits target (in order): the active shape layer's path, the active
@@ -6,100 +10,14 @@
  */
 import type { Tool, ToolHost, ToolPointer } from './tool';
 import { opts, toast } from './helpers';
-import type { DocumentSession } from '../app/session';
 import type { PathKnot, VectorPath } from '../vector/types';
 import { clonePath, knot } from '../vector/types';
-import { LambdaCommand, ReplaceLayerCommand, CreateLayerCommand } from '../commands/layerCommands';
-import { cloneLayer } from '../document/clone';
-import { renderShapeLayer } from '../layers/appearance';
+import { CreateLayerCommand } from '../commands/layerCommands';
 import { fitSmooth, nearestSegment, splitSegment, bezierPoint } from '../vector/shapes';
 import { simplify } from '../selection/ops';
-import { newId } from '../document/ids';
 import { createShapeLayer } from '../document/layerFactory';
 import { insertionPoint, nextLayerName } from '../app/ops/common';
-import { useApp } from '../app/store';
-import type { Layer } from '../document/types';
-
-type PathTarget =
-  | { kind: 'shape'; layerId: string }
-  | { kind: 'vectorMask'; layerId: string }
-  | { kind: 'path'; pathId: string };
-
-function getTarget(s: DocumentSession, create: boolean): PathTarget | null {
-  const l = s.activeLayer();
-  if (l?.kind === 'shape') return { kind: 'shape', layerId: l.id };
-  if (l?.vectorMask && !s.activePathId) return { kind: 'vectorMask', layerId: l.id };
-  const byId = s.activePathId ? s.doc.paths.find((p) => p.id === s.activePathId) : null;
-  if (byId) return { kind: 'path', pathId: byId.id };
-  const work = s.doc.paths.find((p) => p.kind === 'work');
-  if (work) return { kind: 'path', pathId: work.id };
-  if (!create) return null;
-  const id = newId('path');
-  s.doc.paths.unshift({ id, name: 'Work Path', kind: 'work', path: { subpaths: [], fillRule: 'nonzero' } });
-  s.activePathId = id;
-  s.doc.emit({ type: 'paths' });
-  return { kind: 'path', pathId: id };
-}
-
-function livePath(s: DocumentSession, t: PathTarget): VectorPath | null {
-  if (t.kind === 'path') return s.doc.paths.find((p) => p.id === t.pathId)?.path ?? null;
-  const l = s.doc.getLayer(t.layerId);
-  if (!l) return null;
-  if (t.kind === 'shape' && l.kind === 'shape') return l.path;
-  return l.vectorMask?.path ?? null;
-}
-
-/** Captures the target before an edit and records an undoable command after. */
-class PathEdit {
-  private before: VectorPath | Layer;
-  constructor(private s: DocumentSession, readonly t: PathTarget, private label: string) {
-    if (t.kind === 'path') this.before = clonePath(livePath(s, t)!);
-    else this.before = cloneLayer(s.doc.getLayer(t.layerId)!);
-  }
-  path(): VectorPath {
-    return livePath(this.s, this.t)!;
-  }
-  changed(): void {
-    const t = this.t;
-    if (t.kind === 'shape') {
-      const l = this.s.doc.getLayer(t.layerId);
-      if (l?.kind === 'shape') {
-        l.origin = l.origin ? { ...l.origin, kind: 'custom' } : null;
-        renderShapeLayer(this.s.doc, l);
-        this.s.doc.emit({ type: 'layer', layerId: l.id });
-      }
-    } else if (t.kind === 'vectorMask') this.s.doc.emit({ type: 'mask', layerId: t.layerId, rect: null });
-    else this.s.doc.emit({ type: 'paths' });
-  }
-  commit(): void {
-    const s = this.s, t = this.t;
-    if (t.kind === 'path') {
-      const before = this.before as VectorPath;
-      const after = clonePath(this.path());
-      const id = t.pathId;
-      s.push(new LambdaCommand(this.label, (d) => { const p = d.paths.find((x) => x.id === id); if (p) p.path = clonePath(after); d.emit({ type: 'paths' }); }, (d) => { const p = d.paths.find((x) => x.id === id); if (p) p.path = clonePath(before); d.emit({ type: 'paths' }); }), true);
-      return;
-    }
-    const live = s.doc.getLayer(t.layerId);
-    if (!live) return;
-    s.push(new ReplaceLayerCommand(this.label, this.before as Layer, cloneLayer(live)), true);
-  }
-}
-
-function hitKnot(h: ToolHost, path: VectorPath, p: ToolPointer): { sp: number; i: number; part: 'anchor' | 'in' | 'out' } | null {
-  const v = h.session.view;
-  let best: { sp: number; i: number; part: 'anchor' | 'in' | 'out'; d: number } | null = null;
-  path.subpaths.forEach((s, sp) =>
-    s.knots.forEach((k, i) => {
-      for (const [part, x, y] of [['anchor', k.x, k.y], ['in', k.inX, k.inY], ['out', k.outX, k.outY]] as const) {
-        const q = v.docToScreen(x, y);
-        const d = Math.hypot(q.x - p.sx, q.y - p.sy);
-        if (d < 7 && (!best || d < best.d || (part === 'anchor' && best.part !== 'anchor' && d < best.d + 2))) best = { sp, i, part, d };
-      }
-    }),
-  );
-  return best;
-}
+import { ui, useApp } from '../app/store';
 
 function drawPath(h: ToolHost, g: CanvasRenderingContext2D, path: VectorPath | null, selected: Set<string>, showHandles: boolean) {
   if (!path) return;
@@ -145,118 +63,123 @@ function drawPath(h: ToolHost, g: CanvasRenderingContext2D, path: VectorPath | n
 // Pen
 // ---------------------------------------------------------------------------------------------
 export class PenTool implements Tool {
-  id = 'pen' as const;
-  private edit: PathEdit | null = null;
-  private spIndex = -1;
-  private dragging: PathKnot | null = null;
-  private hoverPt: { x: number; y: number } | null = null;
-  private shapeMode = false;
-  cursor() {
+  id='pen' as const;
+  private draft:PenDraft|null=null;
+  private detach:(()=>void)|null=null;
+  private spIndex=-1;
+  private gesture:{before:PenState;sp:number;index:number;kind:'add'|'edit'|'convert';part:'anchor'|'in'|'out';start:ToolPointer;independent:boolean;moved:boolean}|null=null;
+  private hoverPt:ToolPointer|null=null;
+  private selected=new Set<string>();
+  hasPendingEdit(){return !!this.draft;}
+  busy(){return !!this.gesture;}
+  private closing(h:ToolHost,p:ToolPointer|null=this.hoverPt){
+    const d=this.draft,sp=d?.path.subpaths[this.spIndex];
+    if(!d||!d.allowed()||!sp||sp.closed||sp.knots.length<2||this.gesture||!p||p.mod||p.alt)return false;
+    const f=h.session.view.docToScreen(sp.knots[0].x,sp.knots[0].y);return Math.hypot(f.x-p.sx,f.y-p.sy)<8;
+  }
+  cursor(h:ToolHost,p:ToolPointer|null=this.hoverPt){
+    if(!this.ensure())return 'crosshair';
+    if(this.gesture)return this.gesture.kind==='edit'?'move':this.gesture.kind==='convert'?'alias':'crosshair';
+    if(this.draft&&(p?.mod||p?.alt))return p.mod?'move':'alias';
+    if(this.closing(h,p))return 'url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2228%22 height=%2228%22%3E%3Cpath d=%22M8 0v16M0 8h16%22 stroke=%22white%22 stroke-width=%223%22/%3E%3Cpath d=%22M8 0v16M0 8h16%22 stroke=%22black%22/%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%224%22 fill=%22white%22 stroke=%22black%22/%3E%3C/svg%3E") 8 8, crosshair';
     return 'crosshair';
   }
-  busy() {
-    return !!this.dragging;
-  }
-  down(h: ToolHost, p: ToolPointer) {
-    const s = h.session;
-    if (!this.edit) {
-      this.shapeMode = opts().pen.mode === 'shape' && s.activeLayer()?.kind !== 'shape';
-      if (this.shapeMode) {
-        const layer = createShapeLayer(nextLayerName(s, 'Shape'), { subpaths: [], fillRule: 'nonzero' }, null, s.doc.canvas.bitDepth);
-        layer.fill = { type: 'solid', color: { ...useApp.getState().fg } };
-        const { parentId, index } = insertionPoint(s);
-        const cmd = new CreateLayerCommand('Pen Shape', layer, parentId, index);
-        cmd.do(s.doc);
-        s.push(cmd, true);
-        s.setActive(layer.id);
+  private feedback(h:ToolHost){h.setCursor(this.cursor(h));h.redraw();}
+  private releasePointer(){if(typeof window!=='undefined')window.dispatchEvent(new Event('celenne:penInterrupted'));}
+
+  private reset(){this.draft?.host.setCursor('crosshair');this.draft?.dispose();this.draft=null;this.detach?.();this.detach=null;this.gesture=null;this.spIndex=-1;this.hoverPt=null;this.selected.clear();this.releasePointer();ui.bump('historyRev');}
+  private abandon=()=>{this.reset();toast('The current path target changed; the old Pen draft has ended.');};
+  private ensure(){if(this.draft&&!this.draft.valid()){this.abandon();return false;}return true;}
+  private interrupt=()=>{if(!this.ensure())return;const d=this.draft;if(d&&this.gesture){d.restore(this.gesture.before);this.spIndex=this.gesture.before.sp;}this.gesture=null;this.hoverPt=null;this.selected.clear();this.releasePointer();if(d)this.feedback(d.host);};
+  private finish=(output=false):boolean=>{
+    if(!this.ensure())return true;const d=this.draft;if(!d)return true;
+    if(!d.allowed(output)){toast('The current path cannot be finished while its target is unavailable or busy.');return false;}
+    this.interrupt();
+    const sp=d.path.subpaths[this.spIndex];if(sp&&sp.knots.length<2&&!sp.closed){d.path.subpaths.splice(this.spIndex,1);d.changed();}
+    if(!d.commit())return false;this.reset();d.host.redraw();return true;
+  };
+  private undo=(redo:boolean)=>{if(!this.ensure())return;const d=this.draft;if(!d||!d.allowed())return;
+    if(this.gesture){if(!redo)this.interrupt();return;}
+    const state=d.step(redo);if(state)this.spIndex=state.sp;
+  };
+  down(h:ToolHost,p:ToolPointer){
+    if(!this.ensure()||!access('tool:pen').enabled)return;
+    const hadDraft=!!this.draft;
+    if(!this.draft){
+      const creatingShape=opts().pen.mode==='shape'&&h.session.activeLayer()?.kind!=='shape';
+      const target=getTarget(h.session,false),layer=target&&target.kind!=='path'?h.session.doc.getLayer(target.layerId):null;
+      if(layer&&(layer.locks.all||target?.kind==='shape'&&layer.locks.pixels)){toast('The path target is locked.');return;}
+      if(!h.session.canEdit()||h.session.outputPending||h.session.closePending)return;
+      // Admit the actual target before registering an owner; a new Shape does not edit the old mask.
+      if(!creatingShape&&target?.kind==='vectorMask'&&!access('feature:masks').enabled){toast('Vector mask editing is unavailable.');return;}
+      if(creatingShape){
+        const s=h.session,layer=createShapeLayer(nextLayerName(s,'Shape'),{subpaths:[],fillRule:'nonzero'},null,s.doc.canvas.bitDepth);
+        layer.fill={type:'solid',color:{...useApp.getState().fg}};const {parentId,index}=insertionPoint(s);
+        const cmd=new CreateLayerCommand('Pen Shape',layer,parentId,index);cmd.do(s.doc);s.push(cmd,true);s.setActive(layer.id);
       }
-      const t = getTarget(s, true);
-      if (!t) return;
-      this.edit = new PathEdit(s, t, 'Pen');
-      this.spIndex = -1;
+      this.draft=new PenDraft(h,this.abandon);const owned=this.draft;this.detach=registerPen({session:h.session,layerId:owned.target.kind==='path'?null:owned.target.layerId,target:Object.freeze({...owned.target}),busy:()=>this.busy(),valid:()=>owned.valid(),abandon:this.abandon,finish:this.finish,interrupt:this.interrupt,undo:this.undo});
     }
-    const path = this.edit.path();
-    // Close on the first knot of the current sub-path.
-    if (this.spIndex >= 0) {
-      const sp = path.subpaths[this.spIndex];
-      const f = h.session.view.docToScreen(sp.knots[0].x, sp.knots[0].y);
-      if (sp.knots.length > 1 && Math.hypot(f.x - p.sx, f.y - p.sy) < 8) {
-        sp.closed = true;
-        this.edit.changed();
-        this.finish();
-        return;
-      }
+    const d=this.draft;if(!d.allowed())return;
+    this.hoverPt=p;
+    const path=d.path,sp=path.subpaths[this.spIndex];
+    if(hadDraft&&(p.mod||p.alt)){
+      const hit=hitKnot(h,path,p);this.selected.clear();
+      if(hit){this.selected.add(`${hit.sp}:${hit.i}`);this.gesture={before:d.state(this.spIndex),sp:hit.sp,index:hit.i,kind:!p.mod&&hit.part==='anchor'?'convert':'edit',part:hit.part,start:p,independent:p.alt,moved:false};}
+      this.feedback(h);return;
     }
-    if (this.spIndex < 0) {
-      path.subpaths.push({ knots: [], closed: false, op: 'combine' });
-      this.spIndex = path.subpaths.length - 1;
+    if(sp?.closed){this.finish();return;}
+    if(this.closing(h,p)){sp.closed=true;d.changed();this.finish();return;}
+    const before=d.state(this.spIndex);
+    if(this.spIndex<0){path.subpaths.push({knots:[],closed:false,op:'combine'});this.spIndex=path.subpaths.length-1;}
+    const knots=path.subpaths[this.spIndex].knots;knots.push(knot(p.x,p.y));
+    this.selected.clear();this.gesture={before,sp:this.spIndex,index:knots.length-1,kind:'add',part:'anchor',start:p,independent:p.alt,moved:false};d.changed();this.feedback(h);
+  }
+  move(h:ToolHost,p:ToolPointer){
+    if(!this.ensure())return;const d=this.draft;if(!d)return;
+    const g=this.gesture;
+    if(g){
+      if(!d.allowed()){this.interrupt();return;}
+      const k=d.path.subpaths[g.sp].knots[g.index],dx=p.x-g.start.x,dy=p.y-g.start.y;
+      if(dx||dy)g.moved=true;
+      if(p.alt)g.independent=true;
+      if(g.kind==='add'||g.kind==='convert'){
+        if(g.moved){k.outX=p.x;k.outY=p.y;
+          if(g.kind==='convert'||!g.independent){k.inX=2*k.x-p.x;k.inY=2*k.y-p.y;}
+          k.smooth=(g.kind==='convert'||!g.independent)&&!!(p.x-k.x||p.y-k.y);d.changed();}
+      }else if(g.moved){const o=g.before.path.subpaths[g.sp].knots[g.index];if(!g.independent&&!dx&&!dy)Object.assign(k,o);else movePathKnot(k,o,g.part,dx,dy,g.independent);d.changed();}
     }
-    const k = knot(p.x, p.y);
-    path.subpaths[this.spIndex].knots.push(k);
-    this.dragging = k;
-    this.edit.changed();
-    h.redraw();
+    this.hoverPt=p;this.feedback(h);
   }
-  move(h: ToolHost, p: ToolPointer) {
-    if (this.dragging) {
-      const k = this.dragging;
-      k.outX = p.x; k.outY = p.y;
-      if (!p.alt) { k.inX = 2 * k.x - p.x; k.inY = 2 * k.y - p.y; }
-      k.smooth = !p.alt;
-      this.edit?.changed();
+  hover(h:ToolHost,p:ToolPointer){if(!this.ensure())return;this.hoverPt=p;this.feedback(h);}
+  up(){
+    if(!this.ensure())return;const d=this.draft,g=this.gesture;if(!d||!g)return;
+    if(!d.allowed()){this.interrupt();return;}
+    if(g.kind==='convert'&&!g.moved){const k=d.path.subpaths[g.sp].knots[g.index];k.inX=k.outX=k.x;k.inY=k.outY=k.y;k.smooth=false;d.changed();}
+    this.gesture=null;d.record(this.spIndex);this.feedback(d.host);
+  }
+  keyDown(h:ToolHost,e:KeyboardEvent){
+    if(!this.ensure()||!this.draft)return false;
+    if(['Control','Meta','Alt','Shift'].includes(e.key)){
+      if(!this.draft.allowed())return true;
+      if(e.altKey&&this.gesture){const g=this.gesture;g.independent=true;if(g.kind==='edit'&&g.part!=='anchor'&&g.moved){this.draft.path.subpaths[g.sp].knots[g.index].smooth=false;this.draft.changed();}}
+      if(this.hoverPt)this.hoverPt={...this.hoverPt,mod:e.ctrlKey||e.metaKey,alt:e.altKey,shift:e.shiftKey};
+      this.feedback(h);return true;
     }
-    this.hoverPt = { x: p.x, y: p.y };
-    h.redraw();
+    if(e.key==='Escape'&&this.gesture){this.interrupt();return true;}
+    if(e.key==='Enter'||e.key==='Escape'){this.finish();h.redraw();return true;}return false;
   }
-  hover(h: ToolHost, p: ToolPointer) {
-    this.hoverPt = { x: p.x, y: p.y };
-    h.redraw();
-  }
-  up() {
-    this.dragging = null;
-  }
-  keyDown(h: ToolHost, e: KeyboardEvent): boolean {
-    if (!this.edit) return false;
-    if (e.key === 'Enter' || e.key === 'Escape') {
-      this.finish();
-      h.redraw();
-      return true;
-    }
-    return false;
-  }
-  private finish() {
-    if (this.edit) {
-      const path = this.edit.path();
-      path.subpaths = path.subpaths.filter((sp) => sp.knots.length > 1 || sp.closed);
-      this.edit.changed();
-      this.edit.commit();
-    }
-    this.edit = null;
-    this.spIndex = -1;
-    this.dragging = null;
-  }
-  deactivate() {
-    this.finish();
-  }
-  cancel() {
-    this.finish();
-  }
-  drawOverlay(h: ToolHost, g: CanvasRenderingContext2D) {
-    const s = h.session;
-    const t = this.edit?.t ?? getTarget(s, false);
-    const path = t ? livePath(s, t) : null;
-    drawPath(h, g, path, new Set(), true);
-    if (this.edit && this.spIndex >= 0 && this.hoverPt && !this.dragging && path) {
-      const sp = path.subpaths[this.spIndex];
-      const last = sp?.knots[sp.knots.length - 1];
-      if (last) {
-        const v = s.view;
-        const a = v.docToScreen(last.x, last.y), c = v.docToScreen(last.outX, last.outY), b = v.docToScreen(this.hoverPt.x, this.hoverPt.y);
-        g.save();
-        g.strokeStyle = 'rgba(47,139,255,0.6)';
-        g.beginPath(); g.moveTo(a.x, a.y); g.bezierCurveTo(c.x, c.y, b.x, b.y, b.x, b.y); g.stroke();
-        g.restore();
-      }
+  keyUp(h:ToolHost,e:KeyboardEvent){if(!this.ensure()||!this.draft)return false;if(['Control','Meta','Alt','Shift'].includes(e.key)){if(this.hoverPt)this.hoverPt={...this.hoverPt,mod:e.ctrlKey||e.metaKey,alt:e.altKey,shift:e.shiftKey};this.feedback(h);return true;}return false;}
+  cancelPointer(){this.interrupt();}
+  cancel(){this.finish();}
+  deactivate(){this.finish();}
+  drawOverlay(h:ToolHost,g:CanvasRenderingContext2D){
+    if(!this.ensure())return;const d=this.draft,t=d?.target??getTarget(h.session,false),path=t?livePath(h.session,t):null;
+    drawPath(h,g,path,this.selected,true);
+    const sp=d?.path.subpaths[this.spIndex],last=sp?.knots.at(-1),closing=this.closing(h);
+    if(last&&this.hoverPt&&!this.gesture){
+      const v=h.session.view,a=v.docToScreen(last.x,last.y),c=v.docToScreen(last.outX,last.outY),end=closing?sp!.knots[0]:this.hoverPt,b=v.docToScreen(end.x,end.y),incoming=closing?v.docToScreen(sp!.knots[0].inX,sp!.knots[0].inY):b;
+      g.save();g.strokeStyle='rgba(47,139,255,0.6)';g.beginPath();g.moveTo(a.x,a.y);g.bezierCurveTo(c.x,c.y,incoming.x,incoming.y,b.x,b.y);g.stroke();
+      if(closing){g.strokeStyle='#2f8bff';g.lineWidth=2;g.beginPath();g.arc(b.x,b.y,6,0,Math.PI*2);g.stroke();}g.restore();
     }
   }
 }
@@ -413,7 +336,7 @@ export class PathSelectTool implements Tool {
     const orig = d.orig;
     const moveKnot = (sp: number, i: number) => {
       const o = orig.subpaths[sp].knots[i], k = path.subpaths[sp].knots[i];
-      k.x = o.x + dx; k.y = o.y + dy; k.inX = o.inX + dx; k.inY = o.inY + dy; k.outX = o.outX + dx; k.outY = o.outY + dy;
+      movePathKnot(k,o,'anchor',dx,dy,false);
     };
     if (d.part === 'whole' || d.part === 'anchor') {
       for (const key of this.selected) {
@@ -422,20 +345,7 @@ export class PathSelectTool implements Tool {
       }
     } else {
       const o = orig.subpaths[d.sp].knots[d.i], k = path.subpaths[d.sp].knots[d.i];
-      if (d.part === 'in') {
-        k.inX = o.inX + dx; k.inY = o.inY + dy;
-        if (k.smooth && !p.alt) {
-          const len = Math.hypot(o.outX - o.x, o.outY - o.y), a = Math.atan2(k.y - k.inY, k.x - k.inX);
-          k.outX = k.x + Math.cos(a) * len; k.outY = k.y + Math.sin(a) * len;
-        }
-      } else {
-        k.outX = o.outX + dx; k.outY = o.outY + dy;
-        if (k.smooth && !p.alt) {
-          const len = Math.hypot(o.inX - o.x, o.inY - o.y), a = Math.atan2(k.y - k.outY, k.x - k.outX);
-          k.inX = k.x + Math.cos(a) * len; k.inY = k.y + Math.sin(a) * len;
-        }
-      }
-      if (p.alt) k.smooth = false;
+      movePathKnot(k,o,d.part,dx,dy,p.alt);
     }
     d.edit.changed();
     h.redraw();
