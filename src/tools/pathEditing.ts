@@ -7,6 +7,7 @@ import {LambdaCommand, ReplaceLayerCommand} from '../commands/layerCommands';
 import {cloneLayer} from '../document/clone';
 import {renderShapeLayer} from '../layers/appearance';
 import {newId} from '../document/ids';
+import {setWorkPath} from './shapeTools';
 
 export type PathTarget =
   | { kind: 'shape'; layerId: string }
@@ -20,8 +21,13 @@ export function getTarget(s: DocumentSession, create: boolean): PathTarget | nul
   const byId = s.activePathId ? s.doc.paths.find((p) => p.id === s.activePathId) : null;
   if (byId) return { kind: 'path', pathId: byId.id };
   const work = s.doc.paths.find((p) => p.kind === 'work');
-  if (work) return { kind: 'path', pathId: work.id };
+  if (work&&!s.isWorkPathHidden(work)) return { kind: 'path', pathId: work.id };
   if (!create) return null;
+  if(work){
+    // Starting after conversion replaces the hidden Work Path through its existing undoable owner.
+    setWorkPath(s,{subpaths:[],fillRule:'nonzero'},'New Work Path');
+    return s.activePathId===work.id?{kind:'path',pathId:work.id}:null;
+  }
   const id = newId('path');
   s.doc.paths.unshift({ id, name: 'Work Path', kind: 'work', path: { subpaths: [], fillRule: 'nonzero' } });
   s.activePathId = id;

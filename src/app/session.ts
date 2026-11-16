@@ -1,4 +1,4 @@
-import {finishPen} from '../tools/penSession';
+import {finishPen,readPenSession} from '../tools/penSession';
 /**
  * DocumentSession — one open document: model + history + renderer + view + editing state.
  */
@@ -51,7 +51,27 @@ export class DocumentSession {
   /** Path targeted by pen tools / Paths panel (null = work path or active shape layer). */
   private _activePathId: string | null = null;
   get activePathId(): string | null {return this._activePathId;}
-  set activePathId(value: string | null) {if(value!==this._activePathId&&!finishPen(this))return;this._activePathId=value;}
+  set activePathId(value: string | null) {
+    if(value!==this._activePathId&&!finishPen(this))return;
+    this._activePathId=value;
+    if(value&&this.doc.paths.some(p=>p.id===value&&p.kind==='work'))this.hiddenWorkPath=null;
+  }
+  /** Session-only display state: never part of document snapshots, dirty state or files. */
+  private hiddenWorkPath: {entry:DocumentSession['doc']['paths'][number];content:string}|null=null;
+  private workPathContent(p:DocumentSession['doc']['paths'][number]):string {
+    return JSON.stringify([p.path.fillRule,p.path.subpaths.map(s=>[s.closed,s.op,s.knots.map(k=>[k.x,k.y,k.inX,k.inY,k.outX,k.outY,k.smooth])])]);
+  }
+  isWorkPathHidden(p:DocumentSession['doc']['paths'][number]):boolean {
+    return p.kind==='work'&&this.hiddenWorkPath?.entry===p&&this.hiddenWorkPath.content===this.workPathContent(p);
+  }
+  /** Success-only cleanup after the conversion owner has already finished Pen and rechecked identity. */
+  completeDocumentPathSelection():void {
+    if(readPenSession(this))return;
+    const work=this.doc.paths.find(p=>p.kind==='work');
+    this.hiddenWorkPath=work?{entry:work,content:this.workPathContent(work)}:null;
+    this._activePathId=null;
+    try{this.notify();}catch(error){console.warn('Path selection display updated; a session observer failed:',error);}
+  }
   mode: SessionMode = { kind: 'none' };
   fitted = false;
   private savedEntryId: string;
@@ -194,6 +214,7 @@ export class DocumentSession {
 
   dispose(): void {
     this.disposed = true;
+    this.hiddenWorkPath=null;
     if (this.offloadTimer) clearTimeout(this.offloadTimer);
     this.unsub.forEach((u) => u());
     this.engine.dispose();

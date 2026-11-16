@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-16 当前：[路径转选区任务 F1–F2](tasks/2026-11-12_02_path-selection-shortcuts.md) 文字工具误命中隐藏 Work Path 的 P2 已由 6.1-sol 子代理修复并补测，主代理独立复审 Approved；最终关联集 262/262、生产构建通过。原 P1–P3 Approved 保留，真实窗口新增文字流程/IME/设备/Owner 验收仍 Pending。Owner 本轮授权通过后提交并推送 origin/codex/dev，覆盖此前禁止提交/推送限制；不合并、不发布。
+
 2026-11-12 Owner 已授权本地提交 F1/F2 修复和验证记录，不推送/合并/发布；接下来仅分析 Ctrl+Enter 路径转选区等钢笔快捷键，未授权实现。下方未提交状态为当时历史记录。
 
 2026-11-12 F2：用户反馈源码窗口无画板，已定位旧 no-rulers 自动网格使 viewport 0×0；styles.css 显式固定行列修复，标尺偏好/用户文件保留。独立完整 Electron 窗口关/开/关标尺及 WebGPU 实际图像、构建通过；用户窗口热更新后适配约 66.5%、Saved。详见[任务 F2](tasks/2026-11-12_01_pen-live-path-editing.md)，WP-UI-001；未提交/推送。

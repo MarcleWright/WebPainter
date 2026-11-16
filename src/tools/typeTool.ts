@@ -285,7 +285,7 @@ function pathUnder(h: ToolHost, p: ToolPointer): { subpath: SubPath; start: numb
   if(!access('feature:textPath').enabled)return null;
   const s = h.session;
   const cands: SubPath[] = [];
-  const active = s.activePathId ? s.doc.paths.find((x) => x.id === s.activePathId) : s.doc.paths.find((x) => x.kind === 'work');
+  const active = s.activePathId ? s.doc.paths.find((x) => x.id === s.activePathId) : s.doc.paths.find((x) => x.kind === 'work' && !s.isWorkPathHidden(x));
   if (active) cands.push(...active.path.subpaths);
   const al = s.activeLayer();
   if (al?.kind === 'shape') cands.push(...al.path.subpaths);

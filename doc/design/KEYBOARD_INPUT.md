@@ -59,3 +59,16 @@ pointerdown 冻结 owner，松 Ctrl/Alt 不把尾事件交给普通加点；拖�
 有效 Undo/Redo/Step Action、菜单和重绑键先进入草稿局部栈，不硬编码 Ctrl+Z；局部已耗尽则消费，不穿透文档历史。拖动 Undo 只取消当前手势，Redo 不执行。输入框撤销仍归输入框。HistoryPanel 在草稿存在（含撤到零点可 redo）时禁用状态跳转、恢复/创建快照、清空历史，处理器再检查；仅元数据操作保留，正常结束后解除。
 
 普通 Pen/临时点编辑的 pointercancel 与 lostcapture 取消本次手势（不先 up）；其他工具保留原结束约定。窗口失焦、文本/组合开始或 Modal 出现只取消未完成手势并清修饰反馈，保留已完成草稿；外部目标失效则丢弃旧 owner、局部记录及迟到事件，不恢复旧快照。正式提交、主动切目标与保存责任见[交互约定](INTERACTION_RULES.md)。独立复审及完整原生 IME/OS AltTab/设备矩阵仍 Pending。
+
+## 路径转选区（2026-11-12）
+
+`path.toSelection`（Ctrl/Cmd+Enter）、`path.addToSelection`（Ctrl/Cmd+Shift+Enter）和 `path.subtractFromSelection`（Ctrl/Cmd+Alt+Enter）分别固定替换、添加、减去；走既有 Action/keymap，支持用户重绑、删除绑定和冲突显示，重复按键不连发。Paths 面板现有 Load 按钮和 Make Selection 行菜单都调用同一公共 Action；右键按该行显式目标转换，不切活动路径。无参数公共 enabled 只检查会话/access/保护/交互状态，显式目标和默认目标由共享 owner 各自校验，默认空路径不阻挡有效的另一行。
+
+仅支持零羽化：省略或数值 0；显式 undefined、非零、负值、非有限数、字符串等在结束 Pen 前拒绝。目标顺序为显式描述、有效 Pen 固定目标、显式选中路径、Work Path、活动 Shape/Vector Mask；显式失效和不足两点的草稿不回退。文本、IME、菜单/Modal、文字局部确认和正在进行的手势保留原 owner。
+
+转换捕获原 session/doc、目标和 Pen 身份，正常结束一次后再读取最终路径，写选区前复查。仅填充计算隐式连接开放端点，保留原 closed、节点、路径资产。F1 成功转换文档路径（changed 或有效 unchanged）后取消行选中并隐藏当前 Work Path 的默认线/点柄与编辑回退；Shape/Vector Mask 不做该收尾。隐藏只属于当前会话及原 Work 身份/几何，显式 Work 行选择解除，Saved/Clipping 行只恢复自身；新建/替换/几何变化恢复可见，失败不清显示。显式隐藏路径仍可转换，默认目标跳过它并允许图层路径回退。Pen 与 Make Selection 是顺序两步文档历史；无变化不记选区历史。有效零覆盖的 replace 清空旧选区，add/subtract 不改变；空选区 subtract 仍为空。finish 后转换失败保留已提交路径和旧选区，重试只转换。
+
+源码 owner：[目标与生命周期](../../src/app/ops/pathSelectionOps.ts)、[覆盖与历史](../../src/app/ops/selectOps.ts)、[Pen 身份桥](../../src/tools/penSession.ts)。阶段证据与未完成的真实 IME/人工验收见[任务 02](../ai/tasks/2026-11-12_02_path-selection-shortcuts.md)，不据自动通过宣称整体验收。
+
+
+F2：Paths 列表剩余空白的普通主键点击只取消文档路径行选中；行/图标/名称、重命名输入、菜单、工具栏及滚动不触发。空白不修改 Work 隐藏记录、像素覆盖、图层选择或独立历史：普通 Work 仍可默认显示，隐藏 Work 保持隐藏。空闲 Pen 经原 setter 正常结束一次后再取消；失败、拖动、文字/变换、重命名组合态和保存/关闭保护不被强行接管。纯显示/选中状态不 dirty、不序列化；隐藏后开始 Pen 通过可撤销 Work 替换建立可见草稿，保留 Saved/Clipping。

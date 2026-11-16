@@ -9,6 +9,7 @@ import { ui, useApp } from './store';
 import * as file from './fileOps';
 import * as layer from './ops/layerOps';
 import * as sel from './ops/selectOps';
+import {makePathSelection,pathSelectionContext,PATH_SELECTION_ACTIONS} from './ops/pathSelectionOps';
 import * as img from './ops/imageOps';
 import * as mode from './ops/modeOps';
 import { DEFAULT_BITMAP, DEFAULT_INDEXED, type BitmapOptions, type IndexedOptions } from '../color/indexed';
@@ -352,6 +353,11 @@ reg('type.matchFont', 'Match Font…', dialog('matchFont'), { enabled: hasDoc })
 // Select
 // ---------------------------------------------------------------------------------------------
 reg('select.all', 'All', () => sel.selectAll(), { shortcut: 'Ctrl+A', enabled: hasDoc });
+for(const [op,shortcut,label] of [
+  ['replace','Ctrl+Enter','Make Path Selection'],
+  ['add','Ctrl+Shift+Enter','Add Path to Selection'],
+  ['subtract','Ctrl+Alt+Enter','Subtract Path from Selection'],
+] as const)reg(PATH_SELECTION_ACTIONS[op],label,args=>makePathSelection(op,args),{shortcut,enabled:pathSelectionContext,category:'Path'});
 reg('select.deselect', 'Deselect', () => sel.deselect(), { shortcut: 'Ctrl+D', enabled: hasSel });
 reg('select.reselect', 'Reselect', () => sel.reselect(), { shortcut: 'Shift+Ctrl+D', enabled: hasDoc });
 reg('select.inverse', 'Inverse', () => sel.inverse(), { shortcut: 'Shift+Ctrl+I', enabled: hasDoc });

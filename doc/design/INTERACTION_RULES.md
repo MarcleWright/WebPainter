@@ -50,3 +50,12 @@ PhotoCraft v0.20.2 的浮动选区可在松手后继续保持, 直到放下或�
 外部替换、删除、原路径内容或 Shape 关联几何被接管时，旧对象/内容基线已失去所有权：只清理旧局部状态，不恢复/复活目标、不伪造最终历史。有效结束用路径与关联几何命令，避免旧整层快照覆盖 opacity 等后续属性。临时单步取消只在仍拥有原对象/内容时恢复手势前快照。
 
 正常保存/关闭通过已有链路先结束 Pen；自动恢复保存跳过未完成 Pen 草稿，窗口未保存检测包含会话。最终验证包含受控 IO 的真实 saveAs/Save-on-close→PSD 重新导入及 native checkpoint；并非所有格式/外部文件系统的人工验收。未改变格式、填充、PSD 算法或其他钢笔家族功能范围。
+
+## 路径转换 owner（2026-11-12）
+
+路径转选区通过 [pathSelectionOps](../../src/app/ops/pathSelectionOps.ts) 绑定原目标并结束空闲有效 Pen，沿原 VectorPath 重新读取最终几何；不采用绘图 getTarget 的 Shape 优先规则，不在 finish 后猜新目标。显式 B 转换先结束 A，不临时切 activePathId；转换成功后按 F1 清除文档路径选中并隐藏当前 Work（Shape/Vector Mask 例外）。结束失败/失效拒绝转换；历史回调再次结束由 Pen 桥接拒绝，避免一次动作重复提交。对象、路径引用、内容、session/doc、选区基线及 access 在边界复查，不能写新文档或外部接管目标。
+
+复用原 rasterizePath/combineRaster。先离线生成选区，再在原选区基线仍有效时提交单条 Make Selection；有效覆盖不变不记空历史。合法结束的 Pen 步骤与选区独立：先撤销选区，再撤销路径，重做逆序；后续失败不删除已提交作品。路径覆盖全在画布外的 replace 清空旧选区，add/subtract 保持原覆盖。失败提示与零羽化准入、输入界限及验证见[键盘输入约定](KEYBOARD_INPUT.md)和[任务 02](../ai/tasks/2026-11-12_02_path-selection-shortcuts.md)。
+
+
+F1–F2 显示 owner 位于 [DocumentSession](../../src/app/session.ts)：私有会话记录比较 Work 条目身份及规范化几何内容，不依赖通知次数，不进入 document/native 文件或独立历史。钢笔家族的默认 overlay 和直接选择/锚点准入共享 getTarget 的隐藏检查；文字工具的默认 Work Path 候选同样检查隐藏状态，不把普通文字点击/拖框变成沿路径文字，显式选中路径与 Shape 候选保持原行为。原 Pen 草稿仍使用固定 owner。隐藏后新 Pen 沿现有 setWorkPath 作可撤销替换，再开始可见草稿，不改 Saved/Clipping 资产。成功收尾重查原 session/doc/目标且不使用旧选区版本；失败保留显示目标。Paths 空白取消只经受控 setter 清行选择，不改变隐藏记录；实际窗口、例外及未验证项见[任务 F1–F2](../ai/tasks/2026-11-12_02_path-selection-shortcuts.md)。

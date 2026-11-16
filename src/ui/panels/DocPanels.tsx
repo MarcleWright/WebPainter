@@ -9,7 +9,10 @@ import { Icon } from '../icons';
 import { RasterThumb } from './Thumb';
 import { openContextMenu } from '../menu/Menu';
 import { LambdaCommand } from '../../commands/layerCommands';
-import { loadChannelAsSelection, saveSelectionToChannel, pathToSelection, selectionToPath } from '../../app/ops/selectOps';
+import { loadChannelAsSelection, saveSelectionToChannel, selectionToPath } from '../../app/ops/selectOps';
+import {canPathSelection,pathSelectionContext} from '../../app/ops/pathSelectionOps';
+import {run} from '../../app/actions';
+import {editor} from '../../app/editor';
 import { newId } from '../../document/ids';
 import { TiledRaster } from '../../image-engine/tiledRaster';
 import { ui, useApp } from '../../app/store';
@@ -161,12 +164,15 @@ export function ChannelsPanel() {
 }
 
 export function PathsPanel() {
+  useHistoryRev(); // Pen local steps change target admission without a document history push.
   const s = useSession();
   const [renaming, setRenaming] = useState<string | null>(null);
   useApp((st) => st.docRev);
   if (!s) return <div className="panel"><div className="empty">No document</div></div>;
   const d = s.doc;
   const active = d.paths.find((p) => p.id === s.activePathId) ?? null;
+  const blankBlocked=()=>editor.active!==s||!pathSelectionContext()||useApp.getState().dialogs.length>0
+    ||isComposing({key:'',target:document.activeElement});
   const setPaths = (label: string, fn: (paths: typeof d.paths) => typeof d.paths) => {
     if(!finishPen(s))return;
     const before = structuredClone(d.paths);
@@ -204,12 +210,18 @@ export function PathsPanel() {
   };
   return (
     <div className="panel">
-      <div className="list" style={{ flex: 1, overflow: 'auto' }}>
+      <div className="list" style={{ flex: 1, overflow: 'auto' }}
+        onMouseDown={e=>{if(e.target===e.currentTarget&&e.button===0&&blankBlocked())e.preventDefault();}}
+        onClick={e=>{
+          if(e.target!==e.currentTarget||e.button!==0||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||blankBlocked()||!s.activePathId)return;
+          // The existing setter owns idle Pen finish/failure; never finish a second time here.
+          s.activePathId=null;if(s.activePathId===null)s.notify();
+        }}>
         {s.activeLayer()?.vectorMask && <div className="list-item faint"><Icon name="pen" size={13} /><span className="grow">{s.activeLayer()!.name} Vector Mask</span></div>}
         {d.paths.map((p) => (
           <div key={p.id} className={`list-item${active?.id === p.id ? ' active' : ''}`} onClick={() => { s.activePathId = p.id; s.notify(); }} onDoubleClick={() => (p.kind === 'work' ? setPaths('Save Path', (ps) => ps.map((x) => (x.id === p.id ? { ...x, kind: 'saved', name: `Path ${ps.filter((y) => y.kind !== 'work').length + 1}` } : x))) : setRenaming(p.id))}
             onContextMenu={(e) => { e.preventDefault(); openContextMenu([
-              { type: 'item', label: 'Make Selection', run: () => pathToSelection(p.path) },
+              { type: 'item', entry:'action:path.toSelection', label: 'Make Selection', disabled:!canPathSelection('replace',{target:{kind:'path',pathId:p.id}}), run: () => {void run('path.toSelection',{target:{kind:'path',pathId:p.id}});} },
               { type: 'item', label: 'Fill Path', run: () => { s.activePathId = p.id; fillOrStroke(false); } },
               { type: 'item', label: 'Stroke Path', run: () => { s.activePathId = p.id; fillOrStroke(true); } },
               { type: 'separator' },
@@ -230,7 +242,7 @@ export function PathsPanel() {
       <div className="panel-toolbar">
         <IconButton icon="pathFill" title="Fill path with foreground color" disabled={!active} onClick={() => fillOrStroke(false)} />
         <IconButton icon="pathStroke" title="Stroke path with brush size" disabled={!active} onClick={() => fillOrStroke(true)} />
-        <IconButton icon="channelToSelection" title="Load path as a selection" disabled={!active} onClick={() => active && pathToSelection(active.path)} />
+        <IconButton icon="channelToSelection" title="Load path as a selection" disabled={!canPathSelection('replace',active?{target:{kind:'path',pathId:active.id}}:undefined)} onClick={() => {void run('path.toSelection',active?{target:{kind:'path',pathId:active.id}}:undefined);}} />
         <IconButton icon="selectionToChannel" title="Make work path from selection" disabled={d.selection.isEmpty()} onClick={() => { if(!finishPen(s))return;const p = selectionToPath(); if (p) setWorkPath(s, p, 'Make Work Path'); }} />
         <div className="spacer" />
         <IconButton icon="newLayer" title="Create new path" onClick={() => { const id = newId('path'); setPaths('New Path', (ps) => [...ps, { id, name: `Path ${ps.filter((x) => x.kind !== 'work').length + 1}`, kind: 'saved', path: { subpaths: [], fillRule: 'nonzero' } }]); s.activePathId = id; }} />

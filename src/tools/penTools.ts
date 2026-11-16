@@ -117,7 +117,7 @@ export class PenTool implements Tool {
         layer.fill={type:'solid',color:{...useApp.getState().fg}};const {parentId,index}=insertionPoint(s);
         const cmd=new CreateLayerCommand('Pen Shape',layer,parentId,index);cmd.do(s.doc);s.push(cmd,true);s.setActive(layer.id);
       }
-      this.draft=new PenDraft(h,this.abandon);this.detach=registerPen({session:h.session,layerId:this.draft.target.kind==='path'?null:this.draft.target.layerId,valid:()=>!!this.draft?.valid(),abandon:this.abandon,finish:this.finish,interrupt:this.interrupt,undo:this.undo});
+      this.draft=new PenDraft(h,this.abandon);const owned=this.draft;this.detach=registerPen({session:h.session,layerId:owned.target.kind==='path'?null:owned.target.layerId,target:Object.freeze({...owned.target}),busy:()=>this.busy(),valid:()=>owned.valid(),abandon:this.abandon,finish:this.finish,interrupt:this.interrupt,undo:this.undo});
     }
     const d=this.draft;if(!d.allowed())return;
     this.hoverPt=p;

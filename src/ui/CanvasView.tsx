@@ -109,6 +109,7 @@ interface AntsCache {
 
 export function CanvasView() {
   const session = useSession();
+  const docRev = useApp(s=>s.docRev);
   const viewRef = useRef<HTMLDivElement>(null);
   const glHostRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -120,6 +121,8 @@ export function CanvasView() {
   const sizeRef = useRef({ w: 1, h: 1, dpr: 1 });
   const dirty = useRef(true);
   const overlayDirty = useRef(true);
+  // Session-only path selection/hiding must repaint even when the pixel selection is empty.
+  useEffect(()=>{overlayDirty.current=true;},[docRev]);
   const ants = useRef<AntsCache | null>(null);
   const pointerDown = useRef(false);
   const lastPointer = useRef<ToolPointer | null>(null);
