@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-16 [无感自动保存修复任务](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md)获Owner授权按0→A→B→C分阶段实施/独立review/本地提交，不推送发布。阶段0源码落点与全部旧判断退休表已写入§10待独立review，尚未改业务源码；保留独立版手动输出保护，只使embedded稳定捕获后的后台阶段非阻塞。Pen/控件稳定通知、history seal、快照隔离与离开截止点为门槛；B首个候选包接ADA后、C完整矩阵前执行实际iframe探针。前置事实见[排查报告](tasks/2026-11-16_02_embedded-editing-continuity-audit.md)，独立选层文档保留不混提交。
+
 2026-11-16 [跨分支集成](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)阶段0/A/A1/B/C本地实施及独立技术review均Approved。main合Dev d1efe6e，通用输入5924a6d；embedded df3a496/d277f7c clean包e1798e81，ADA现有绘图分支dc1ea564已消费，保留新悬浮UI。dirty已保全独立提交，原操作身份/续期组合有自动证据；Owner人工/新实窗/ASAR/性能与设备Pending，opacity旧scrub及R4未修复。不推送/发布/合ADA主线。
 
 2026-11-12 [Ctrl+T正式确认吞吐](tasks/2026-11-12_01_transform-confirm-throughput.md)已按Owner授权实施，待独立实现review；Owner已观察明显提速；只改专用Worker采样内核。独立b01dcb7 oracle及305项整体回归、P-BUILD、开发/生产实际取消重试通过；同环境4K窗口三类总耗时中位数透明降低39.6–44.3%、不透明42.0–45.5%，最终tile/坐标/输入精确一致。仍约4–5秒，authority长尾最高235ms；原768MiB预算、预览和文件协调不变。本轮Owner另授权提交并推送origin/main；不推进下游，详细证据及限制见任务。

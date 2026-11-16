@@ -6,6 +6,10 @@
 
 ## Recent
 
+### 2026-11-16 无感自动保存规划
+
+- [分阶段修复任务](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md)：Owner已授权分阶段实施/独立review/本地提交；阶段0§10已补源码落点、旧判断退休表、控件稳定通知与离开时序，待独立review。本阶段仅文档，未实施源码/提交/构包。
+
 ### 2026-11-16 跨分支集成阶段0
 
 - [分阶段任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)：方案review通过并获Owner执行授权；阶段0固定输入/保全dirty、整理embedded诊断及ADA现有面板UI交独立review。A–C尚未实施，未提交/合并/换包/推送；人工体验Pending。
@@ -182,3 +186,8 @@ Links: [DEV_SETUP](../engineering/DEV_SETUP.md)。
 
 
 2026-11-16 — [跨分支集成最终记录](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)：Dev→main→embedded→ADA各阶段本地提交与独立技术review Approved；原dirty独立交付，新包来源固定，Owner人工/窗口验收Pending，无推送发布。
+
+
+2026-11-16 — 登记WP-EDIT-002：[透明穿透选层核对](../engineering/LAYER_PICKING_ASSESSMENT.md)，对照固定PhotoCraft命中owner；3项受控诊断区分原alpha0已有能力与蒙版/opacity0缺口，仅文档未修复。
+
+2026-11-16 — Owner确认ADA内WP开启Auto-Select后透明处可选下层，本次按配置行为收口；WP-EDIT-002记录已区分其他受控边界，无感保存任务明确不包含选层修复。
