@@ -5,7 +5,7 @@ import {action, run} from './actions';
 import {access} from './access';
 import {useApp, ui} from './store';
 import {chordFromEvent, keymap} from './shortcuts';
-import {isComposing,isTextTarget,inputBlocked,installInputContext} from './inputContext';
+import {isComposing,inputEventTarget,isTextTarget,inputBlocked,installInputContext} from './inputContext';
 import {beginPan,releasePan,invalidatePan,inputPointerRevision,inputPointerBusy,onInputPointerStart} from './heldPan';
 import type {ToolId} from '../tools/toolTypes';
 const BRUSH_TOOLS = new Set<ToolId>(['brush','pencil','eraser','bgEraser','cloneStamp','patternStamp','healing','spotHealing','remove','colorReplace','mixerBrush','blur','sharpen','smudge','dodge','burn','sponge','quickSelect']);
@@ -51,7 +51,7 @@ function toolAllowed(): boolean {
   return allowed;
 }
 function down(e: KeyboardEvent) {
-  if (e.defaultPrevented || isComposing(e) || isTextTarget(e.target)) return;
+  if (e.defaultPrevented || isComposing(e) || isTextTarget(inputEventTarget(e))) return;
   if (useApp.getState().dialogs.length || document.querySelector('[role="dialog"],[role="menu"]')) return;
   const host = editor.hostFactory?.();
   if (editor.hasPendingToolInteraction() && !toolAllowed()) {e.preventDefault();return;}
@@ -94,27 +94,27 @@ function down(e: KeyboardEvent) {
 }
 function up(e: KeyboardEvent) {
   releasePan(e);
-  if (e.defaultPrevented || isComposing(e) || isTextTarget(e.target) || useApp.getState().dialogs.length) return;
+  if (e.defaultPrevented || isComposing(e) || isTextTarget(inputEventTarget(e)) || useApp.getState().dialogs.length) return;
   if (!editor.currentTool?.keyUp) return;
   const h = editor.hostFactory?.();
   if (h && h.session.canEdit() && toolAllowed()) editor.currentTool?.keyUp?.(h,e);
 }
-export function installInputDispatch(): () => void {
-  const removeContext = installInputContext();
+export function installInputDispatch(target: EventTarget = window): () => void {
+  const removeContext = installInputContext(target);
   const offPointer = onInputPointerStart(cancelDigits);
   const invalidate = () => {cancelDigits();invalidatePan();interruptPen(editor.active);};
-  const focus = (e: FocusEvent) => {if (isTextTarget(e.target) || e.target instanceof HTMLElement && e.target.closest('[role="dialog"],[role="menu"]')) invalidate();};
+  const focus = (e: FocusEvent) => {const origin=inputEventTarget(e);if (isTextTarget(origin) || origin instanceof HTMLElement && origin.closest('[role="dialog"],[role="menu"]')) invalidate();};
   const unsub = useApp.subscribe((state,prev) => {
     if (state.activeSessionId !== prev.activeSessionId || state.tool !== prev.tool || state.dialogs !== prev.dialogs) invalidate();
   });
-  window.addEventListener('keydown',down);
-  window.addEventListener('keyup',up);
+  target.addEventListener('keydown',down as EventListener);
+  target.addEventListener('keyup',up as EventListener);
   window.addEventListener('blur',invalidate);
-  window.addEventListener('focusin',focus,true);
-  window.addEventListener('compositionstart',invalidate,true);
+  target.addEventListener('focusin',focus as EventListener,true);
+  target.addEventListener('compositionstart',invalidate as EventListener,true);
   return () => {
     removeContext();offPointer();unsub();invalidate();
-    window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);
-    window.removeEventListener('blur',invalidate);window.removeEventListener('focusin',focus,true);window.removeEventListener('compositionstart',invalidate,true);
+    target.removeEventListener('keydown',down as EventListener);target.removeEventListener('keyup',up as EventListener);
+    window.removeEventListener('blur',invalidate);target.removeEventListener('focusin',focus as EventListener,true);target.removeEventListener('compositionstart',invalidate as EventListener,true);
   };
 }

@@ -212,3 +212,11 @@ GPU串行默认后端40.52秒通过；读取完成缓冲前额外发起的显式
 ### 阶段A独立审查
 
 gpt-6.1-sol独立review Approved，核对双亲冲突及session/Canvas/Pen/Move自动合并，无有证据P1/P2。独立重跑7文件281项通过（Pen/pathSelection/transformTask/listeners/batchedPaint/moveSelection/transformThroughput），diff检查通过；允许进入B。窗口/性能/Owner体验继续Pending，首次GPU退出超时未归因。
+
+### A1：通用局部输入目标兼容（实施范围）
+
+阶段B发现新输入安装器固定window，不能保持既有embedded keyboardTarget/ShadowRoot边界。按通用修复先main规则，在main增加可选EventTarget（默认window），从composedPath识别原始文本/IME目标，保留window blur；增加ShadowRoot/局部按键、文本Ctrl+S与IME、dispose和外部宿主隔离回归。仅main实现并本地提交、独立review后单向同步；不修改embedded。
+
+A1实现：两安装器增加`target: EventTarget = window`；keydown/up及capture保存/IME、focusin监听同一target，window blur保留。统一`inputEventTarget`读取composedPath，composition WeakSet与isComposing使用相同原始目标，避免shadow host与文本目标身份分裂。相邻embedded候选只读参考，未写入。
+
+A1验证：`npm test -- tests/input --maxWorkers=2`，7文件223项通过；补充keyup工具/文本/dispose用例后，`npm test -- tests/input/scopedDispatch.test.ts --maxWorkers=1` 7项通过，最终覆盖224个不同输入用例（不重复累计）。首轮新增文本保存测试2项失败系测试替身注册遗漏Ctrl+S默认声明，补齐声明后通过，非实现缺陷。`npm run build`完整typecheck/renderer/Electron退出0，保留已有externalization与chunk提示。新增7项覆盖局部Element与ShadowRoot外部宿主不抢键、dispose、默认window与shadow文本Ctrl+S/repeat/stopPropagation、composition原始身份、keyup文本保护、blur/focus held清理。真实窗口/Owner体验仍Pending；独立A1 review待执行，不推进B。
