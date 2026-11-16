@@ -191,3 +191,6 @@ Links: [DEV_SETUP](../engineering/DEV_SETUP.md)。
 2026-11-16 — 登记WP-EDIT-002：[透明穿透选层核对](../engineering/LAYER_PICKING_ASSESSMENT.md)，对照固定PhotoCraft命中owner；3项受控诊断区分原alpha0已有能力与蒙版/opacity0缺口，仅文档未修复。
 
 2026-11-16 — Owner确认ADA内WP开启Auto-Select后透明处可选下层，本次按配置行为收口；WP-EDIT-002记录已区分其他受控边界，无感保存任务明确不包含选层修复。
+
+
+- 2026-11-16：无感保存阶段A main实现：Session输出/编辑准入分工、稳定检查点与局部buffer通知、旧Promise交互判断退休及close cutoff。336项定向自动/P-BUILD通过，待独立实现review，未推进B/ADA。见[任务§11](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md#11-阶段a实施与验证2026-11-16)。

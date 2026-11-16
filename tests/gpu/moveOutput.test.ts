@@ -1,3 +1,4 @@
+import {setGuard} from "../sessionGuards";
 // @vitest-environment jsdom
 import { beforeAll, afterEach, afterAll, expect, it, vi } from 'vitest';
 const io = vi.hoisted(() => ({ confirmClose: vi.fn(), chooseSavePath: vi.fn(), writePath: vi.fn(), confirm: vi.fn(), recovery: { save: vi.fn(), remove: vi.fn() }, setTitle() {}, setEdited() {}, kind: 'electron', canWriteInPlace: true, bridge: null }));
@@ -55,11 +56,11 @@ it('write failure and cancelled dialogs do not output, while newer edits stay mo
  io.writePath.mockImplementation(()=>{began();return new Promise<void>(r=>release=r);});const saving=saveAs(s);await begun;
  s.doc.emit({type:'meta'});release();expect(await saving).toBe(true);expect(s.modified).toBe(true);expect(s.doc.filePath).toBe('delayed.psd');expect(io.recovery.remove).not.toHaveBeenCalled();
 });
-it('autosave skips the target during Move including after yield, then saves after release; close cancels',async()=>{
+it('autosave skips the target during Move including after yield, then saves after release; close finishes before cutoff',async()=>{
  const {s,start,t,h}=fixture();start();expect(await autosaveNow()).toBe(0);expect(t.busy()).toBe(true);t.up(h);
  const pending=autosaveNow();start();expect(await pending).toBe(0);expect(io.recovery.save).not.toHaveBeenCalled();t.up(h);
  io.recovery.save.mockResolvedValue(undefined);expect(await autosaveNow()).toBe(1);
- start();const id=s.history.current.id;io.confirm.mockResolvedValue(2);expect(await closeSession(s)).toBe(false);expect(t.busy()).toBe(false);expect(s.history.current.id).toBe(id);
+ start();const id=s.history.current.id;io.confirm.mockResolvedValue(2);expect(await closeSession(s)).toBe(false);expect(t.busy()).toBe(false);expect(s.history.current.id).not.toBe(id);
 });
 
 it('automatically falls back for low zoom, groups and unavailable GPU',()=>{
@@ -119,7 +120,7 @@ it('rejects an actual asynchronous filter result while the target is protected',
 it('releases all reservations after encode/write errors and close-all does not discard a failed writer',async()=>{
  const {s,t,h,start}=fixture();start();t.up(h);s.doc.filePath='old.psd';io.chooseSavePath.mockResolvedValue('retry.psd');
  const encoder=vi.spyOn(exporters.find(e=>e.id==='psd')!,'export').mockRejectedValueOnce(new Error('encode'));
- expect(await saveAs(s)).toBe(false);expect(s.doc.filePath).toBe('old.psd');expect(s.modified).toBe(true);expect(s.canEdit()).toBe(true);expect(s.outputPending).toBeNull();encoder.mockRestore();
+ expect(await saveAs(s)).toBe(false);expect(s.doc.filePath).toBe('old.psd');expect(s.modified).toBe(true);expect(s.canEdit()).toBe(true);expect(s.outputBusy).toBe(false);encoder.mockRestore();
  let reject!:(e:Error)=>void,began!:()=>void;const ready=new Promise<void>(r=>began=r);io.writePath.mockImplementation(()=>{began();return new Promise<void>((_,r)=>reject=r);});
  const writing=saveAs(s);await ready;const closing=closeAll();reject(new Error('write refused'));expect(await writing).toBe(false);expect(await closing).toBe(false);expect(editor.session(s.id)).toBe(s);expect(io.recovery.remove).not.toHaveBeenCalled();expect(s.canEdit()).toBe(true);
  io.writePath.mockResolvedValue(undefined);expect(await saveAs(s)).toBe(true);expect(s.doc.filePath).toBe('retry.psd');

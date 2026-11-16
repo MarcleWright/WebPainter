@@ -219,3 +219,46 @@ snapshotDocument现有深拷贝metadata/custom/path/text等与raster COW复用�
 ### 阶段0独立审查
 
 2026-11-16 gpt-6.1-sol只读独立review Approved，无有依据P1/P2。核对旧字段消费者、Session/fileOps/history、NumberField/Slider、embedded mount/contract与ADA调度/RPC，确认§10可执行，允许进入A。尚无实现或修复验收。选层相关dirty不纳入保存任务提交。
+
+
+## 11. 阶段A实施与验证（2026-11-16）
+
+状态：main源码实施及定向自动/P-BUILD完成，等待独立实现review。实施基线 `17eddce`，只改本工作树；独立选层 `KNOWN_ISSUES.md` dirty和未跟踪 `LAYER_PICKING_ASSESSMENT.md`保持原样、不纳入提交。未推进B、未换包、未操作ADA、未推送发布。
+
+### 11.1 最小接口与实际退休
+
+- `DocumentSession`私有output/closing状态；`reserveOutput/joinOutput/releaseOutput`以reservation symbol核对释放。`outputBusy`仅输出竞争；`closeRequested/joinClose/setClose/releaseClose`仅离开owner去重，最终截止由真实edit token表达。保留canEdit、disposed、transform唯一protected history owner；删除legacy editProtected setter。保护增减发session通知。
+- `checkpoint.ts`组合纯查询 `checkpointReady/hasUncommittedChanges`，不提交/取消工具；`onCheckpointChange`合并到微任务，在当前真实事件处理完成后读取状态。`captureCheckpoint`同一同步段检查稳定→seal→绑定entry/revision→短保护COW结构快照→释放。没有jobs、第二份常驻文档或新版本系统。输出槽不属于编辑锁。
+- 所有原生产 `outputPending/closePending`交互读已删除：inputContext/dispatcher数字、actions异步身份重检、pathSelection、PenDraft/PenTool、transform、Modal、Editing/Document dialogs。Pen finish/output布尔豁免完全删除，expected Pen owner继续核对。main全src搜索旧字段及legacyProtection零命中。
+- fileOps保留Save/SaveAs/Copy/Export路径选择、writingPaths竞争、错误清理和原实际output保护寿命；选择路径/对话框等待不是实际保护。手动写出前再次显式收尾并检查共同稳定准入，不能捕获未提交控件。close先等待已有输出/transform，再收尾Pen/text/Move并重检；同步seal和close token绑定最终entry/revision。close内部私有checkpoint能力允许自己的最终save读取截止内容，不向交互公开ignore锁布尔；finally只释放本owner。
+- recovery autosave替换旧散列工具判断，yield后再查稳定，共享输出槽并用固定COW检查点编码；原恢复目录、串行写/removal、fingerprint保留。独立版现有同步PSD编码仍存在，本阶段没有宣称其变为后台Worker。
+
+### 11.2 稳定producer与局部buffer清点
+
+Canvas仍由真实pointer busy down→up/cancel/lostcapture/卸载表示事务，状态通知在微任务读取，因此tool.up/取消、guide安装已执行完；不能在pointer标记清除的同步doc通知中立即捕获。Pen注册/释放/失效清理通知；type owner生命周期发通知；transform原preview/applying/finally通知保留。Move直接up补finally通知；`editor.moving`只读取已实例化owner，不在查询时创建工具。实际Move浮动缓存在up时已经安装raster+selection+history，仅为下次拖动基线；未完成drag才阻止捕获，不把已提交缓存误判为永久草稿。
+
+共享NumberField登记偏离value的文本buffer，提交/无效回退后释放；Arrow参数在keyup结束，焦点本身不延期。label scrub在pointerdown登记，up/cancel/lostcapture/卸载完整清理，commit后释放；Slider对pointer/键盘手势同样登记，补cancel/lostcapture/blur/卸载。窗口失焦收尾已提交参数手势，不能把尚未提交文本当已提交。350ms数字pending登记到原session，apply/cancel结束；输出槽状态通知不取消合法参数。
+
+全UI `input/textarea/contentEditable/useState/onChange`检索结果已枚举：
+
+| 类别 | owner/处理 |
+| --- | --- |
+| Canvas textarea与文字样式 | type owner，mode/edit state未结束不捕获 |
+| 图层、Channel、Path名称局部buffer | 对应panel rename生命周期登记，提交/取消/卸载后释放；History entry/snapshot名称只属session历史面板显示 |
+| 调整、Filter、LayerStyle、Liquify、模式、选择、文档属性/metadata等对话框参数及live preview | Modal原target session拥有未提交生命周期，Apply/Cancel完成后卸载释放；嵌套窗口各自独立token |
+| NumberField/Slider | 自身buffer/连续手势owner；不靠CSS焦点选择器推断 |
+| 颜色/笔刷即时参数、复选/Select即时命令 | 参数已同步提交，无额外未提交文本；共享数值控件手势仍登记 |
+| layer filter、commandPalette/shortcuts搜索、文件名/导出选择、preferences、about/update/report、信息/兼容/GPU、zoom | 不构成目标document未提交buffer；Modal明确排除这些已知非document类型。通用prompt可能用于目标名称，保守保留其owner |
+
+embedded mount的pointer/key/composition避让与焦点规则、port4、背景native worker/host回执及离开宿主协议属于B/C，尚未实施，不将main通知等同iframe验收。
+
+### 11.3 验证结果与边界
+
+- 12文件 **336/336**：`npx vitest run tests/input tests/gpu/moveOutput.test.ts tests/engine/transformTask.test.ts tests/engine/native.test.ts tests/engine/core.test.ts tests/engine/checkpointSnapshot.test.ts`。忽略日志 `doc/material/local/autosave-a-final-336-tests.log`。
+- 新背景槽交叉用例使用真实Session、App dispatcher、Canvas、Pen/path、transform和Modal，证明X/D/笔刷大小、E、350ms数字、Space导航、Pen局部历史及Ctrl+Enter可执行；真实resource/edit token仍拒绝。没有mock准入为true。原旧测试的assignable boolean/Promises迁移为显式独占手动输出/close-cutoff token fixture，未删除原目标失效/取消/输出保护断言。
+- 控件DOM覆盖未提交NumberField+compositionend仍不捕获、blur后无新输入独立唤醒、Arrow提交仍focus可稳定、Slider最后pointerup唤醒；真实stroke末次up只形成一项history后通知。背景transform preview与Modal参数等待期间不可捕获，Modal view导航仍执行。
+- 新快照用例覆盖像素/companion/mask/channel/selection、text/path/property、smartSource原始数据与decoded COW、pattern及nested metadata；快照后live修改不影响固定内容。真实capture→新编辑→旧markSaved→undo/redo/分叉保持准确保存点。
+- 收尾窗口失焦清理后追加控件定向复验与最终P-BUILD，73/73通过，日志 `doc/material/local/autosave-a-control-final-tests.log`；最终P-BUILD通过，日志 `doc/material/local/autosave-a-final-build.log`。原始首次诊断失败日志保留，不能当最终失败或最终通过。
+- P-BUILD为 `npm run build`（包含typecheck、Vite renderer、Electron bundles）。源/文档 `git diff --check`及文档UTF-8/链接检查在提交前执行。
+
+未执行真实独立窗口/iframe、真实IME/笔/DPR/设备、4K长帧与COW最长同步任务/Worker批次/IO对照；A不声称产品整体Go、性能目标完成或Owner人工验收。B首次候选包接ADA后的实际流程探针保持原阶段门。回退可revert本阶段main提交；不触及用户作品/恢复数据。

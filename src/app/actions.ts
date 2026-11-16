@@ -186,7 +186,7 @@ reg('edit.commandPalette', 'Search Commands…', dialog('commandPalette'), { sho
 async function startTransform(kind?: string) {
   const target = editor.active, doc = target?.doc, tool = editor.currentToolId, mode = target?.mode, layer = target?.activeLayer();
   const { beginTransform } = await import('../tools/transformTool');
-  if (!target || editor.active !== target || target.doc !== doc || editor.currentToolId !== tool || target.mode !== mode || target.activeLayer() !== layer || !!target.outputPending || !!target.closePending || !target.canEdit() || !access('action:edit.freeTransform').enabled || useApp.getState().dialogs.length) return;
+  if (!target || editor.active !== target || target.doc !== doc || editor.currentToolId !== tool || target.mode !== mode || target.activeLayer() !== layer || !target.canEdit() || !access('action:edit.freeTransform').enabled || useApp.getState().dialogs.length) return;
   beginTransform(kind as never);
 }
 async function quickTransform(kind: string) {
@@ -210,7 +210,7 @@ async function quickTransform(kind: string) {
   try {
     const { quickTransformLayer } = await import('../tools/transformTool');
     const final = action(`edit.transform.${kind}`);
-    if (cancelled || !unchanged() || !target.canEdit() || target.outputPending || target.closePending
+    if (cancelled || !unchanged() || !target.canEdit()
       || editor.currentTool?.busy?.() || useApp.getState().dialogs.length || !final || final.comingSoon || final.enabled?.() === false) return;
     quickTransformLayer(kind as never);
   } finally {

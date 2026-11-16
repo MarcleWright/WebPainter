@@ -197,7 +197,7 @@ export function FillDialog({ close }: { close: () => void }) {
   const [target] = useState(() => {const session=editor.active!;return {session, doc:session.doc, layer:session.activeLayer(), mask:session.editMask, channel:session.activeChannelId};});
   const permit = () => {
     const s=target.session;
-    if (editor.active === s && s.doc === target.doc && s.activeLayer() === target.layer && s.editMask === target.mask && s.activeChannelId === target.channel && s.canEdit() && !s.outputPending && !s.closePending && access('action:edit.fill').enabled) return true;
+    if (editor.active === s && s.doc === target.doc && s.activeLayer() === target.layer && s.editMask === target.mask && s.activeChannelId === target.channel && s.canEdit() && access('action:edit.fill').enabled) return true;
     ui.toast('info','The fill target is unavailable or busy saving or closing.');return false;
   };
   const [use, setUse] = useState<FillSpec['use']>('foreground');

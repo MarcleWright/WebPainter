@@ -14,6 +14,7 @@ export function onInputPointerStart(listener: () => void): () => void {
 }
 export function setInputPointerBusy(value: boolean) {
   pointerBusy = value;
+  editor.active?.notify();
   if (value) {pointerRevision++;for (const listener of pointerStarts) listener();}
 }
 export function panHeld(s: DocumentSession): boolean {return !!held && held.session === s && held.doc === s.doc && held.tool === useApp.getState().tool;}

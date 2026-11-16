@@ -91,9 +91,9 @@ export class PenTool implements Tool {
   private abandon=()=>{this.reset();toast('The current path target changed; the old Pen draft has ended.');};
   private ensure(){if(this.draft&&!this.draft.valid()){this.abandon();return false;}return true;}
   private interrupt=()=>{if(!this.ensure())return;const d=this.draft;if(d&&this.gesture){d.restore(this.gesture.before);this.spIndex=this.gesture.before.sp;}this.gesture=null;this.hoverPt=null;this.selected.clear();this.releasePointer();if(d)this.feedback(d.host);};
-  private finish=(output=false):boolean=>{
+  private finish=():boolean=>{
     if(!this.ensure())return true;const d=this.draft;if(!d)return true;
-    if(!d.allowed(output)){toast('The current path cannot be finished while its target is unavailable or busy.');return false;}
+    if(!d.allowed()){toast('The current path cannot be finished while its target is unavailable or busy.');return false;}
     this.interrupt();
     const sp=d.path.subpaths[this.spIndex];if(sp&&sp.knots.length<2&&!sp.closed){d.path.subpaths.splice(this.spIndex,1);d.changed();}
     if(!d.commit())return false;this.reset();d.host.redraw();return true;
@@ -109,7 +109,7 @@ export class PenTool implements Tool {
       const creatingShape=opts().pen.mode==='shape'&&h.session.activeLayer()?.kind!=='shape';
       const target=getTarget(h.session,false),layer=target&&target.kind!=='path'?h.session.doc.getLayer(target.layerId):null;
       if(layer&&(layer.locks.all||target?.kind==='shape'&&layer.locks.pixels)){toast('The path target is locked.');return;}
-      if(!h.session.canEdit()||h.session.outputPending||h.session.closePending)return;
+      if(!h.session.canEdit())return;
       // Admit the actual target before registering an owner; a new Shape does not edit the old mask.
       if(!creatingShape&&target?.kind==='vectorMask'&&!access('feature:masks').enabled){toast('Vector mask editing is unavailable.');return;}
       if(creatingShape){

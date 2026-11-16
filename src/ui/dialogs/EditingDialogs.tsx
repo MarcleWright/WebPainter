@@ -195,7 +195,7 @@ export function AdjustmentDialog({ close, type }: { close: () => void; type: Adj
   const [preview, setPreview] = useState(true);
   const [target] = useState(() => {const session=editor.active!;return {session, doc:session.doc, layer:session.activeLayer()!};});
   const {session:s, layer} = target;
-  const valid = () => editor.active === s && s.doc === target.doc && s.activeLayer() === layer && s.canEdit() && !s.outputPending && !s.closePending && access(`action:image.adjust.${type}`).enabled;
+  const valid = () => editor.active === s && s.doc === target.doc && s.activeLayer() === layer && s.canEdit() && access(`action:image.adjust.${type}`).enabled;
   const permit = () => {if (valid()) return true;ui.toast('info','The adjustment target is unavailable or busy saving or closing.');return false;};
   useEffect(() => {
     if (!valid()) return;

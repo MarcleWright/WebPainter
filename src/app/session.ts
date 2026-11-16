@@ -28,22 +28,39 @@ export function addHistoryHook(h: (s: DocumentSession) => void): void {
 export class DocumentSession {
   readonly id = newId('sess');
   readonly history: History;
-  outputPending: Promise<boolean> | null = null;
-  closePending: Promise<boolean> | null = null;
-  private legacyProtection = false;
+  private output: {token:symbol; pending:Promise<boolean>} | null = null;
+  private closing: Promise<boolean> | null = null;
   private editOwners = new Map<symbol,string>();
-  get editProtected():boolean { return this.legacyProtection || this.editOwners.size>0; }
-  set editProtected(value:boolean) { this.legacyProtection=value; }
+  private unstable = new Set<symbol>();
+  get editProtected():boolean { return this.editOwners.size>0; }
+  get outputBusy():boolean { return !!this.output; }
+  get closeRequested():boolean { return !!this.closing; }
+  joinOutput():Promise<boolean>|null { return this.output?.pending ?? null; }
+  joinClose():Promise<boolean>|null { return this.closing; }
+  reserveOutput(pending:Promise<boolean>):symbol|null {
+    if(this.output || this.disposed)return null;
+    const token=Symbol('output');this.output={token,pending};this.notify();return token;
+  }
+  releaseOutput(token:symbol):void {if(this.output?.token===token){this.output=null;this.notify();}}
+  setClose(pending:Promise<boolean>):void {this.closing=pending;this.notify();}
+  releaseClose(pending:Promise<boolean>):void {if(this.closing===pending){this.closing=null;this.notify();}}
+  /** Local uncommitted values / gestures, owned and released by their actual producer. */
+  beginUncommitted():()=>void {
+    const token=Symbol('uncommitted');this.unstable.add(token);this.notify();
+    return ()=>{if(this.unstable.delete(token))this.notify();};
+  }
+  get hasLocalUncommitted():boolean {return this.unstable.size>0;}
   /** A transform's completion is a stable authority boundary for file requests. */
   transformPending: Promise<boolean> | null = null;
   cancelTransformTask: (()=>void) | null = null;
-  acquireEditProtection(owner:string):symbol { const token=Symbol(owner);this.editOwners.set(token,owner);return token; }
-  releaseEditProtection(token:symbol):void { this.editOwners.delete(token); }
+  acquireEditProtection(owner:string):symbol { const token=Symbol(owner);this.editOwners.set(token,owner);this.notify();return token; }
+  releaseEditProtection(token:symbol):void { if(this.editOwners.delete(token))this.notify(); }
+  ownsEditProtection(token:symbol):boolean {return !this.disposed&&this.editOwners.size===1&&this.editOwners.has(token);}
   pushProtected(cmd:Command,token:symbol,alreadyApplied=false):void {
     if(!this.ownsCommit(token))throw Error('Transform no longer owns document protection');
     this.history.push(cmd,alreadyApplied,token);
   }
-  private ownsCommit(token:symbol):boolean { return !this.disposed&&!this.legacyProtection&&this.editOwners.size===1&&this.editOwners.get(token)==='transform'; }
+  private ownsCommit(token:symbol):boolean { return !this.disposed&&this.editOwners.size===1&&this.editOwners.get(token)==='transform'; }
   private disposed = false;
   canEdit(): boolean { return !this.editProtected && !this.disposed; }
 

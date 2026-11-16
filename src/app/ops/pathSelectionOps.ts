@@ -16,7 +16,7 @@ interface Binding {target:PathTarget;object:object;path:VectorPath;mask:object|n
 /** No target-dependent enabled check here: explicit B must work when default A is invalid. */
 export function pathSelectionContext():boolean {
   const s=editor.active,pen=readPenSession(s);
-  return !!s&&s.canEdit()&&!s.outputPending&&!s.closePending&&s.mode.kind==='none'
+  return !!s&&s.canEdit()&&s.mode.kind==='none'
     &&!inputPointerBusy()&&!editor.currentTool?.busy?.()&&!pen?.busy()
     &&(!!pen||!editor.hasPendingToolInteraction());
 }
@@ -77,7 +77,7 @@ export function makePathSelection(op:PathSelectionOp,args?:unknown):'changed'|'u
   try{
     if(!sessionValid()||!same(s,bound))return 'rejected';
     if(pen){
-      if(readPenSession(s)!==pen||!finishPen(s,false,pen))return 'rejected';
+      if(readPenSession(s)!==pen||!finishPen(s,pen))return 'rejected';
       // The captured owner's pure validity also works after disposal: its own final fingerprint
       // accepts legal finish cleanup, but rejects reentrant external writes or session changes.
       if(readPenSession(s)||!pen.valid())return 'rejected';

@@ -2,7 +2,7 @@ import {finishPen,penSession,penHistoryAllowed} from '../../tools/penSession';
 import {isComposing} from '../../app/inputContext';
 /** History, Channels and Paths panels. */
 import { editColor } from '../../color/plates';
-import { useState } from 'react';
+import { useState,useEffect } from 'react';
 import { useSession, useHistoryRev } from '../hooks';
 import { IconButton } from '../controls';
 import { Icon } from '../icons';
@@ -74,6 +74,7 @@ export function HistoryPanel() {
 export function ChannelsPanel() {
   const s = useSession();
   const [renaming, setRenaming] = useState<string | null>(null);
+  useEffect(()=>renaming?s?.beginUncommitted():undefined,[renaming,s]);
   if (!s) return <div className="panel"><div className="empty">No document</div></div>;
   const eng = s.engine;
   const v = eng.view.channels;
@@ -167,6 +168,7 @@ export function PathsPanel() {
   useHistoryRev(); // Pen local steps change target admission without a document history push.
   const s = useSession();
   const [renaming, setRenaming] = useState<string | null>(null);
+  useEffect(()=>renaming?s?.beginUncommitted():undefined,[renaming,s]);
   useApp((st) => st.docRev);
   if (!s) return <div className="panel"><div className="empty">No document</div></div>;
   const d = s.doc;

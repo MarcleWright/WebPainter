@@ -1,4 +1,4 @@
-import {penSession} from '../tools/penSession';
+import {checkpointReady,captureCheckpoint} from './checkpoint';
 /**
  * Auto-save & crash recovery.
  *
@@ -17,7 +17,6 @@ import { ui } from './store';
 import { platform } from './platform/platform';
 import { exportPsd } from '../psd/export';
 
-const hasTransformPreview=(s:import('./session').DocumentSession)=>s.mode.kind==='transform';
 const RUNNING_KEY = 'celenne.running.v1';
 const lastSaved = new Map<string, string>();
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -36,28 +35,34 @@ export async function autosaveNow(): Promise<number> {
     for (const s of editor.sessions) {
       if(s.transformPending && !(await s.transformPending))continue;
       if(editor.session(s.id)!==s)continue;
-      if (!s.modified || (editor.moving(s) || !!penSession(s) || s.outputPending || s.closePending || s.transformPending || hasTransformPreview(s))) continue;
+      if (!s.modified || (!checkpointReady(s) || s.outputBusy || s.closeRequested)) continue;
       let fp = fingerprint(s.id);
       if (lastSaved.get(s.id) === fp) continue;
       // Yield between documents so the UI stays responsive.
       await new Promise((r) => setTimeout(r, 0));
+      let settle!:(ok:boolean)=>void;
+      const output=new Promise<boolean>(resolve=>settle=resolve);
+      const reservation=s.reserveOutput(output);
+      if(!reservation)continue;
+      let completed=false;
       try {
-        if (editor.session(s.id) !== s || (editor.moving(s) || !!penSession(s) || s.outputPending || s.closePending || s.transformPending || hasTransformPreview(s))) continue;
+        if (editor.session(s.id) !== s || (!checkpointReady(s) || s.closeRequested)) continue;
         fp = fingerprint(s.id);
         const psb = s.doc.width > 30000 || s.doc.height > 30000;
-        const bytes = exportPsd(s.doc, { psb, maximizeCompatibility: true, selectedLayerIds: s.selectedLayers().map((l) => l.id) });
+        const checkpoint=captureCheckpoint(s);if(!checkpoint)continue;
+        const bytes = exportPsd(checkpoint.document, { psb, maximizeCompatibility: true, selectedLayerIds: s.selectedLayers().map((l) => l.id) });
         let saved = false;
         const metadata = { id: s.id, name: s.doc.name, originalPath: s.doc.filePath, savedAt: Date.now(), byteSize: bytes.length };
         const writing = s.recoveryWrite.catch(() => {}).then(async () => {
-          if (editor.session(s.id) !== s || (editor.moving(s) || !!penSession(s) || s.outputPending || s.closePending || s.transformPending || hasTransformPreview(s)) || fingerprint(s.id) !== fp) return;
+          if (editor.session(s.id) !== s || (!checkpointReady(s) || s.closeRequested) || fingerprint(s.id) !== fp) return;
           await platform().recovery.save(metadata, bytes); saved = true;
         });
         s.recoveryWrite = writing;
         await writing;
-        if (saved) { lastSaved.set(s.id, fp); n++; }
+        if (saved) { lastSaved.set(s.id, fp); n++; completed=true; }
       } catch (e) {
         console.warn(`[autosave] ${s.doc.name}: ${(e as Error).message}`);
-      }
+      } finally {settle(completed);s.releaseOutput(reservation);}
     }
   } finally {
     busy = false;

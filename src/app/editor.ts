@@ -147,10 +147,12 @@ export class Editor {
 
   beginInteraction(): void {
     this.interactions++;
+    this.active?.notify();
   }
 
   endInteraction(): void {
     this.interactions = Math.max(0, this.interactions - 1);
+    this.active?.notify();
     if (!this.interactions && this.docRevDeferred) {
       this.docRevDeferred = false;
       this.schedule('docRev');
@@ -263,7 +265,7 @@ export class Editor {
     return this.tool('move')?.finishMove?.(s, commit) ?? 'none';
   }
 
-  moving(s: DocumentSession): boolean { return this.tool('move')?.movingSession?.(s) ?? false; }
+  moving(s: DocumentSession): boolean { return this.toolInstances.get('move')?.movingSession?.(s) ?? false; }
 
   // -------------------------------------------------------------------------------------------
   // Preferences

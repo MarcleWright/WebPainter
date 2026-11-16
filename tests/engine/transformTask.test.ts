@@ -1,3 +1,4 @@
+import {setGuard} from "../sessionGuards";
 // @vitest-environment jsdom
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {createHash} from 'node:crypto';
@@ -81,7 +82,7 @@ it('successful save/close wait for the transform without releasing its protectio
  FakeWorker.mode='hold';const {s}=fixture();commitTransform();const pending=s.transformPending!;await held();const saving=saveAs(s);await sleep();expect(s.editProtected).toBe(true);FakeWorker.all[0].held!();expect(await pending).toBe(true);expect(await saving).toBe(true);expect(s.modified).toBe(false);expect(await closeSession(s)).toBe(true);
 });
 it('owner release cannot release another owner and an already open output dialog cannot unlock a new transform',async()=>{
- const {s}=fixture();cancelTransform();const a=s.acquireEditProtection('output'),b=s.acquireEditProtection('transform');s.releaseEditProtection(a);s.editProtected=false;expect(s.canEdit()).toBe(false);s.releaseEditProtection(b);expect(s.canEdit()).toBe(true);
+ const {s}=fixture();cancelTransform();const a=s.acquireEditProtection('output'),b=s.acquireEditProtection('transform');s.releaseEditProtection(a);setGuard(s,"editProtected",false);expect(s.canEdit()).toBe(false);s.releaseEditProtection(b);expect(s.canEdit()).toBe(true);
 });
 it('partial authority swap failure restores pixels/history and permits retry; post-history notification error does not duplicate',async()=>{
  const {l,s}=fixture(),before=hash(l.raster),orig=ReplaceLayerCommand.prototype.do;let fail=true;vi.spyOn(ReplaceLayerCommand.prototype,'do').mockImplementation(function(this:ReplaceLayerCommand,d){orig.call(this,d);if(fail){fail=false;throw Error('partial swap');}});commitTransform();expect(await s.transformPending).toBe(false);expect(hash((s.doc.getLayer(l.id)as typeof l).raster)).toBe(before);expect(s.history.entries).toHaveLength(1);expect(transformState()).not.toBeNull();vi.restoreAllMocks();
@@ -101,7 +102,7 @@ it('Worker absence still applies common admission; legal CPU fallback is explici
 });
 it.each([false,true])('close waits for a running job and handles failure=%s without unlocking early',async failed=>{
  FakeWorker.mode='hold';const {s}=fixture();commitTransform();const job=s.transformPending!;await held();const closing=closeSession(s);await sleep();expect(s.canEdit()).toBe(false);expect(editor.session(s.id)).toBe(s);
- if(failed)FakeWorker.all[0].onerror?.({message:'worker died'});else FakeWorker.all[0].held!();expect(await job).toBe(!failed);expect(await closing).toBe(!failed);if(failed){expect(s.closePending).toBeNull();expect(s.canEdit()).toBe(true);expect(transformState()).not.toBeNull();}else expect(editor.session(s.id)).toBeUndefined();
+ if(failed)FakeWorker.all[0].onerror?.({message:'worker died'});else FakeWorker.all[0].held!();expect(await job).toBe(!failed);expect(await closing).toBe(!failed);if(failed){expect(s.closeRequested).toBe(false);expect(s.canEdit()).toBe(true);expect(transformState()).not.toBeNull();}else expect(editor.session(s.id)).toBeUndefined();
 });
 it('autosave waits for the stable transformed authority and ignores failed preview jobs',async()=>{
  FakeWorker.mode='hold';const {s}=fixture();commitTransform();const job=s.transformPending!;await held();const saving=autosaveNow();await sleep();expect(io.recovery.save).not.toHaveBeenCalled();FakeWorker.all[0].held!();expect(await job).toBe(true);expect(await saving).toBe(1);expect(io.recovery.save).toHaveBeenCalledTimes(1);
@@ -113,7 +114,7 @@ it('external source edits before Enter are recaptured at the current parameters'
  const {l,s}=fixture();l.raster.writePixels({x:0,y:0,w:1,h:1},new Uint8ClampedArray([7,8,9,255]));const expected=warpLayerRaster(l.raster,l.x,l.y,affineToHomography(transformState()!.M),'bicubic');commitTransform();expect(await s.transformPending).toBe(true);expect(hash((s.doc.getLayer(l.id)as typeof l).raster)).toBe(hash(expected.raster));
 });
 it('cancelled output-dialog cleanup cannot release another operation owner',async()=>{
- const {s}=fixture();cancelTransform();let choose!:(path:string|null)=>void;io.chooseSavePath.mockImplementation(()=>new Promise(r=>choose=r));const saving=saveAs(s);await sleep();beginTransform();expect(transformState()).toBeNull();const token=s.acquireEditProtection('transform');choose(null);expect(await saving).toBe(false);expect(s.canEdit()).toBe(false);s.releaseEditProtection(token);expect(s.canEdit()).toBe(true);
+ const {s}=fixture();cancelTransform();let choose!:(path:string|null)=>void;io.chooseSavePath.mockImplementation(()=>new Promise(r=>choose=r));const saving=saveAs(s);await sleep();beginTransform();expect(transformState()).not.toBeNull();cancelTransform();const token=s.acquireEditProtection('transform');choose(null);expect(await saving).toBe(false);expect(s.canEdit()).toBe(false);s.releaseEditProtection(token);expect(s.canEdit()).toBe(true);
 });
 
 it('budgets all three source mip owners and complete floating placement buffers',()=>{

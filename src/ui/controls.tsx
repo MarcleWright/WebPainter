@@ -1,3 +1,4 @@
+import {useUncommitted} from './useUncommitted';
 import {isComposing} from '../app/inputContext';
 /** Reusable form controls. */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -64,8 +65,13 @@ export function NumberField({ label, value, onChange, onCommit, min = -Infinity,
     const p = precision ?? (step < 1 ? Math.min(3, Math.ceil(-Math.log10(step))) : 0);
     return Number.isFinite(v) ? v.toFixed(p).replace(/\.0+$/, '') : '';
   };
+  const draft=useUncommitted(),gesture=useUncommitted();
+  const scrubCleanup=useRef<(()=>void)|null>(null);
+  useEffect(()=>()=>scrubCleanup.current?.(),[]);
   const [text, setText] = useState(fmt(value));
   const focused = useRef(false);
+  const commitRef=useRef(onCommit);commitRef.current=onCommit;
+  useEffect(()=>{const finish=()=>{scrubCleanup.current?.();if(!gesture.active())return;try{commitRef.current?.();}finally{gesture.end();}};window.addEventListener('blur',finish);return()=>window.removeEventListener('blur',finish);},[]);
   useEffect(() => {
     if (!focused.current) setText(fmt(value));
   }, [value]);
@@ -74,12 +80,13 @@ export function NumberField({ label, value, onChange, onCommit, min = -Infinity,
     // Allow simple arithmetic ("100*2", "50+10").
     let v = Number(text);
     if (!Number.isFinite(v)) v = evalArithmetic(text);
-    if (Number.isFinite(v)) onChange(clamp(v));
-    else setText(fmt(value));
-    onCommit?.();
+    try {if (Number.isFinite(v)) onChange(clamp(v));else setText(fmt(value));}
+    finally {try{onCommit?.();}finally{draft.end();}}
   };
   const scrub = (e: React.PointerEvent) => {
     if (disabled) return;
+    scrubCleanup.current?.();
+    gesture.begin();
     const startX = e.clientX, start = value;
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
@@ -90,10 +97,16 @@ export function NumberField({ label, value, onChange, onCommit, min = -Infinity,
     const up = () => {
       el.removeEventListener('pointermove', mv);
       el.removeEventListener('pointerup', up);
-      onCommit?.();
+      el.removeEventListener('pointercancel', up);
+      el.removeEventListener('lostpointercapture', up);
+      scrubCleanup.current=null;
+      try{onCommit?.();}finally{gesture.end();}
     };
     el.addEventListener('pointermove', mv);
     el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+    scrubCleanup.current=up;
   };
   return (
     <label className="field" title={title}>
@@ -106,14 +119,16 @@ export function NumberField({ label, value, onChange, onCommit, min = -Infinity,
         onFocus={() => (focused.current = true)}
         onBlur={() => {
           focused.current = false;
-          commitText();
+          try{commitText();}finally{gesture.end();}
         }}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {setText(e.target.value);if(e.target.value!==fmt(value))draft.begin();else draft.end();}}
+        onKeyUp={(e)=>{if(e.key==='ArrowUp'||e.key==='ArrowDown'){try{onCommit?.();}finally{gesture.end();}}}}
         onKeyDown={(e) => { if (isComposing(e)) return;
           e.stopPropagation();
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             e.preventDefault();
+            gesture.begin();draft.end();
             const k = (e.shiftKey ? 10 : 1) * step * (e.key === 'ArrowUp' ? 1 : -1);
             const v = clamp(value + k);
             onChange(v);
@@ -138,6 +153,10 @@ export function Slider({ label, value, onChange, onCommit, min = 0, max = 100, s
   showNumber?: boolean;
   width?: number;
 }) {
+  const gesture=useUncommitted();
+  const finish=()=>{try{onCommit?.();}finally{gesture.end();}};
+  const finishRef=useRef(finish);finishRef.current=finish;
+  useEffect(()=>{const blur=()=>{if(gesture.active())finishRef.current();};window.addEventListener('blur',blur);return()=>window.removeEventListener('blur',blur);},[]);
   return (
     <div className="field" style={{ width }}>
       {label && <span className="lbl" style={{ minWidth: 64 }}>{label}</span>}
@@ -149,8 +168,13 @@ export function Slider({ label, value, onChange, onCommit, min = 0, max = 100, s
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        onPointerUp={() => onCommit?.()}
-        onKeyUp={() => onCommit?.()}
+        onPointerDown={()=>gesture.begin()}
+        onKeyDown={(e)=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key))gesture.begin();}}
+        onPointerUp={finish}
+        onPointerCancel={finish}
+        onLostPointerCapture={finish}
+        onBlur={finish}
+        onKeyUp={finish}
         aria-label={label}
       />
       {showNumber && <NumberField value={value} onChange={onChange} onCommit={onCommit} min={min} max={max} step={step} unit={unit} width={52} />}

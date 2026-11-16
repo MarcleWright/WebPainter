@@ -498,6 +498,7 @@ export class MoveTool implements Tool {
   }
 
   up(h: ToolHost): MoveResult {
+    try {
     const d = this.drag;
     this.drag = null;
     if (!d) return 'none';
@@ -571,6 +572,7 @@ export class MoveTool implements Tool {
       return this.moveResult;
     }
     return this.moveResult = 'cancelled';
+    }finally{h.session.notify();}
   }
 
   cancel(h: ToolHost) {

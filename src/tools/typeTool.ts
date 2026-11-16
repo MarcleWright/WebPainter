@@ -45,6 +45,7 @@ export function onTextEdit(l: () => void): () => void {
   return () => listeners.delete(l);
 }
 function notify() {
+  for(const s of editor.sessions)s.notify();
   for (const l of listeners) l();
   ui.bump('viewRev');
 }
