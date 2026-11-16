@@ -1,3 +1,4 @@
+import {finishPen} from './penSession';
 /** Rectangle, Ellipse, Polygon, Line and Custom Shape tools. */
 import { editColor } from '../color/plates';
 import type { Tool, ToolHost, ToolPointer } from './tool';
@@ -21,6 +22,7 @@ import { flattenSubPath } from '../vector/rasterize';
 type ShapeId = 'rectangle' | 'ellipse' | 'polygon' | 'line' | 'customShape';
 
 export function setWorkPath(s: DocumentSession, path: VectorPath, label: string): void {
+  if(!finishPen(s))return;
   const before = s.doc.paths.find((p) => p.kind === 'work');
   const prev = before ? clonePath(before.path) : null;
   const id = before?.id ?? newId('path');

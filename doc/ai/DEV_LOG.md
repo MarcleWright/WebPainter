@@ -1,5 +1,7 @@
 # 工作进展索引
 
+- 2026-11-16 阶段A：固定Dev普通merge，逐函数整合生命周期；390项回归与P-BUILD通过，独立集成review待执行，B/C和Owner窗口体验Pending。见[集成任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)。
+
 2026-11-06 — 03B main通用native v1：显式有界manifest/binary tile、稳定ID和支持数据恢复、继续编辑/撤销、非法输入拒绝；独立PSD管线保留。[格式与边界](../engineering/NATIVE_FORMAT.md)。通过阶段门槛后本地提交并由main单向合入embedded，不推送/发布。
 
 ## Recent
@@ -34,6 +36,57 @@
 
 - 新增 [start-dev.bat](../../start-dev.bat), 复用本目录 Start-WebPainter/Vite/Electron, 前端改动热更新, main/preload 重启后生效。
 - Owner 指定 WP 本体以 main_native 为主要工作目录, 两个 worktree 分工及使用说明见 [DEV_SETUP](../engineering/DEV_SETUP.md)。本轮不改编辑器算法或品牌, 不提交/推送。
+
+### 2026-11-16 路径显示补漏复审通过
+
+- [任务 02 F1–F2](tasks/2026-11-12_02_path-selection-shortcuts.md)：文字工具默认目标跳过隐藏 Work Path，4 项补测保留普通文字点击/拖框与显式路径、Shape 行为。6.1-sol 子代理修复，主代理独立复审 Approved，关联集 262/262、构建通过；Owner 授权提交并推送 origin/codex/dev，未完成的窗口/人工验收仍单列。
+
+### 2026-11-14 路径转换显示与空白取消 F1–F2
+
+- [任务 02 F1–F2](tasks/2026-11-12_02_path-selection-shortcuts.md)：原范围复审 Approved，新增成功收尾按文档路径取消/隐藏、Shape/Mask 例外和面板剩余空白取消；会话显示状态与默认编辑准入一致。验证及人工缺口见任务，待独立实现复审；不暂存/提交/推送/合并/发布。
+
+
+### 2026-11-12 路径转选区统一入口实现验证
+
+- [任务 02](tasks/2026-11-12_02_path-selection-shortcuts.md)：三键 replace/add/subtract、共享 Action/面板入口、固定目标与 finishPen、历史/失败及空覆盖验收。基线 F1/F2 为 a2d48be；Owner 已授权 P1→P2→P3 实现验证。阶段证据和真实窗口/IME/人工缺口见任务，待独立实现复审；本轮不提交、推送、合并或发布。
+
+### 2026-11-12 F1/F2 本地提交授权
+
+- Owner 授权提交钢笔准入及关闭标尺布局修复、对应验证和文档；不推送/合并/发布。随后仅分析钢笔路径转选区快捷键缺口，不扩展代码。
+
+### 2026-11-12 关闭标尺导致画板不可见修复
+
+- [任务运行验证 F2](tasks/2026-11-12_01_pen-live-path-editing.md)：WP-UI-001 固定 viewport 网格位置；真实 Electron 复现 0×0 布局并修复，独立完整应用关/开/关标尺与 WebGPU 图像输出通过，构建通过。原源码窗口热更新后恢复适配且保持 Saved；未提交/推送。
+
+### 2026-11-12 钢笔 F1 目标准入修复
+
+- [任务 F1](tasks/2026-11-12_01_pen-live-path-editing.md)：矢量蒙版权限拒绝在注册空草稿前完成，保留已有有效草稿及新建 Shape；三例回归、关联 143/143 与生产构建通过。修复后自查无新增 P1/P2，不替代独立 reviewer/人工验收；未提交或推送。
+
+### 2026-11-12 钢笔即时路径编辑实现
+
+Status: 方案复审通过后按 R1–R2 完成 P1–P3 本地提交，自动与隔离生产窗口证据见任务；待独立实现复审，真实 IME/OS AltTab/物理高 DPR 与人工/Owner Pending。不推送/合并/发布。
+
+- [钢笔任务](tasks/2026-11-12_01_pen-live-path-editing.md)：同一未闭合路径内 Ctrl/Alt 临时编辑、续画末端与手势归属、局部撤销及统一闭合提示；列明三阶段范围、目标失效边界及验收；复审修订补历史面板保护、正式草稿主动切换先提交及对应实际面板测试。
+
+### 2026-11-12 弹窗与移动选区 F1–F2 限定修复
+
+Status: 原实现审查 Changes Requested；限定修复完成，待独立复审，人工/Owner Pending。本地提交，不推送/合并/发布。
+
+- [任务文末 F1–F2](tasks/2026-11-11_01_dialog-and-selection-interaction.md)：F1 覆盖率相减挖空及独立三例/重叠数值；F2 控件激活先于 held 导航。最终关联 190/190、构建及隔离窗口原生 Space 激活/held 正例通过，保留旧 R4 与全部未验收项。
+
+### 2026-11-11 弹窗与移动选区交互实现
+
+Status: 方案复审通过后按授权完成 P1–P3 本地提交；177 项关联回归/构建/隔离生产窗口脚本通过。独立实现复审及人工/Owner Pending，不推送/合并/发布。
+
+- [交互对齐任务](tasks/2026-11-11_01_dialog-and-selection-interaction.md)：公共透明模态背景、受控画布导航及位置记忆；移动片段 Alpha 生成贴合轮廓，配套覆盖率与单次撤销。三阶段范围及验收已列明。
+- 颜色填充延迟记录为 [WP-PERF-002](../engineering/KNOWN_ISSUES.md)，由其他分支处理，不混入本任务。
+
+### 2026-11-11 快捷键统一实现交接
+
+Status: 原实现审查 Changes Requested；限定 R1–R3 修复 review 已通过（Owner 确认），R4 延期；人工/Owner Pending。已授权推送 origin/codex/dev，不合并/发布。
+
+- [任务 P1-P5](tasks/2026-11-10_01_shortcut-unification.md) 记录固定 PhotoCraft 源码参考、输入优先级、工具重绑定、常用绑定及验收; codex/dev 独立实施。
+- 复用 Action/keymap/工具与历史；有效绑定、分发/焦点/IME、held pan、上下文复制及首批绑定已接入。原 75 项定向检查、生产构建与隔离生产 smoke 证据保留；本轮限定修复 hash、补测和最终门槛见任务文末。
 
 ### 2026-11-06 保存与关闭可靠性实现
 

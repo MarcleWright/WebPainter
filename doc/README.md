@@ -7,6 +7,7 @@
 | 你想了解 | 主要文档 |
 | --- | --- |
 | 项目面向谁、与 ADA 的关系 | [产品定位](product/PRODUCT_BRIEF.md) |
+| 快捷键统一、PS 常用绑定与分阶段实施 | [输入约定](design/KEYBOARD_INPUT.md)、[快捷键任务 P1-P5](ai/tasks/2026-11-10_01_shortcut-unification.md), R1–R3 review 已通过（Owner 确认）；R4 延期，人工/Owner Pending |
 | 为什么优化 4K、先做什么、怎样算有效 | [产品性能方向](product/PERFORMANCE_DIRECTION.md) |
 | 当前Move/Ctrl+T预览、后台确认与输出交接 | [交互预览架构](architecture/INTERACTIVE_PREVIEW.md) |
 | 拖动时看什么、什么时候落定、怎样撤销 | [交互约定](design/INTERACTION_RULES.md) |
@@ -20,6 +21,9 @@
 | 本地运行和远程配置 | [开发环境](engineering/DEV_SETUP.md) |
 | 怎样验证、哪些还没有验证 | [验证约定](engineering/TESTING.md) |
 | 当前已知缺口 | [已知问题](engineering/KNOWN_ISSUES.md) |
+| Ctrl+Enter 路径转选区三键、共享入口与草稿结束 | [路径转选区任务](ai/tasks/2026-11-12_02_path-selection-shortcuts.md)，P1–P3、F1–F2 及文字工具隐藏路径补漏复审 Approved；IME/设备/人工与 Owner Pending |
+| 钢笔未闭合路径 Ctrl/Alt 即时编辑与闭合提示 | [钢笔任务](ai/tasks/2026-11-12_01_pen-live-path-editing.md)，方案复审通过后 P1–P3 已实施，待独立实现复审；完整 IME/窗口/DPR 与 Owner Pending |
+| 透明调整窗口、受控画布导航与移动选区贴合 | [交互对齐任务](ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md)，P1–P3 原实现审查 Changes Requested；限定 F1–F2 已修复并补测，待独立复审，人工/Owner Pending |
 | 后续 AI 如何继续 | [当前上下文](ai/AI_CONTEXT.md)、[协作规则](ai/AI_WORKFLOW.md)、[进展索引](ai/DEV_LOG.md) |
 | 原始证据 | [材料入口](material/README.md) |
 

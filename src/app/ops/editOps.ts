@@ -1,3 +1,4 @@
+import {penSession} from '../../tools/penSession';
 /** Edit menu operations: history, clipboard, fill, stroke, content-aware fill, presets. */
 import { editColor, editPattern, isCmykDoc, isLabDoc, plateCount, platesToRgb, readPlates, rgbToPlates } from '../../color/plates';
 import { adoptLayers, convertRasterSpace, spaceOfDoc } from '../../color/convertDocument';
@@ -26,6 +27,7 @@ import { canvasSize, Anchor } from './imageOps';
 export function undo(): void {
   const s = need();
   if (!s) return;
+  const draft=penSession(s);if(draft){draft.undo(false);return;}
   editor.cancelTool();
   if (!s.history.undo()) ui.toast('info', 'Nothing to undo.', undefined, 1200);
 }
@@ -33,6 +35,7 @@ export function undo(): void {
 export function redo(): void {
   const s = need();
   if (!s) return;
+  const draft=penSession(s);if(draft){draft.undo(true);return;}
   editor.cancelTool();
   if (!s.history.redo()) ui.toast('info', 'Nothing to redo.', undefined, 1200);
 }
@@ -41,6 +44,7 @@ export function redo(): void {
 export function toggleLastStep(): void {
   const s = need();
   if (!s) return;
+  const draft=penSession(s);if(draft){draft.undo(false);return;}
   if (s.history.canRedo && s.history.index === s.history.entries.length - 2) s.history.redo();
   else s.history.undo();
 }
@@ -261,10 +265,21 @@ export interface FillSpec {
   preserveTransparency: boolean;
 }
 
+/** Shared fill admission for menu, aliases and recorded fill operations. */
+export function fillBlockReason(s: DocumentSession | null = editor.active): string | null {
+  if (!s) return 'Open a document first.';
+  const l=s.activeLayer(), target=s.paintTarget(useApp.getState().quickMask);
+  if (!target) return s.paintBlockReason(false) ?? 'Cannot fill this target.';
+  if ((target.kind === 'layer' || target.kind === 'mask') && l && (l.locks.all || target.kind === 'layer' && l.locks.pixels)) return `"${l.name}" is locked.`;
+  return null;
+}
+
 export async function fill(spec: FillSpec): Promise<void> {
   const r = needLayer();
   if (!r) return;
   const { s, l } = r;
+  const blocked = fillBlockReason(s);
+  if (blocked) {ui.toast('info', blocked);return;}
   if (spec.use === 'contentAware') return contentAwareFill();
   const target = s.paintTarget(useApp.getState().quickMask);
   if (!target) {

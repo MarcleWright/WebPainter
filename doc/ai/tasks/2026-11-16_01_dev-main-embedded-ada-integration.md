@@ -178,3 +178,33 @@ opacity长scrub偶发多history保持**未通过/待定位**；本轮未运行�
 ### 阶段0独立审查
 
 2026-11-16 gpt-6.1-sol独立review Approved，无P1/P2。四树备份SHA/忽略、dirty范围及ADA面板生命周期已核对，reviewer独立复跑六入口通过；已补精确cwd。允许独立本地提交并进入A。opacity仍未通过，真实窗口/Owner体验Pending，不替代后续集成审查。
+
+## 阶段A执行记录（2026-11-16，coder交独立review）
+
+固定main第一亲为`4498e2b3cf17e1cd3925f97fe6b73971ef872b46`，固定Dev第二亲为`b5cf006f3f47e7937775a4c6f4684c1ba76e0933`；merge前main clean。普通`merge --no-commit --no-ff`，未rebase或使用整文件ours/theirs，未修改Dev/embedded/ADA。首次merge因未配置身份在操作前拒绝，随后仅命令级指定授权身份，不改git config。
+
+### 冲突与交叉生命周期决策
+
+- `autosave.ts`：三处条件保留main transform等待、session身份、preview/output/close保护，再增加Dev Pen草稿延期。定时恢复不结束Pen；yield及串行recovery写之前仍重检。
+- `fileOps.ts`：prepareMoveOutput先验证session和拒绝未确认transform preview，再以output模式结束Pen，随后Move/text；outputRequest及close保留main等待transform完成/失败后再继续，owner token、精确快照/保存entry与revision保留。
+- `editor.ts`：setTool同时保留transformPending及canEdit保护；activate/remove/目标切换先结束Pen。核对自动合并发现Dev cancelTool的canEdit保护会挡住main applying任务在切session时取消，新增独立cancelTransformTask调用，普通工具取消仍走权限与canEdit。
+- AI_CONTEXT合并为main当前状态及Dev任务链接，去掉合入后已过时的Dev执行限制；DEV_LOG保留双方历史索引并新增本阶段入口。
+- 已逐项核对自动合并的session/tool/paintTools/App/CanvasView、actions和Move路径：session保留transform专用owner/history准入；Canvas coalesced moveBatch保留完整压力/时间点；输入分发接管旧App快捷键，IME/控件/Modal及Pen局部history独立；min-alpha/coverage挖空与稳定GPU源仍由各原owner负责。采样Worker/容量预检/边界缓存实现未重写。
+
+新增3个组合用例：Pen草稿恢复保存延期及显式输出仅结束一次；transform preview拒绝输出前不结束Pen；applying拒绝Dev工具切换/undo/Ctrl+J动作、切session实际终止Worker。原有pathSelection及Pen输出/PSD重开、快速取消重试、owner互斥、Modal/Pen和batch输入用例一起重跑。
+
+### 自动验证（cwd为本main_native）
+
+首次不限制worker的18文件联跑出现GPU fork退出超时并中断，不算通过；改为限制并发分组后：
+
+```powershell
+npm test -- tests/input tests/engine/transformThroughput.test.ts tests/engine/transformTask.test.ts tests/engine/moveSelection.test.ts tests/engine/moveSelectionReference.test.ts tests/engine/tileContentBounds.test.ts tests/engine/batchedPaint.test.ts tests/engine/native.test.ts tests/engine/access.test.ts --maxWorkers=2
+npm test -- tests/gpu/projectivePreview.test.ts tests/gpu/transformPreview.test.ts tests/gpu/moveOutput.test.ts tests/gpu/floatingSelection.test.ts --maxWorkers=1
+npm run build
+```
+
+前两组分别14文件328项、4文件62项通过（合计390，含新增3项）；typecheck、Vite renderer及Electron main/preload build退出0。保留现有browser externalization/large chunk提示，未生成安装器。transformThroughput继续使用固定`tests/reference/transform-b01dcb7` oracle，不把当前实现作为独立参考。另一次输入基线215项通过在新增用例前，不重复累计。
+
+真实窗口、统一4K显示/吞吐性能对照、Ctrl+J/路径三键/Pen修饰键/透明Move/Enter取消重试保存重开人工体验、真实IME/压感/设备仍Pending；按Owner补充授权由Owner最终统一执行。自动像素与生命周期回归不能证明这些体验。既有R4延期及opacity未通过状态不变。不启动用户窗口、不推进embedded/ADA、不推送或发布。coder自查不能替代本次独立review，待独立审查无阻断后方可进入B。
+
+GPU串行默认后端40.52秒通过；读取完成缓冲前额外发起的显式`$env:CELENNE_GPU_BACKEND='d3d12'`同组37.05秒再次通过，不重复累计。首次并发退出超时未确定根因，不以推测归因；分组覆盖全部要求。最终61个相关相对链接存在，相关文档UTF-8无BOM，git diff --check通过；清除Dev新增fixture末尾多余空行以满足检查。

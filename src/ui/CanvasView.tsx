@@ -1,3 +1,6 @@
+import {panHeld, setInputPointerBusy} from '../app/heldPan';
+import {access} from '../app/access';
+import {isComposing, inputBlocked} from '../app/inputContext';
 /** Document tabs + interactive canvas viewport. */
 import { buildCmykGrid, evalCmykGrid } from '../color/cmykDisplayGrid';
 import { hasInkAppearance } from '../rendering/inkView';
@@ -71,11 +74,11 @@ function DocTabs() {
             const sess = editor.session(s.id);
             openContextMenu([
               { type: 'item', label: 'Close', run: () => closeSession(sess ?? null) },
-              { type: 'item', label: 'Close Others', run: () => { editor.activate(s.id); run('file.closeOthers'); } },
+              { type: 'item', label: 'Close Others', run: () => { if(editor.activate(s.id))run('file.closeOthers'); } },
               { type: 'item', label: 'Close All', run: () => run('file.closeAll') },
               { type: 'separator' },
-              { type: 'item', label: 'Duplicate', run: () => { editor.activate(s.id); run('file.duplicate'); } },
-              { type: 'item', label: 'Document Properties…', run: () => { editor.activate(s.id); run('image.docInfo'); } },
+              { type: 'item', label: 'Duplicate', run: () => { if(editor.activate(s.id))run('file.duplicate'); } },
+              { type: 'item', label: 'Document Properties…', run: () => { if(editor.activate(s.id))run('image.docInfo'); } },
             ], e.clientX, e.clientY);
           }}
         >
@@ -91,6 +94,7 @@ function DocTabs() {
 }
 
 interface AntsCache {
+  mask: NonNullable<typeof editor.active>['doc']['selection']['mask'];
   key: string;
   polys: number[][];
   scale: number;
@@ -105,6 +109,7 @@ interface AntsCache {
 
 export function CanvasView() {
   const session = useSession();
+  const docRev = useApp(s=>s.docRev);
   const viewRef = useRef<HTMLDivElement>(null);
   const glHostRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -116,12 +121,15 @@ export function CanvasView() {
   const sizeRef = useRef({ w: 1, h: 1, dpr: 1 });
   const dirty = useRef(true);
   const overlayDirty = useRef(true);
+  // Session-only path selection/hiding must repaint even when the pixel selection is empty.
+  useEffect(()=>{overlayDirty.current=true;},[docRev]);
   const ants = useRef<AntsCache | null>(null);
   const pointerDown = useRef(false);
   const lastPointer = useRef<ToolPointer | null>(null);
-  const spaceHeld = useRef(false);
+  const capture = useRef<{element:HTMLElement;id:number}|null>(null);
   const guideDrag = useRef<{ id: string | null; orientation: 'horizontal' | 'vertical'; start: number } | null>(null);
-  const panDrag = useRef<{ x: number; y: number } | null>(null);
+  const panDrag = useRef<{ x: number; y: number; session: NonNullable<typeof editor.active>; pointer: number } | null>(null);
+  const pointerSession = useRef<typeof editor.active>(null);
   const [dropping, setDropping] = useState(false);
   const [, setTick] = useState(0);
   const viewFlags = useApp((s) => s.view);
@@ -434,20 +442,24 @@ export function CanvasView() {
     const v = s.view;
     const level = Math.max(0, Math.min(10, v.level(12)));
     const sc = 1 << level;
-    const b = doc.selection.bounds(doc.bounds);
+    const preview = doc.selection.previewOutline;
+    const mask = preview?.mask ?? doc.selection.mask;
+    const b = preview?.bounds ?? doc.selection.bounds(doc.bounds);
     if (!b) return;
     const lr = { x: Math.floor(b.x / sc), y: Math.floor(b.y / sc), w: Math.ceil((b.x + b.w) / sc) - Math.floor(b.x / sc), h: Math.ceil((b.y + b.h) / sc) - Math.floor(b.y / sc) };
-    const key = `${doc.selection.version}:${level}:${lr.x},${lr.y},${lr.w},${lr.h}`;
+    const key = `${mask.version}:${level}:${lr.x},${lr.y},${lr.w},${lr.h}`;
     // Selected pixels being moved: the same outline, shifted (no re-tracing while dragging).
-    const moved = doc.selection.movedOutline();
-    let odx = 0, ody = 0;
-    if (moved && ants.current && ants.current.base === moved.baseVersion && ants.current.level === level) {
+    const moved = preview ? null : doc.selection.movedOutline();
+    let odx = preview?.dx ?? 0, ody = preview?.dy ?? 0;
+    if (moved && ants.current && ants.current.mask === mask && ants.current.base === moved.baseVersion && ants.current.level === level) {
       odx = moved.dx - ants.current.bdx;
       ody = moved.dy - ants.current.bdy;
-    } else if (!ants.current || ants.current.key !== key) {
+    } else if (!ants.current || ants.current.mask !== mask || ants.current.key !== key) {
       if (lr.w * lr.h > 16e6) return;
-      const m = doc.selection.mask.readFloat(lr, level);
-      ants.current = { key, polys: traceContours(m, lr.w, lr.h), scale: sc, ox: lr.x, oy: lr.y, level, base: moved ? moved.baseVersion : doc.selection.version, bdx: moved?.mdx ?? 0, bdy: moved?.mdy ?? 0 };
+      const m = mask.readFloat(lr, level);
+      // Entirely low-alpha fragments still need a visible outline, including transparent holes.
+      const threshold = m.some(a => a >= .5) ? .5 : Number.MIN_VALUE;
+      ants.current = { mask, key, polys: traceContours(m, lr.w, lr.h, threshold), scale: sc, ox: lr.x, oy: lr.y, level, base: moved ? moved.baseVersion : doc.selection.version, bdx: moved?.mdx ?? 0, bdy: moved?.mdy ?? 0 };
     }
     const a = ants.current;
     g.save();
@@ -537,12 +549,6 @@ export function CanvasView() {
     };
   };
 
-  const spring = (): Tool | null => {
-    // Space → hand; Ctrl+Space → zoom; Alt → eyedropper for painting tools.
-    if (spaceHeld.current) return editor.tool(lastPointer.current?.mod ? 'zoom' : 'hand');
-    return null;
-  };
-
   const guideAt = (p: ToolPointer): string | null => {
     const s = editor.active;
     if (!s || !useApp.getState().view.guides || guidesLocked) return null;
@@ -554,6 +560,7 @@ export function CanvasView() {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if(document.querySelector('[role="dialog"]')) return;
     const s = editor.active;
     const h = host();
     if (!s || !h) return;
@@ -561,8 +568,10 @@ export function CanvasView() {
     const p = toPointer(e);
     if (!p) return;
     lastPointer.current = p;
-    if (e.button === 1 || (e.button === 0 && spaceHeld.current && !p.mod)) {
-      panDrag.current = { x: e.clientX, y: e.clientY };
+    if (e.button === 1 || (e.button === 0 && panHeld(s))) {
+      if (!access('tool:hand').enabled) return;
+      panDrag.current = { x: e.clientX, y: e.clientY, session: s, pointer: e.pointerId };
+      setInputPointerBusy(true);
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       return;
     }
@@ -574,19 +583,35 @@ export function CanvasView() {
       if (gid) {
         const gd = s.doc.guideById(gid)!;
         guideDrag.current = { id: gid, orientation: gd.orientation, start: gd.position };
+        setInputPointerBusy(true);
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         return;
       }
     }
-    const t = spring() ?? (p.alt && ALL_SPRING.altEyedropper.includes(editor.currentToolId) ? editor.tool('eyedropper') : null) ?? currentTool();
+    const t = (p.alt && ALL_SPRING.altEyedropper.includes(editor.currentToolId) ? editor.tool('eyedropper') : null) ?? currentTool();
     if (!t) return;
+    if (!access('tool:'+editor.currentToolId).enabled) return;
     pointerDown.current = true;
+    pointerSession.current = s;
+    setInputPointerBusy(true);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     activeTool.current = t;
+    capture.current={element:e.target as HTMLElement,id:e.pointerId};
     t.down?.(h, p);
     overlayDirty.current = true;
   };
   const activeTool = useRef<Tool | null>(null);
+
+  useEffect(()=>{
+    const clear=()=>{
+      if(activeTool.current?.id!=='pen')return;
+      pointerDown.current=false;pointerSession.current=null;activeTool.current=null;setInputPointerBusy(false);
+      const own=capture.current;capture.current=null;
+      if(own?.element.hasPointerCapture?.(own.id))own.element.releasePointerCapture(own.id);
+      overlayDirty.current=true;
+    };
+    window.addEventListener('celenne:penInterrupted',clear);return()=>window.removeEventListener('celenne:penInterrupted',clear);
+  },[]);
 
   // The cursor position feeds the status bar and Info panel (which samples the composite), so it is
   // published at most once per frame and only when the pixel under the pointer changes.
@@ -609,9 +634,10 @@ export function CanvasView() {
     if (!s || !h) return;
     const events = (e.nativeEvent as PointerEvent).getCoalescedEvents?.() ?? [e.nativeEvent];
     if (panDrag.current) {
+      if (panDrag.current.session !== s || panDrag.current.pointer !== e.pointerId) return;
       s.view.panX += e.clientX - panDrag.current.x;
       s.view.panY += e.clientY - panDrag.current.y;
-      panDrag.current = { x: e.clientX, y: e.clientY };
+      panDrag.current = {...panDrag.current, x: e.clientX, y: e.clientY};
       dirty.current = overlayDirty.current = true;
       return;
     }
@@ -629,7 +655,8 @@ export function CanvasView() {
       return;
     }
     publishCursor(p.x, p.y, p.x >= 0 && p.y >= 0 && p.x < s.doc.width && p.y < s.doc.height);
-    const t = pointerDown.current ? activeTool.current : spring() ?? currentTool();
+    if (pointerDown.current && (pointerSession.current !== s || !s.canEdit() || !access('tool:'+editor.currentToolId).enabled)) return;
+    const t = pointerDown.current ? activeTool.current : panHeld(s) ? editor.tool('hand') : currentTool();
     if (pointerDown.current && t?.move) {
       if (t.moveBatch) {
         const points = (events.length > 1 ? events : [e.nativeEvent]).map(ev => toPointer(ev as PointerEvent)).filter((p): p is ToolPointer => !!p);
@@ -649,10 +676,11 @@ export function CanvasView() {
   const onPointerUp = (e: React.PointerEvent) => {
     const s = editor.active;
     const h = host();
-    if (panDrag.current) { panDrag.current = null; return; }
+    if (panDrag.current) { if (panDrag.current.pointer !== e.pointerId) return; panDrag.current = null; setInputPointerBusy(false); return; }
     if (guideDrag.current && s) {
       const gd = guideDrag.current;
       guideDrag.current = null;
+      setInputPointerBusy(false);
       const p = toPointer(e);
       if (gd.id && p) {
         const g = s.doc.guideById(gd.id);
@@ -671,7 +699,10 @@ export function CanvasView() {
       return;
     }
     if (!pointerDown.current || !h) return;
+    if (pointerSession.current !== s || !s?.canEdit()) return;
     pointerDown.current = false;
+    pointerSession.current = null;
+    setInputPointerBusy(false);
     const p = toPointer(e);
     const t = activeTool.current;
     activeTool.current = null;
@@ -681,13 +712,21 @@ export function CanvasView() {
     overlayDirty.current = dirty.current = true;
   };
 
+  const onPointerCancel = (e:React.PointerEvent) => {
+    const tool=activeTool.current,h=host();
+    if(pointerDown.current&&tool?.cancelPointer&&h){tool.cancelPointer(h);pointerDown.current=false;pointerSession.current=null;activeTool.current=null;capture.current=null;setInputPointerBusy(false);overlayDirty.current=dirty.current=true;}
+    else onPointerUp(e);
+  };
+
   const onDoubleClick = (e: React.MouseEvent) => {
+    if(document.querySelector('[role="dialog"]')) return;
     const h = host();
     const p = toPointer(e, 2);
     if (h && p) currentTool()?.doubleClick?.(h, p);
   };
 
   const onWheel = (e: React.WheelEvent) => {
+    if(document.querySelector('[role="dialog"]')) return;
     const s = editor.active;
     if (!s) return;
     const r = viewRef.current!.getBoundingClientRect();
@@ -705,33 +744,17 @@ export function CanvasView() {
     ui.bump('viewRev');
   };
 
-  // Keyboard: spring-loaded tools.
+  // Invalidating a held override clears only view interaction, never the underlying tool.
   useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !isTyping(e)) {
-        if (!spaceHeld.current) {
-          spaceHeld.current = true;
-          if (viewRef.current) viewRef.current.style.cursor = 'grab';
-        }
-        e.preventDefault();
-      }
-    };
-    const up = (e: KeyboardEvent) => {
-      if (e.code === 'Space') spaceHeld.current = false;
-    };
-    // Switching windows while Space is held never delivers the keyup: don't get stuck panning.
-    const blur = () => {
-      spaceHeld.current = false;
+    const clear = () => {
+      const drag = panDrag.current;
+      panDrag.current = null;
+      if (drag && viewRef.current?.hasPointerCapture?.(drag.pointer)) viewRef.current.releasePointerCapture(drag.pointer);
+      if (drag) setInputPointerBusy(false);
       if (viewRef.current) viewRef.current.style.cursor = '';
     };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    window.addEventListener('blur', blur);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-      window.removeEventListener('blur', blur);
-    };
+    window.addEventListener('celenne:clearHeldPan',clear);
+    return () => {clear();setInputPointerBusy(false);window.removeEventListener('celenne:clearHeldPan',clear);};
   }, []);
 
   // Context menu.
@@ -849,10 +872,10 @@ export function CanvasView() {
       <DocTabs />
       <div className={`canvas-wrap${rulers ? '' : ' no-rulers'}`}>
         <div className="ruler corner" style={{ display: rulers ? undefined : 'none' }} />
-        <div className="ruler h" style={{ display: rulers ? undefined : 'none' }} onPointerDown={(e) => { if (editor.active) { guideDrag.current = { id: null, orientation: 'horizontal', start: 0 }; viewRef.current?.setPointerCapture?.(e.pointerId); } }}>
+        <div className="ruler h" style={{ display: rulers ? undefined : 'none' }} onPointerDown={(e) => { if (editor.active) { guideDrag.current = { id: null, orientation: 'horizontal', start: 0 }; setInputPointerBusy(true); viewRef.current?.setPointerCapture?.(e.pointerId); } }}>
           <canvas ref={rulerH} />
         </div>
-        <div className="ruler v" style={{ display: rulers ? undefined : 'none' }} onPointerDown={(e) => { if (editor.active) { guideDrag.current = { id: null, orientation: 'vertical', start: 0 }; viewRef.current?.setPointerCapture?.(e.pointerId); } }}>
+        <div className="ruler v" style={{ display: rulers ? undefined : 'none' }} onPointerDown={(e) => { if (editor.active) { guideDrag.current = { id: null, orientation: 'vertical', start: 0 }; setInputPointerBusy(true); viewRef.current?.setPointerCapture?.(e.pointerId); } }}>
           <canvas ref={rulerV} />
         </div>
         <div
@@ -863,8 +886,8 @@ export function CanvasView() {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onLostPointerCapture={(e) => { if (pointerDown.current) onPointerUp(e); }}
+          onPointerCancel={onPointerCancel}
+          onLostPointerCapture={(e) => { if (pointerDown.current) onPointerCancel(e); }}
           onPointerLeave={() => { ui.set((s) => ({ cursor: { ...s.cursor, inside: false } })); overlayDirty.current = true; }}
           onDoubleClick={onDoubleClick}
           onWheel={onWheel}
@@ -884,6 +907,8 @@ export function CanvasView() {
               onSelect={() => { caretChanged(); overlayDirty.current = true; }}
               onKeyDown={(e) => {
                 e.stopPropagation();
+                if (isComposing(e)) return;
+                if (inputBlocked() || !access('tool:'+(editor.currentToolId === 'typeVertical' ? 'typeVertical' : 'type')).enabled) { e.preventDefault(); return; }
                 if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); commitTextEdit(); return; }
                 const l = editedText();
                 if (l && caretKey(e, e.currentTarget, l)) overlayDirty.current = true;
@@ -903,11 +928,6 @@ export function CanvasView() {
       </div>
     </div>
   );
-}
-
-function isTyping(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement | null;
-  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
 }
 
 function Welcome() {

@@ -1,3 +1,4 @@
+import {finishPen} from '../tools/penSession';
 import { snapshotDocument } from '../document/clone';
 /**
  * File operations: new / open / save / save as / save a copy / export / close / recent / place.
@@ -27,6 +28,7 @@ import { builtinProfileName, BuiltinProfileId } from '../color/icc';
 export function prepareMoveOutput(s: DocumentSession): boolean {
   if (editor.session(s.id) !== s) return false;
   if(s.mode.kind==='transform'){ui.toast('info','Confirm or cancel the transform before saving.');return false;}
+  if (!finishPen(s,true)) return false;
   const tool = editor.currentTool;
   if (editor.active === s && tool?.id !== 'move' && tool?.id !== 'type' && tool?.busy?.()) { ui.toast('info', 'Finish the current tool before saving.'); return false; }
   const result = editor.finishMove(s);
@@ -377,6 +379,7 @@ export async function closeSession(s: DocumentSession | null = editor.active, fo
     if(transform && !(await transform)){ui.toast('warning','Transform was not committed; document remains open.');return false;}
     if (s.outputPending && !(await s.outputPending)) return false;
     if (editor.session(s.id) !== s) return true;
+    if (!finishPen(s,true)) return false;
     editor.finishMove(s, false);
     if (textEditState()?.sessionId === s.id) commitTextEdit();
     protection=s.acquireEditProtection('close'); s.notify();

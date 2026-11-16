@@ -137,3 +137,11 @@ it('matrix replay uses the same capacity admission and cannot bypass an unsafe t
  const {l,s}=fixture();cancelTransform();const before=hash(l.raster),cpu=vi.spyOn(imageOps,'warpLayerRaster');expect(transformLayersByMatrix(s,[l.id],[1e5,0,0,0,1e5,0,0,0,1],true)).toBe(false);expect(cpu).not.toHaveBeenCalled();expect(hash(l.raster)).toBe(before);expect(s.history.entries).toHaveLength(1);
  expect(transformLayersByMatrix(s,[l.id],[1,0,7,0,1,3,0,0,1],true)).toBe(true);expect(s.history.entries).toHaveLength(2);expect(s.history.current.command?.record?.action).toBe('edit.freeTransformApply');
 });
+
+it('integration: applying blocks Dev tool shortcuts and history, then session switch cancels the retained owner',async()=>{
+ FakeWorker.mode='hold';const {s,l}=fixture(),before=hash(l.raster);commitTransform();const job=s.transformPending!;await held();
+ const {useApp}=await import('../../src/app/store'),{run}=await import('../../src/app/actions');const selected=useApp.getState().tool;
+ editor.setTool('pen');await run('edit.undo');await run('layer.copyContext');
+ expect(useApp.getState().tool).toBe(selected);expect(s.history.index).toBe(0);expect(hash(l.raster)).toBe(before);
+ editor.addDocument(newDoc(8,8));expect(await job).toBe(false);expect(FakeWorker.all[0].terminated).toBe(true);expect(hash(l.raster)).toBe(before);
+});

@@ -1,6 +1,6 @@
 # 当前上下文
 
-2026-11-16 [Dev→main→embedded→ADA集成任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)方案review通过，Owner已授权阶段0→A→B→C及独立本地提交。阶段0已固定四树HEAD、保全dirty，embedded诊断与ADA现有新面板分别整理交独立review；未提交/合并/换包/推送。阶段A–C尚未实施；opacity长scrub多history仍未通过/待定位，最终人工体验由Owner统一执行，窗口未测Pending。
+2026-11-16 [Dev→main→embedded→ADA集成任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)：阶段0独立Approved并独立本地提交；阶段A已普通merge固定Dev b5cf006，联跑390项及P-BUILD通过，待独立集成review。合并保留Pen/transform/output双重保护，并修复工具保护挡住后台任务实际取消的组合问题。B/C未实施，不推送；opacity长scrub多history仍未通过/待定位，最终窗口/人工/性能体验Owner统一执行，Pending。
 
 2026-11-12 [Ctrl+T正式确认吞吐](tasks/2026-11-12_01_transform-confirm-throughput.md)已按Owner授权实施，待独立实现review；Owner已观察明显提速；只改专用Worker采样内核。独立b01dcb7 oracle及305项整体回归、P-BUILD、开发/生产实际取消重试通过；同环境4K窗口三类总耗时中位数透明降低39.6–44.3%、不透明42.0–45.5%，最终tile/坐标/输入精确一致。仍约4–5秒，authority长尾最高235ms；原768MiB预算、预览和文件协调不变。本轮Owner另授权提交并推送origin/main；不推进下游，详细证据及限制见任务。
 
@@ -12,9 +12,11 @@
 
 2026-11-10 Owner 指定后续 WP 本体主要在 `WebPainter_main_native` 工作, 当前为 main; `WebPainter` 保留 embedded 工作目录。新增根目录 `start-dev.bat`, 复用当前 checkout 的 Vite + 原生 Electron 启动流程; 前端热更新, main/preload 改动重启。见 [开发环境](../engineering/DEV_SETUP.md#启动当前源码的完整工程)。
 
+Dev输入/Modal、min-alpha移动、Pen局部历史及路径转换已在阶段A合入；原任务与独立审查历史见[输入约定](../design/KEYBOARD_INPUT.md)、[Pen任务](tasks/2026-11-12_01_pen-live-path-editing.md)、[路径转选区任务](tasks/2026-11-12_02_path-selection-shortcuts.md)。旧R4延期，真实IME/设备与Owner验收仍Pending。
+
 2026-11-06 03B：main独立worktree通用native v1已实施，待后续统一review。初始main ef3eea8；75项首次组合检查、追加后native18项/类型及构建通过，6层4K codec与tile往返有记录。格式/拒绝边界见 [native格式](../engineering/NATIVE_FORMAT.md)，[执行证据](tasks/2026-11-06_03B_native-codec.md)。只由main单向合入embedded供ADA固定包使用，不引入ADA/embedded依赖；未推送/发布，人工/Photoshop未验收。
 
-更新: 2026-11-12。保持短而当前; 详细历史读任务记录。
+更新: 2026-11-16。保持短而当前; 详细历史读任务记录。
 
 ## 当前阶段与入口
 

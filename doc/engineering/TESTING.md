@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | P-DOC | UTF-8 解码、相对链接、材料忽略规则、上游 docs 校验、git diff --check | 文档和研究归档 |
 | P-TYPE | `npm run typecheck` | TypeScript 契约 |
+| P-INPUT | `npm exec -- vitest run tests/input tests/engine/moveSelection.test.ts tests/gpu/moveOutput.test.ts tests/engine/access.test.ts tests/engine/layerAccessUI.test.tsx` | 有效绑定、实际 App/Canvas/文本/Modal 传播、业务像素/历史、保存及 access 回归 |
 | P-MOVE | `npm exec -- vitest run tests/engine/moveSelection.test.ts` | 既有选区移动和历史回归 |
 | P-BUILD | `npm run build` | 生产资源与 Electron 构建, 内含 typecheck |
 | P-SMOKE | 依上游 `CELENNE_SMOKE=1` 入口, 使用独立 userData/temp | 真实生产窗口加载, 不覆盖用户 profile |
@@ -40,3 +41,7 @@
 - 完全断网运行的绘画、打开、保存、重开、PSD 导出需单独人工验证。
 
 Task 02 的 P-MOVE、GPU 定向检查、P-BUILD 和有限脚本对照见 [任务记录](../ai/tasks/2026-11-05_02_4k-selection-preview-prototype.md), 用户已实际试用确认性能达到可用水平。P-FULL、PhotoCraft Rust 基准和完整人工矩阵仍未执行。生产默认链路及输出交接的后续验收见 [默认接入任务](../ai/tasks/2026-11-06_01_default-gpu-selection-move.md), 自动及生产脚本检查已执行, 未执行的人工与设备项目在该任务记录。
+
+## 快捷键验证边界
+
+稳定规则见[键盘输入约定](../design/KEYBOARD_INPUT.md)，阶段与人工结果见[任务](../ai/tasks/2026-11-10_01_shortcut-unification.md)。P-INPUT 挂载生产监听和真实工具/会话/命令，图形 renderer/布局及 IO 可隔离；不能用它代替完整生产图形、原生焦点/中文 IME 或 Owner 试用。曲线、调整、Fill 和 Copy/Cut 分别检查实际预览/像素/历史。生产 smoke 从当前 worktree 的 build + 正常 main/preload/app:// 加载，独立 profile/temp，不加载相邻业务源码；脚本 KeyboardEvent 及 profile 重启是自动集成证据，人工矩阵须逐项另记。

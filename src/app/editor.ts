@@ -1,3 +1,4 @@
+import {finishPen} from '../tools/penSession';
 import {access} from './access';
 /**
  * Editor — the application core (framework-agnostic). Owns document sessions, the active tool,
@@ -78,12 +79,13 @@ export class Editor {
       offHist();
       offSess();
     });
-    this.activate(s.id);
+    if(!this.activate(s.id))this.syncSessions();
     return s;
   }
 
-  activate(id: string): void {
-    if (this.activeId === id) return;
+  activate(id: string): boolean {
+    if (this.activeId === id) return true;
+    if (!finishPen(this.active)) return false;
     this.cancelTool();
     this.activeId = id;
     this.syncSessions();
@@ -91,11 +93,12 @@ export class Editor {
     ui.bump('historyRev');
     ui.bump('viewRev');
     this.updateTitle();
+    return true;
   }
 
   removeSession(id: string): void {
     const s = this.session(id);
-    if (!s) return;
+    if (!s || !finishPen(s)) return;
     if (this.activeId === id) this.cancelTool();
     this.unsubs.get(id)?.();
     this.unsubs.delete(id);
@@ -214,8 +217,16 @@ export class Editor {
     this.modeControllers.set(kind, controller);
   }
 
+  /** Inspect retained ownership without admitting a disabled tool to input. */
+  hasPendingToolInteraction(): boolean {
+    const mode = this.active?.mode.kind;
+    const owner = (mode && mode !== 'none' ? this.modeControllers.get(mode) : undefined) ?? this.toolInstances.get(this.currentToolId);
+    return !!(owner?.busy?.() || owner?.hasPendingEdit?.() || this.active && mode !== 'none');
+  }
+
   setTool(id: ToolId): void {
     if(this.active?.transformPending)return;
+    if (this.active && !this.active.canEdit()) {ui.toast('info', 'This document is busy saving or closing.'); return;}
     if(!access('tool:'+id).enabled)return;
     const info = toolInfo(id);
     if (info.comingSoon) {
@@ -224,6 +235,14 @@ export class Editor {
     }
     const prev = useApp.getState().tool;
     if (prev === id) return;
+    if (!finishPen(this.active)) return;
+    // Admission hides disabled tools from normal input. Inspect only an already retained owner
+    // here: asking currentTool would hide precisely the pending edit we must preserve.
+    const mode = this.active?.mode.kind;
+    const admitted = access('tool:'+this.currentToolId).enabled && (mode !== 'transform' || access('action:edit.freeTransform').enabled);
+    if (!admitted && this.hasPendingToolInteraction()) {
+      ui.toast('info', 'The current tool is unavailable; its pending edit has been preserved.');return;
+    }
     this.cancelTool();
     const host = this.hostFactory?.();
     if (host) this.tool(prev)?.deactivate?.(host);
@@ -234,8 +253,10 @@ export class Editor {
 
   /** Cancels the in-progress interaction of the current tool. */
   cancelTool(): void {
+    // Cancellation belongs to the retained task even while its edit token blocks tools.
+    this.active?.cancelTransformTask?.();
     const host = this.hostFactory?.();
-    if (host) this.currentTool?.cancel?.(host);
+    if (host && host.session.canEdit() && access('tool:'+this.currentToolId).enabled) this.currentTool?.cancel?.(host);
   }
 
   finishMove(s: DocumentSession, commit = true) {
