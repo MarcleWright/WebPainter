@@ -2,6 +2,10 @@
 
 2026-11-16：[Dev→main→embedded→ADA集成](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)阶段0和A独立Approved；B已在integration/embedded整合已审main 4577114及A1 5924a6d，自动验证/编译通过待独立review，未构建新固定包、未推进C。B完整执行、测试与待审范围见该任务；窗口/性能/人工体验由Owner统一验收，Pending。只本地提交，不推送或发布。
 
+2026-11-16 [无感自动保存修复任务](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md)阶段0独立review Approved；A已实现main Session输出槽/稳定检查点、交互旧Promise判断退休、工具/控件稳定通知和先收尾再close cutoff，336项定向自动与P-BUILD通过，独立review指出恢复到期需求丢失P2，已补session需求保留/稳定通知生产订阅及6项真实调度回归，P-BUILD通过，待复审。只保留实际edit保护；B/port4/embedded背景编码与C/ADA尚未实施，未换包/推送发布。独立选层dirty保留不混提交；实际窗口/性能与设备Pending，详细实施和限制见任务§11。
+
+2026-11-16 [跨分支集成](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)阶段0/A/A1/B/C本地实施及独立技术review均Approved。main合Dev d1efe6e，通用输入5924a6d；embedded df3a496/d277f7c clean包e1798e81，ADA现有绘图分支dc1ea564已消费，保留新悬浮UI。dirty已保全独立提交，原操作身份/续期组合有自动证据；Owner人工/新实窗/ASAR/性能与设备Pending，opacity旧scrub及R4未修复。不推送/发布/合ADA主线。
+
 - 通用WP内核由main工作树 `WebPainter_main_native` 持有；本树只单向合入main并拥有通用embedded boot/host port。ADA拥有Profile/Artifact/Results/调度，消费固定包，不复制WP内核。当前架构见[架构入口](../architecture/ARCHITECTURE_OVERVIEW.md)、[预览/后台确认](../architecture/INTERACTIVE_PREVIEW.md)。
 - 现行合同port3/native1/policy1，native-only自动保存、操作完整边界seal、短COW owner保护、原codec worker及独立返回预览worker。旧固定源仍 `060b6a4` / bundle `df16465d…`，不得将新源码或编译验证追认到旧包。[端口](../architecture/EMBEDDED_PORT_V1.md)、[03D原配套证据](tasks/2026-11-06_03D_ada-document-workflow.md#autosave-local-rework-final-handoff-2026-11-09)。
 - Dev的输入/Modal、min-alpha移动、Pen局部历史及路径转换已在A合入main；R4延期，ADA既有opacity长scrub多history仍未通过/待定位，人工IME/设备及完整格式验收Pending。

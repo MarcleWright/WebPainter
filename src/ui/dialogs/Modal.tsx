@@ -9,6 +9,7 @@ import { IconButton } from '../controls';
 
 // Session-only public shell state. No preferences or command queue.
 export const DialogType = createContext<string | null>(null);
+const nonDocumentDialogs=new Set(['newDocument','customZoom','saveCompat','preferences','shortcuts','about','updates','reports','reportPrompt','docInfo','recovered','exportAs','compatMatrix','compatibility','gpuInfo','plugins','commandPalette']);
 const positions = new Map<string,{x:number;y:number}>();
 const owners: {token:object;clear:()=>void}[] = [];
 
@@ -33,7 +34,7 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
   const titleStop = useRef<(()=>void)|null>(null);
   const top = () => owners.at(-1)?.token === token;
   const clear = () => {held.current=null;const drag=pan.current;pan.current=null;if(drag && backdrop.current?.hasPointerCapture?.(drag.pointer)) backdrop.current.releasePointerCapture(drag.pointer);titleStop.current?.();titleStop.current=null;};
-  const valid = () => top() && editor.active === target.session && editor.active?.doc === target.doc && !!target.session?.canEdit() && !target.session.outputPending && !target.session.closePending;
+  const valid = () => top() && editor.active === target.session && editor.active?.doc === target.doc && !!target.session?.canEdit();
   const popup = () => {if(document.querySelector('[role="menu"],[role="listbox"],.select-popup,[aria-expanded="true"]'))return true;try{return !!document.querySelector('select:open');}catch{return false;}};
   const exposed = (x:number,y:number) => {const el=document.querySelector<HTMLElement>('.viewport');if(!el||popup())return false;const r=el.getBoundingClientRect();return x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom;};
   const clamp = (value:{x:number;y:number}) => {const r=ref.current?.getBoundingClientRect();const x=Math.max(0,(window.innerWidth-(r?.width||360))/2-20),y=Math.max(0,(window.innerHeight-(r?.height||200))/2-20);return {x:Math.max(-x,Math.min(x,value.x)),y:Math.max(-y,Math.min(y,value.y))};};
@@ -45,6 +46,7 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
   const okRef = useRef(onOk);
   okRef.current = onOk;
   useEffect(() => {
+    const release=type&&nonDocumentDialogs.has(type)?undefined:target.session?.beginUncommitted();
     alive.current=true;owners.at(-1)?.clear();owners.push({token,clear});
     const up=(e:KeyboardEvent)=>{if(held.current===(e.code||e.key))held.current=null;};
     const resize=()=>setOff(value=>{const next=clamp(value);positions.set(key,next);return next;});
@@ -53,7 +55,7 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
       else if(e.shiftKey)s.view.panX-=e.deltaY+e.deltaX;else{s.view.panX-=e.deltaX;s.view.panY-=e.deltaY;}ui.bump('viewRev');};
     const stop=useApp.subscribe((s,p)=>{if(s.activeSessionId!==p.activeSessionId||s.dialogs!==p.dialogs)clear();});
     window.addEventListener('keyup',up);window.addEventListener('blur',clear);window.addEventListener('resize',resize);backdrop.current?.addEventListener('wheel',wheel,{passive:false});resize();
-    return()=>{alive.current=false;clear();stop();const i=owners.findIndex(o=>o.token===token);if(i>=0)owners.splice(i,1);window.removeEventListener('keyup',up);window.removeEventListener('blur',clear);window.removeEventListener('resize',resize);backdrop.current?.removeEventListener('wheel',wheel);};
+    return()=>{release?.();alive.current=false;clear();stop();const i=owners.findIndex(o=>o.token===token);if(i>=0)owners.splice(i,1);window.removeEventListener('keyup',up);window.removeEventListener('blur',clear);window.removeEventListener('resize',resize);backdrop.current?.removeEventListener('wheel',wheel);};
   }, []);
   useEffect(() => {
     const el = ref.current;

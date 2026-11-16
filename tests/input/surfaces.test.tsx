@@ -1,3 +1,4 @@
+import {setGuard} from "../sessionGuards";
 // @vitest-environment jsdom
 import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
@@ -19,7 +20,7 @@ it('real toolbar and menu hints update after rebinding/removal, and color clicks
  expect(container.querySelector('[title="Swap colors"]')).not.toBeNull();
  expect(container.querySelector('[title="Edit in Quick Mask Mode (F7)"]')).not.toBeNull();
  expect(container.querySelector('[title="Search commands (F8)"]')).not.toBeNull();
- const fg={r:.2,g:.3,b:.4},bg={r:.6,g:.7,b:.8};await act(async()=>ui.set({fg,bg}));session.editProtected=true;
+ const fg={r:.2,g:.3,b:.4},bg={r:.6,g:.7,b:.8};await act(async()=>ui.set({fg,bg}));setGuard(session,"editProtected",true);
  await act(async()=>container.querySelector<HTMLButtonElement>('[title="Swap colors"]')!.click());expect(useApp.getState().fg).toEqual(fg);
- session.editProtected=false;await act(async()=>container.querySelector<HTMLButtonElement>('[title="Swap colors"]')!.click());expect(useApp.getState().fg).toEqual(bg);
+ setGuard(session,"editProtected",false);await act(async()=>container.querySelector<HTMLButtonElement>('[title="Swap colors"]')!.click());expect(useApp.getState().fg).toEqual(bg);
 });

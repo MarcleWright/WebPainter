@@ -1,3 +1,4 @@
+import {setGuard} from "../sessionGuards";
 // @vitest-environment jsdom
 import {act} from 'react';
 import {createRoot,type Root} from 'react-dom/client';
@@ -33,7 +34,7 @@ beforeEach(()=>{
  vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockImplementation(()=>new Proxy({measureText:()=>({width:10}),createImageData:(w:number,h:number)=>({data:new Uint8ClampedArray(w*h*4),width:w,height:h})},{get:(o,k)=>Reflect.get(o,k)??(()=>{})}) as any);
  container=document.createElement('div');document.body.append(container);root=createRoot(container);registerTools();keymap.reset();ui.set({dialogs:[],tool:'pen'});ui.setToolOptions('pen',{mode:'path'});
 });
-afterEach(async()=>{await act(async()=>{for(const s of [...editor.sessions]){s.editProtected=false;finishPen(s,true);}root.unmount();for(const s of [...editor.sessions])editor.removeSession(s.id);});container.remove();editor.hostFactory=null;keymap.reset();vi.restoreAllMocks();vi.unstubAllGlobals();});
+afterEach(async()=>{await act(async()=>{for(const s of [...editor.sessions]){setGuard(s,"editProtected",false);finishPen(s);}root.unmount();for(const s of [...editor.sessions])editor.removeSession(s.id);});container.remove();editor.hostFactory=null;keymap.reset();vi.restoreAllMocks();vi.unstubAllGlobals();});
 const empty=():VectorPath=>({subpaths:[],fillRule:'nonzero'});
 export const pt=(x:number,y:number,extra:Partial<ToolPointer>={}):ToolPointer=>({x,y,sx:x,sy:y,pressure:1,tiltX:0,tiltY:0,twist:0,button:0,buttons:1,shift:false,alt:false,mod:false,pointerType:'mouse',time:0,clickCount:1,...extra});
 async function fixture(kind='work'){
@@ -72,7 +73,7 @@ it('P1 actual PathsPanel target switch commits open A before B; return then docu
  const f=await fixture('saved'),{doc,s}=f;await f.click(10,10);await f.click(40,10);await f.click(40,40);
  const a=clonePath(doc.paths[0].path);const row=(name:string)=>[...container.querySelectorAll<HTMLElement>('[data-paths] .list-item')].find(el=>el.textContent===name)!;
  await act(async()=>row('Path A').click());expect(penSession(s)).toBeTruthy();
- s.editProtected=true;await act(async()=>row('Path B').click());expect(s.activePathId).toBe('a');expect(penSession(s)).toBeTruthy();s.editProtected=false;
+ setGuard(s,"editProtected",true);await act(async()=>row('Path B').click());expect(s.activePathId).toBe('a');expect(penSession(s)).toBeTruthy();setGuard(s,"editProtected",false);
  await act(async()=>row('Path B').click());expect(s.activePathId).toBe('b');expect(penSession(s)).toBeNull();expect(s.history.index).toBe(1);expect(doc.paths[1].path.subpaths).toHaveLength(0);
  await act(async()=>row('Path A').click());s.history.undo();expect(doc.paths[0].path.subpaths).toHaveLength(0);s.history.redo();expect(doc.paths[0].path).toEqual(a);expect(a.subpaths[0].closed).toBe(false);
 });
@@ -216,7 +217,7 @@ it('P2 active layer replacement/deletion commands finish the original path befor
 
 it('P3 actual mask selection and document switch protection preserve old draft until a successful finish',async()=>{
  const f=await fixture(),{s,other,doc}=f;await f.click(10,10);await f.click(50,10);const a=clonePath(doc.paths[0].path);const maskButton=container.querySelector<HTMLButtonElement>('[data-layers] [data-kind=mask]')!;
- s.editProtected=true;await act(async()=>maskButton.click());expect(s.activeLayerId).not.toBe(other.id);expect(s.editMask).toBe(false);expect(penSession(s)).toBeTruthy();s.editProtected=false;
+ setGuard(s,"editProtected",true);await act(async()=>maskButton.click());expect(s.activeLayerId).not.toBe(other.id);expect(s.editMask).toBe(false);expect(penSession(s)).toBeTruthy();setGuard(s,"editProtected",false);
  await act(async()=>maskButton.click());expect(s.activeLayerId).toBe(other.id);expect(s.editMask).toBe(true);expect(s.history.index).toBe(1);s.history.undo();expect(doc.paths[0].path.subpaths).toHaveLength(0);s.history.redo();expect(doc.paths[0].path).toEqual(a);
 });
 it('P3 normal native save/close checkpoint includes completed paths; open gesture is cancelled once',async()=>{
@@ -301,4 +302,13 @@ it('integration: transform preview rejects output before ending a retained Pen o
  const owner=penSession(s);s.mode={kind:'transform',layerIds:[s.activeLayerId!]};
  expect(prepareMoveOutput(s)).toBe(false);expect(penSession(s)).toBe(owner);expect(s.history.index).toBe(0);
  s.mode={kind:'none'};expect(prepareMoveOutput(s)).toBe(true);expect(s.history.index).toBe(1);
+});
+
+import {checkpointReady,captureCheckpoint,onCheckpointChange} from '../../src/app/checkpoint';
+it('background output admits real Pen creation/local undo/Ctrl+Enter while draft capture waits for final owner release',async()=>{
+ const f=await fixture();const slot=f.s.reserveOutput(Promise.resolve(true))!;let ready=0;const off=onCheckpointChange(f.s,()=>{if(checkpointReady(f.s))ready++;});
+ await f.click(10,10);await f.click(40,10);await f.click(40,40);expect(captureCheckpoint(f.s)).toBeNull();expect(f.s.history.index).toBe(0);
+ await act(async()=>key(container.querySelector('.viewport')!,'z',{ctrlKey:true}));expect(f.path().subpaths[0].knots).toHaveLength(2);
+ await act(async()=>key(container.querySelector('.viewport')!,'z',{ctrlKey:true,shiftKey:true}));expect(f.path().subpaths[0].knots).toHaveLength(3);
+ const before=ready;await act(async()=>key(container.querySelector('.viewport')!,'Enter',{ctrlKey:true}));expect(penSession(f.s)).toBeNull();expect(f.doc.selection.isEmpty()).toBe(false);expect(checkpointReady(f.s)).toBe(true);expect(ready).toBeGreaterThan(before);expect(captureCheckpoint(f.s)).not.toBeNull();off();f.s.releaseOutput(slot);
 });

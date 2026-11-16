@@ -1,3 +1,4 @@
+import {checkpointReady} from './checkpoint';
 import {finishPen} from '../tools/penSession';
 import { snapshotDocument } from '../document/clone';
 /**
@@ -26,9 +27,9 @@ import { builtinProfileName, BuiltinProfileId } from '../color/icc';
 
 /** Finish only this target's Move/text; recheck after every asynchronous dialog/yield. */
 export function prepareMoveOutput(s: DocumentSession): boolean {
-  if (editor.session(s.id) !== s) return false;
+  if (editor.session(s.id) !== s || !s.canEdit()) return false;
   if(s.mode.kind==='transform'){ui.toast('info','Confirm or cancel the transform before saving.');return false;}
-  if (!finishPen(s,true)) return false;
+  if (!finishPen(s)) return false;
   const tool = editor.currentTool;
   if (editor.active === s && tool?.id !== 'move' && tool?.id !== 'type' && tool?.busy?.()) { ui.toast('info', 'Finish the current tool before saving.'); return false; }
   const result = editor.finishMove(s);
@@ -38,6 +39,14 @@ export function prepareMoveOutput(s: DocumentSession): boolean {
     if (textEditState()?.sessionId === s.id) return false;
   }
   return true;
+}
+
+const closeCheckpoints=new WeakMap<DocumentSession,{token:symbol;entry:string;revision:number}>();
+function prepareFileOutput(s:DocumentSession):boolean {
+  const close=closeCheckpoints.get(s);
+  if(close)return editor.session(s.id)===s && s.ownsEditProtection(close.token)
+    && s.history.current.id===close.entry && s.doc.rev===close.revision;
+  return s.canEdit() && prepareMoveOutput(s) && checkpointReady(s);
 }
 
 // Only manual file operations use these per-document/per-path reservations; requests are rejected, not queued.
@@ -56,16 +65,17 @@ function claimPath(s: DocumentSession, path: string): boolean {
 }
 async function outputRequest(s: DocumentSession | null, run: (s: DocumentSession) => Promise<boolean>): Promise<boolean> {
   if (!s || editor.session(s.id) !== s) return false;
-  if (s.outputPending || s.closePending) { ui.toast('info', 'This document is busy saving or closing.'); return false; }
+  if (s.outputBusy || s.closeRequested) { ui.toast('info', 'This document is busy saving or closing.'); return false; }
   const pending = Promise.resolve().then(async () => {
     const transform=s.transformPending;
     if(transform && !(await transform)){ui.toast('warning','Transform was not committed; nothing was saved.','Confirm or cancel the retained preview, then save again.');return false;}
     if(editor.session(s.id)!==s)return false;
     return run(s);
   }).catch(error => { ui.toast('error', 'File operation failed', errMsg(error)); return false; });
-  s.outputPending = pending;
+  const reservation=s.reserveOutput(pending);
+  if(!reservation)return false;
   try { return await pending; }
-  finally { s.outputPending = null; if (editor.session(s.id) === s) s.notify(); }
+  finally { s.releaseOutput(reservation); if (editor.session(s.id) === s) s.notify(); }
 }
 export function save(s: DocumentSession | null = editor.active): Promise<boolean> { return outputRequest(s, saveImpl); }
 export function saveAs(s: DocumentSession | null = editor.active, asCopy = false): Promise<boolean> { return outputRequest(s, target => saveAsImpl(target, asCopy)); }
@@ -244,7 +254,7 @@ async function confirmPsdNotes(s: DocumentSession, psb: boolean): Promise<boolea
 }
 
 async function writeDocument(s: DocumentSession, path: string, asCopy: boolean): Promise<boolean> {
-  if (!prepareMoveOutput(s)) return false;
+  if (!prepareFileOutput(s)) return false;
   const exporter = exporterFor(path);
   if (!exporter) {
     ui.toast('error', 'Unknown file format', path);
@@ -266,7 +276,8 @@ async function writeDocument(s: DocumentSession, path: string, asCopy: boolean):
   let protection:symbol|undefined;
   try {
     await new Promise((r) => setTimeout(r, 16));
-    if (!prepareMoveOutput(s)) return false;
+    if (!prepareFileOutput(s)) return false;
+    s.history.seal();
     protection=s.acquireEditProtection('output'); s.notify();
     const checkpoint = snapshotDocument(s.doc), entry = s.history.current.id, revision = s.doc.rev;
     const bytes = await exporter.export(checkpoint, { maximizeCompatibility: true, psb, selectedLayerIds: s.selectedLayers().map((l) => l.id), onProgress: (f, label) => p.update(f, `Saving ${basename(path)} — ${label}`) });
@@ -298,7 +309,7 @@ async function writeDocument(s: DocumentSession, path: string, asCopy: boolean):
 }
 
 async function saveImpl(s: DocumentSession | null = editor.active): Promise<boolean> {
-  if (!s || !prepareMoveOutput(s)) return false;
+  if (!s || !prepareFileOutput(s)) return false;
   const path = s.doc.filePath;
   if (!path || !isLayeredFormat(path) || !platform().canWriteInPlace) {
     if (path && !isLayeredFormat(path)) ui.toast('info', 'Saving as PSD to keep layers and editability.', `"${basename(path)}" is a flat format; the original file is left unchanged.`);
@@ -316,7 +327,7 @@ async function saveImpl(s: DocumentSession | null = editor.active): Promise<bool
 }
 
 async function saveAsImpl(s: DocumentSession | null = editor.active, asCopy = false): Promise<boolean> {
-  if (!s || !prepareMoveOutput(s)) return false;
+  if (!s || !prepareFileOutput(s)) return false;
   const base = s.doc.filePath ? basename(s.doc.filePath).replace(/\.[^.]+$/, '') : s.doc.name;
   const suggestedExt = s.doc.width > 30000 || s.doc.height > 30000 ? 'psb' : 'psd';
   const path = await platform().chooseSavePath(`${base}${asCopy ? ' copy' : ''}.${suggestedExt}`, saveFilters());
@@ -336,7 +347,7 @@ export async function saveCopy(s: DocumentSession | null = editor.active): Promi
 
 /** Export As: flattened export to a web/raster format with options. */
 async function exportAsImpl(s: DocumentSession | null = editor.active, formatId?: string, opts: import('../formats/registry').ExportOptions = {}): Promise<boolean> {
-  if (!s || !prepareMoveOutput(s)) return false;
+  if (!s || !prepareFileOutput(s)) return false;
   const exp = exporters.find((e) => e.id === (formatId ?? 'png'));
   if (!exp || !exp.available) {
     ui.toast('warning', `${exp?.label ?? formatId} export is not available yet.`, exp?.note);
@@ -350,7 +361,8 @@ async function exportAsImpl(s: DocumentSession | null = editor.active, formatId?
   try {
     await new Promise((r) => setTimeout(r, 16));
     if (s.doc.canvas.bitDepth > 8 && !exp.supports16) ui.toast('info', `${exp.label} is 8-bit only; the export is converted from ${s.doc.canvas.bitDepth}-bit. Your document keeps its bit depth.`);
-    if (!prepareMoveOutput(s)) return false;
+    if (!prepareFileOutput(s)) return false;
+    s.history.seal();
     protection=s.acquireEditProtection('output'); s.notify();
     const bytes = await exp.export(snapshotDocument(s.doc), opts);
     await platform().writePath(path, bytes);
@@ -372,17 +384,18 @@ async function exportAsImpl(s: DocumentSession | null = editor.active, formatId?
 // ---------------------------------------------------------------------------------------------
 export async function closeSession(s: DocumentSession | null = editor.active, force = false): Promise<boolean> {
   if (!s) return true;
-  if (s.closePending) return s.closePending;
+  const existingClose=s.joinClose();if(existingClose)return existingClose;
   let protection:symbol|undefined;
   const closing = Promise.resolve().then(async () => {
     const transform=s.transformPending;
     if(transform && !(await transform)){ui.toast('warning','Transform was not committed; document remains open.');return false;}
-    if (s.outputPending && !(await s.outputPending)) return false;
+    const existingOutput=s.joinOutput();if(existingOutput && !(await existingOutput))return false;
     if (editor.session(s.id) !== s) return true;
-    if (!finishPen(s,true)) return false;
-    editor.finishMove(s, false);
-    if (textEditState()?.sessionId === s.id) commitTextEdit();
-    protection=s.acquireEditProtection('close'); s.notify();
+    if(!prepareMoveOutput(s)||!checkpointReady(s))return false;
+    s.history.seal();
+    protection=s.acquireEditProtection('close');
+    closeCheckpoints.set(s,{token:protection,entry:s.history.current.id,revision:s.doc.rev});
+    s.notify();
     if (s.modified && !force) {
       editor.activate(s.id);
       const r = await platform().confirm(`Save changes to "${s.doc.name}" before closing?`, 'Your changes will be lost if you don’t save them.', ['Save', 'Don’t Save', 'Cancel']);
@@ -396,9 +409,9 @@ export async function closeSession(s: DocumentSession | null = editor.active, fo
     if (s.history.current.id !== entry || s.doc.rev !== revision) return false;
     fileStamps.delete(s.id); editor.removeSession(s.id); return true;
   }).catch(error => { ui.toast('error', 'Could not close document', errMsg(error)); return false; });
-  s.closePending = closing;
+  s.setClose(closing);
   try { return await closing; }
-  finally { s.closePending = null; if(protection)s.releaseEditProtection(protection); if (editor.session(s.id) === s) s.notify(); }
+  finally { closeCheckpoints.delete(s);s.releaseClose(closing); if(protection)s.releaseEditProtection(protection); if (editor.session(s.id) === s) s.notify(); }
 }
 
 export async function closeAll(except?: string): Promise<boolean> {

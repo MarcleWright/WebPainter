@@ -260,3 +260,41 @@ npx vite build --config vite.embedded.config.ts
 ### 阶段B独立审查
 
 gpt-6.1-sol独立review Approved（df3a496），核对双亲及main通用输入一致、嵌入生命周期和5交叉用例，无新增P1/P2。独立主组297项、补充53项通过，1性能诊断跳过；typecheck/diff通过。允许clean源构建固定包，Profile transport renew留C验证；窗口/Owner体验Pending。
+
+### 阶段B主代理配套记录
+
+embedded两次merge为cf4edf8（326b4d7+4577114）、df3a496（cf4edf8+5924a6d），经独立review Approved；reviewer主组297项、补充53项通过，性能诊断1跳过，typecheck/diff通过。具体冲突/实现决策保存在embedded同名任务阶段B执行记录，不反向合入其业务源码。
+
+固定包从clean `d277f7c3ec1b574af8672fe3a98972c88efaead3`（追加独立审查记录）构建，mainBase `5924a6dd6deccf4d8239312e13267be53b255624`，sourceHash `61b03764a43154a226f1bbb6ad0f87e690aef751e3a43a5bd84d85c8a4b5caf9`，bundleHash `e1798e817a185b338b5f92d70d6ce5411ac27679d89bbc1b572c42c494b26c73`，port3/native1。build-embedded脚本退出0，主代理逐资源SHA校验通过，manifest uncommitted=false；包含checkpoint-worker和transformWorker资源。此为待ADA消费新包，不是旧实窗重标。
+
+### Owner最终人工检查清单（尚未执行）
+
+1. 独立WP和ADA分别确认Ctrl+J有选区/无选区语义、路径三键、转换后路径隐藏与显式重新选择。
+2. Pen续画时Ctrl/Alt编辑点柄、局部undo/redo；点击隐藏Work原线段创建普通文字/拖出文字框。
+3. 透明边缘选区Move、连续拖动与取消，确认无残影/孔洞；Ctrl+T普通/透视拖动、Enter等待、取消重试与最终undo/redo。
+4. ADA提示词/模型/来源弹层按键不穿透，悬浮面板不挤占WP布局；标尺开关不丢画板。
+5. ADA画笔/Pen/applying/保存期间发生同Profile续期，原实例/草稿/历史保持；另行切Profile时旧操作失效。
+6. 编辑后等待自动保存、返回Canvas预览、重新进入继续编辑；在途返回/关闭以及失败后重试无漏存/双写。恢复备份与预览依原合同，不每笔生成PNG。
+7. 受控生成对应当前作品/修订，Results持久且只在显式操作后加层；真实付费模型不属自动验收。
+8. Opacity长scrub偶发多历史仍未通过/待定位；本次不承诺已修复。真实笔/IME/高DPR及性能对比均由Owner补充，不用自动断言代替手感。
+
+### 阶段C与最终完成审计（2026-11-16）
+
+ADA原目标分支已消费固定包并提交 `dc1ea564b2dbaca899bec31e512736a8d1c2ecd2`，保留阶段0新UI。独立gpt-6.1-sol技术review Approved，无有依据P1/P2；独立owner续期3/3、API32/32、public/dist137资源哈希及4 Worker静态目标验证通过。ADA详细命令、受控Worker证据限制和生产/实窗Pending记录在其 `doc/ai/tasks/2026-11-16_001_wp-package-integration-stage-c.md`。审查结论随后独立文档提交，不重标固定包来源。
+
+完成要求逐项核对：
+
+| 要求 | 权威证据与结论 |
+| --- | --- |
+| 两项评审补充 | §0点名opacity未通过；§C显式同Profile续期Pen/applying/save。ADA新增真实owner3测试及独立复跑通过 |
+| dirty保全与独立交付 | 阶段0备份SHA核验及独立Approved；embedded326b4d7/ADA3b15f3ee独立提交，原新UI保留 |
+| Dev合main | d1efe6e保留固定Dev b5cf006双亲，阶段A独立281项复跑Approved |
+| 通用输入先main | A1 main5924a6d，独立76项通过Approved，再单向合embedded；无嵌入反向依赖 |
+| main合embedded与适配 | cf4edf8、df3a496双亲记录；B独立297+53通过/1诊断跳过，Approved |
+| clean确定包 | d277f7c clean源，mainBase5924a6d，e1798e81包；逐文件资源哈希验证，port3/native1不变 |
+| ADA对应分支更新 | dc1ea564双端指针一致；保持既有Panel/业务策略，C独立技术Approved |
+| 分阶段文档与审查关口 | 主任务先于0/A/B执行；A1先记录范围；ADA阶段C独立任务先于实现；每阶段审查通过才推进 |
+| 自动验证/人工分离 | coder定向/构建和reviewer复跑分别记录；Owner最终人工清单未执行，未标成通过 |
+| Git与范围 | 只本地提交，无push/发布/ADA主线合入/付费Provider；Dev未修改；旧包保留作回退 |
+
+阶段0/A/A1/B/C执行及技术审查完成。最终人工、真实窗口/Worker网络加载、新生产ASAR/4K性能、IME/压感等按Owner本次安排统一验收，继续Pending；opacity长scrub和旧R4明确未修复。没有把尚未执行的体验或发布验收写成通过。

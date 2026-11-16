@@ -1,3 +1,4 @@
+import {setGuard} from "../sessionGuards";
 // @vitest-environment jsdom
 import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
@@ -6,7 +7,7 @@ const io=vi.hoisted(()=>({kind:'electron',canWriteInPlace:true,bridge:null,setTi
 vi.mock('../../src/app/platform/platform',()=>({platform:()=>io}));
 import {App} from '../../src/ui/App';
 import {Modal} from '../../src/ui/dialogs/Modal';
-import {NumberField} from '../../src/ui/controls';
+import {NumberField,Slider} from '../../src/ui/controls';
 import {inputSession,clearInputSessions,key} from './fixture';
 import {keymap} from '../../src/app/shortcuts';
 import {ui,useApp} from '../../src/app/store';
@@ -96,18 +97,18 @@ it('held pan keeps pointer owner after keyup; repeat, blur, new document and exp
 it('protected real text session rejects Escape/tool switch/undo; non-target doc remains editable and access cannot bypass',async()=>{
  const {session}=await mount();const layer=createTextLayer('保护',8,0,0);session.doc.insertLayer(layer);
  await act(async()=>{editor.setTool('type');startTextEdit(session,layer.id,false);});const input=container.querySelector('textarea.text-editor')!;
- session.editProtected=true;const history=session.history.current.id;
+ setGuard(session,"editProtected",true);const history=session.history.current.id;
  await act(async()=>{key(input,'Escape');key(window,'b');key(window,'z',{ctrlKey:true});});expect(textEditState()?.layerId).toBe(layer.id);expect(useApp.getState().tool).toBe('type');expect(session.history.current.id).toBe(history);
- session.editProtected=false;await act(async()=>key(input,'Escape'));expect(textEditState()).toBeNull();
+ setGuard(session,"editProtected",false);await act(async()=>key(input,'Escape'));expect(textEditState()).toBeNull();
  const restore=installAccessPolicy(id=>({visible:true,enabled:id!=='tool:brush'}));await act(async()=>key(window,'b'));expect(useApp.getState().tool).not.toBe('brush');restore();
- session.editProtected=true;let other!:ReturnType<typeof inputSession>;await act(async()=>{other=inputSession();key(window,'b');});expect(useApp.getState().tool).toBe('pencil');expect(other.session.canEdit()).toBe(true);
- session.editProtected=false;
+ setGuard(session,"editProtected",true);let other!:ReturnType<typeof inputSession>;await act(async()=>{other=inputSession();key(window,'b');});expect(useApp.getState().tool).toBe('pencil');expect(other.session.canEdit()).toBe(true);
+ setGuard(session,"editProtected",false);
 });
 it('actual transform Enter/Escape protects local context and normal confirmation/cancel stays local',async()=>{
  const {session}=await mount();const layer=session.activeLayer()!;if(layer.kind!=='pixel')throw Error('fixture');layer.raster.writeFloat({x:0,y:0,w:2,h:2},new Float32Array(16).fill(1));
  await act(async()=>key(window,'t',{ctrlKey:true}));expect(session.mode.kind).toBe('transform');const history=session.history.current.id;
- session.editProtected=true;await act(async()=>{key(window,'Enter');key(window,'Escape');key(window,'b');});expect(session.mode.kind).toBe('transform');expect(session.history.current.id).toBe(history);
- session.editProtected=false;await act(async()=>key(window,'Escape'));expect(session.mode.kind).toBe('none');
+ setGuard(session,"editProtected",true);await act(async()=>{key(window,'Enter');key(window,'Escape');key(window,'b');});expect(session.mode.kind).toBe('transform');expect(session.history.current.id).toBe(history);
+ setGuard(session,"editProtected",false);await act(async()=>key(window,'Escape'));expect(session.mode.kind).toBe('none');
  await act(async()=>key(window,'t',{ctrlKey:true}));await act(async()=>key(window,'Enter'));expect(session.mode.kind).toBe('none');
 });
 import {importPsd} from '../../src/psd/import';
@@ -121,7 +122,7 @@ it('real keyboard undo→save and save→undo preserve snapshot order during del
  const entry=session.history.current.id;await act(async()=>{key(window,'z',{ctrlKey:true});key(window,'b');key(window,'ArrowRight');key(window,'Escape');});expect(session.history.current.id).toBe(entry);expect(useApp.getState().tool).toBe('move');
  const saved=importPsd(io.writePath.mock.calls[0][1],'input-save.psd').doc;expect(saved.allLayers().find(x=>x.kind==='pixel')!.opacity).toBe(1);
  let other!:ReturnType<typeof inputSession>;await act(async()=>{other=inputSession();key(window,'b');});expect(useApp.getState().tool).toBe('brush');expect(other.session.canEdit()).toBe(true);
- const saving=session.outputPending!;release();await act(async()=>{await saving;});expect(session.canEdit()).toBe(true);
+ const saving=session.joinOutput()!;release();await act(async()=>{await saving;});expect(session.canEdit()).toBe(true);
 });
 it('actual Move pointer transaction rejects global undo/Space mid-drag and creates one history entry',async()=>{
  const {session}=await mount();const l=session.activeLayer()!;if(l.kind!=='pixel')throw Error('fixture');l.raster.writeFloat({x:0,y:0,w:4,h:4},new Float32Array(64).fill(1));
@@ -136,8 +137,8 @@ it('async transform entry cancels when its original target changes before module
 it('busy polygon selection keeps local Delete/Enter ownership, and save protection preserves its unfinished points',async()=>{
  const {session}=await mount();const canvas=container.querySelector('.viewport')!;await act(async()=>editor.setTool('polyLasso'));
  await act(async()=>{pointer(canvas,'pointerdown',1,1);pointer(canvas,'pointerup',1,1);pointer(canvas,'pointerdown',9,1);pointer(canvas,'pointerup',9,1);pointer(canvas,'pointerdown',9,9);pointer(canvas,'pointerup',9,9);});
- expect(editor.currentTool?.busy?.()).toBe(true);session.editProtected=true;await act(async()=>{key(canvas,'Enter');key(canvas,'Escape');});expect(editor.currentTool?.busy?.()).toBe(true);expect(session.doc.selection.isEmpty()).toBe(true);
- session.editProtected=false;await act(async()=>key(canvas,'Enter'));expect(editor.currentTool?.busy?.()).toBe(false);expect(session.doc.selection.isEmpty()).toBe(false);
+ expect(editor.currentTool?.busy?.()).toBe(true);setGuard(session,"editProtected",true);await act(async()=>{key(canvas,'Enter');key(canvas,'Escape');});expect(editor.currentTool?.busy?.()).toBe(true);expect(session.doc.selection.isEmpty()).toBe(true);
+ setGuard(session,"editProtected",false);await act(async()=>key(canvas,'Enter'));expect(editor.currentTool?.busy?.()).toBe(false);expect(session.doc.selection.isEmpty()).toBe(false);
 });
 it('rebound held key works, while late events after document change cannot move either view',async()=>{
  const {session}=await mount();const canvas=container.querySelector('.viewport')!;keymap.set('input.pan',['F7']);
@@ -148,8 +149,8 @@ it('real paint stroke and pen point interaction retain their own history and pro
  const {session}=await mount();const canvas=container.querySelector('.viewport')!;await act(async()=>{editor.setTool('brush');ui.setBrush({opacity:1,flow:1,size:2});});const count=session.history.entries.length;
  await act(async()=>{pointer(canvas,'pointerdown',2,2);pointer(canvas,'pointermove',8,2);key(canvas,'z',{ctrlKey:true});pointer(canvas,'pointerup',8,2);});expect(session.history.entries.length).toBe(count+1);
  await act(async()=>{editor.setTool('pen');pointer(canvas,'pointerdown',1,1);pointer(canvas,'pointerup',1,1);pointer(canvas,'pointerdown',10,6);pointer(canvas,'pointerup',10,6);});
- const entry=session.history.current.id, paths=JSON.stringify(session.doc.paths);session.editProtected=true;await act(async()=>{key(canvas,'Enter');key(canvas,'Escape');key(canvas,'b');});expect(session.history.current.id).toBe(entry);expect(JSON.stringify(session.doc.paths)).toBe(paths);expect(useApp.getState().tool).toBe('pen');
- session.editProtected=false;await act(async()=>key(canvas,'Enter'));expect(session.history.current.id).not.toBe(entry);
+ const entry=session.history.current.id, paths=JSON.stringify(session.doc.paths);setGuard(session,"editProtected",true);await act(async()=>{key(canvas,'Enter');key(canvas,'Escape');key(canvas,'b');});expect(session.history.current.id).toBe(entry);expect(JSON.stringify(session.doc.paths)).toBe(paths);expect(useApp.getState().tool).toBe('pen');
+ setGuard(session,"editProtected",false);await act(async()=>key(canvas,'Enter'));expect(session.history.current.id).not.toBe(entry);
 });
 import {createMask,createGroupLayer} from '../../src/document/layerFactory';
 const pixels=(layer:ReturnType<typeof createPixelLayer>)=>layer.raster.readFloat({x:0,y:0,w:16,h:12});
@@ -216,7 +217,7 @@ it('new adjustment/fill keys do not cross text or numeric focus; unsupported lay
 });
 it('adjustment confirmation cannot act on a changed document; modal keys stay isolated during protection',async()=>{
  const {session}=await mount();paintFixture(session);await act(async()=>key(window,'u',{ctrlKey:true}));await modifyAdjustment('hueSaturation');
- const index=session.history.index;session.editProtected=true;await act(async()=>{key(container.querySelector('[role=dialog]')!,'Escape');key(container.querySelector('[role=dialog]')!,'Enter');await new Promise(r=>setTimeout(r,5));});expect(session.history.index).toBe(index);expect(container.querySelector('[role=dialog]')).not.toBeNull();session.editProtected=false;
+ const index=session.history.index;setGuard(session,"editProtected",true);await act(async()=>{key(container.querySelector('[role=dialog]')!,'Escape');key(container.querySelector('[role=dialog]')!,'Enter');await new Promise(r=>setTimeout(r,5));});expect(session.history.index).toBe(index);expect(container.querySelector('[role=dialog]')).not.toBeNull();setGuard(session,"editProtected",false);
  let other!:ReturnType<typeof inputSession>;await act(async()=>{other=inputSession();});const entry=other.session.history.current.id;await act(async()=>container.querySelector<HTMLButtonElement>('[role=dialog] button.primary')!.click());expect(other.session.history.current.id).toBe(entry);expect(session.history.index).toBe(index);await act(async()=>ui.set({dialogs:[]}));
 });
 it('adjustment selection coverage changes only selected pixels and undo/redo restores exact raster values',async()=>{
@@ -250,8 +251,8 @@ it('real curve point Delete belongs to the dialog, respects IME/protection, and 
  await act(async()=>key(window,'m',{ctrlKey:true}));await modifyAdjustment('curves');const canvas=container.querySelector('.curve-editor')!;
  const added=session.engine.getOverride(layer.id)!.gpu!.adjustment as any;expect(added.rgb.length).toBe(3);
  await act(async()=>{canvas.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));key(canvas,'Delete');});expect((session.engine.getOverride(layer.id)!.gpu!.adjustment as any).rgb.length).toBe(3);
- await act(async()=>canvas.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));session.editProtected=true;await act(async()=>key(canvas,'Delete'));expect((session.engine.getOverride(layer.id)!.gpu!.adjustment as any).rgb.length).toBe(3);
- session.editProtected=false;await act(async()=>key(canvas,'Delete'));expect((session.engine.getOverride(layer.id)!.gpu!.adjustment as any).rgb.length).toBe(2);expect(pixels(layer)).toEqual(before);expect(session.history.current.id).toBe(entry);
+ await act(async()=>canvas.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));setGuard(session,"editProtected",true);await act(async()=>key(canvas,'Delete'));expect((session.engine.getOverride(layer.id)!.gpu!.adjustment as any).rgb.length).toBe(3);
+ setGuard(session,"editProtected",false);await act(async()=>key(canvas,'Delete'));expect((session.engine.getOverride(layer.id)!.gpu!.adjustment as any).rgb.length).toBe(2);expect(pixels(layer)).toEqual(before);expect(session.history.current.id).toBe(entry);
  await act(async()=>key(container.querySelector('[role=dialog]')!,'Escape'));
 });
 it('vertical text owner retains its session when its own tool access is disabled',async()=>{
@@ -291,9 +292,9 @@ it.each(['rotate90cw','flipH'])('R1: %s cancels changed/restored targets and rec
   ['target replaced under same id',()=>{const replacement=createPixelLayer('Replacement',8);replacement.id=a.id;session.doc.removeLayer(a);session.doc.insertLayer(replacement);session.doc.emit({type:'structure'});}],
   ['final action access revoked',()=>{restore=installAccessPolicy(entry=>({visible:true,enabled:entry!==`action:${id}`}));}],
   ['final action enabled revoked',()=>register({...original,enabled:()=>false})],
-  ['canEdit revoked',()=>{session.editProtected=true;}],
-  ['output pending before canEdit lock',()=>{session.outputPending=Promise.resolve(true);}],
-  ['close pending before canEdit lock',()=>{session.closePending=Promise.resolve(true);}],
+  ['canEdit revoked',()=>{setGuard(session,"editProtected",true);}],
+  ['output pending before canEdit lock',()=>{setGuard(session,"outputPending",Promise.resolve(true));}],
+  ['close pending before canEdit lock',()=>{setGuard(session,"closePending",Promise.resolve(true));}],
   ['tool changes and returns',()=>{editor.setTool('brush');editor.setTool('move');}],
   ['new interaction finishes before continuation',()=>{const canvas=container.querySelector('.viewport')!;pointer(canvas,'pointerdown',1,1);pointer(canvas,'pointerup',1,1);}],
  ];
@@ -301,7 +302,7 @@ it.each(['rotate90cw','flipH'])('R1: %s cancels changed/restored targets and rec
  for (const [label,change] of changes) {
   // Recreate the fixture's target identity after destructive cases; no command history is involved.
   await act(async()=>{
-   editor.activate(session.id);session.editProtected=false;session.outputPending=null;session.closePending=null;
+   editor.activate(session.id);setGuard(session,"editProtected",false);setGuard(session,"outputPending",null);setGuard(session,"closePending",null);
    if(session.doc.getLayer(a.id)!==a){const replacement=session.doc.getLayer(a.id);if(replacement)session.doc.removeLayer(replacement);session.doc.insertLayer(a);}
    session.setActive(a.id);if(label==='multi-selection shrinks')session.setActive(b.id,true);
   });
@@ -309,7 +310,7 @@ it.each(['rotate90cw','flipH'])('R1: %s cancels changed/restored targets and rec
   try {
    await act(async()=>{key(window,'F6');change();snapshots=editor.sessions.map(quickLayerState);entries=editor.sessions.map(s=>s.history.current.id);});
    expect(editor.sessions.map(quickLayerState),label).toEqual(snapshots);expect(editor.sessions.map(s=>s.history.current.id),label).toEqual(entries);
-  } finally {restore?.();restore=undefined;register(original);session.editProtected=false;session.outputPending=null;session.closePending=null;}
+  } finally {restore?.();restore=undefined;register(original);setGuard(session,"editProtected",false);setGuard(session,"outputPending",null);setGuard(session,"closePending",null);}
  }
 });
 it.each(['rotate90cw','flipH'])('R1: stable %s affects only the original selected set with one undoable history',async(kind)=>{
@@ -354,14 +355,14 @@ it.each(['output','close','canEdit','layerAccess','brushAccess'])('R2: deferred 
  let restore:(()=>void)|undefined;vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
  try {
   await act(async()=>key(canvas,'5'));
-  if(reason==='output'){session.outputPending=Promise.resolve(true);expect(session.canEdit()).toBe(true);}
-  if(reason==='close'){session.closePending=Promise.resolve(true);expect(session.canEdit()).toBe(true);}
-  if(reason==='canEdit')session.editProtected=true;
+  if(reason==='output'){setGuard(session,"outputPending",Promise.resolve(true));expect(session.canEdit()).toBe(false);}
+  if(reason==='close'){setGuard(session,"closePending",Promise.resolve(true));expect(session.canEdit()).toBe(false);}
+  if(reason==='canEdit')setGuard(session,"editProtected",true);
   if(reason==='layerAccess'||brush)restore=installAccessPolicy(id=>({visible:true,enabled:id!==(brush?'tool:brush':'action:layer.setOpacity')}));
   await act(async()=>vi.advanceTimersByTimeAsync(400));expect(brush?useApp.getState().brush.opacity:session.activeLayer()!.opacity).toBe(1);expect(session.history.index).toBe(index);
-  session.outputPending=null;session.closePending=null;session.editProtected=false;restore?.();restore=undefined;
+  setGuard(session,"outputPending",null);setGuard(session,"closePending",null);setGuard(session,"editProtected",false);restore?.();restore=undefined;
   await act(async()=>{key(canvas,'9');await vi.advanceTimersByTimeAsync(350);});expect(brush?useApp.getState().brush.opacity:session.activeLayer()!.opacity).toBe(.9);
- } finally {session.outputPending=null;session.closePending=null;session.editProtected=false;restore?.();vi.useRealTimers();}
+ } finally {setGuard(session,"outputPending",null);setGuard(session,"closePending",null);setGuard(session,"editProtected",false);restore?.();vi.useRealTimers();}
 });
 it.each(['brushOpacity','flow','layerOpacity','fillOpacity'])('R2: normal %s combines two digits and applies a single digit exactly once',async(parameter)=>{
  const {session}=await mount();paintFixture(session);const brush=parameter==='brushOpacity'||parameter==='flow',shift=parameter==='flow'||parameter==='fillOpacity';
@@ -500,4 +501,54 @@ it('F2 rebound held F6 still pans from a non-text modal region',async()=>{
  vi.spyOn(canvas,'getBoundingClientRect').mockReturnValue({left:0,top:0,right:400,bottom:300,width:400,height:300,x:0,y:0,toJSON(){}});
  keymap.set('input.pan',['F6']);await act(async()=>{key(container.querySelector('[data-nav]')!,'F6',{code:'F6'});pointer(backdrop,'pointerdown',100,100);pointer(backdrop,'pointermove',130,110);pointer(backdrop,'pointerup',130,110);window.dispatchEvent(new KeyboardEvent('keyup',{key:'F6',code:'F6'}));});
  expect(session.view.panX).toBe(30);expect(session.view.panY).toBe(10);expect(session.history.canUndo).toBe(false);
+});
+
+import {captureCheckpoint,checkpointReady,onCheckpointChange,hasUncommittedChanges} from '../../src/app/checkpoint';
+import {panHeld} from '../../src/app/heldPan';
+it('background output slot permits real keyboard color/brush/tool/digits/Space and keeps actual edit protection',async()=>{
+ const {session}=await mount();const canvas=container.querySelector('.viewport')!;
+ await act(async()=>{editor.setTool('brush');ui.set({fg:{r:.2,g:.3,b:.4},bg:{r:.7,g:.8,b:.9}});ui.setBrush({size:40,opacity:1});});
+ let finish!:(v:boolean)=>void;const pending=new Promise<boolean>(r=>finish=r);const slot=session.reserveOutput(pending)!;
+ expect(session.reserveOutput(Promise.resolve(true))).toBeNull();expect(session.canEdit()).toBe(true);
+ await act(async()=>key(canvas,'x'));expect(useApp.getState().fg.r).toBe(.7);
+ await act(async()=>{key(canvas,'d');key(canvas,']');});expect(useApp.getState().brush.size).toBe(45);expect(useApp.getState().fg.r).toBe(0);
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
+ try{await act(async()=>key(canvas,'5'));expect(checkpointReady(session)).toBe(false);session.notify();await act(async()=>vi.advanceTimersByTimeAsync(350));expect(useApp.getState().brush.opacity).toBe(.5);}finally{vi.useRealTimers();}
+ await act(async()=>key(canvas,'e'));expect(useApp.getState().tool).toBe('eraser');
+ await act(async()=>{key(canvas,' ',{code:'Space'});pointer(canvas,'pointerdown',2,2);pointer(canvas,'pointermove',12,2);pointer(canvas,'pointerup',12,2);window.dispatchEvent(new KeyboardEvent('keyup',{key:' ',code:'Space'}));});expect(session.view.panX).toBe(10);
+ const lock=session.acquireEditProtection('resource');await act(async()=>key(canvas,'b'));expect(useApp.getState().tool).toBe('eraser');expect(captureCheckpoint(session)).toBeNull();session.releaseEditProtection(lock);
+ session.releaseOutput(Symbol('stale'));expect(session.outputBusy).toBe(true);finish(true);await pending;session.releaseOutput(slot);expect(session.outputBusy).toBe(false);
+});
+it('NumberField draft/IME and Slider gesture defer capture; final commit wakes without another input or blur',async()=>{
+ const {session}=await mount(<><NumberField label="Checkpoint number" value={100} onChange={v=>{void run('layer.setOpacity',{value:v/100});}} onCommit={()=>editor.active?.history.seal()}/><Slider label="Checkpoint slider" value={100} onChange={v=>{void run('layer.setOpacity',{value:v/100});}} onCommit={()=>editor.active?.history.seal()}/></>);
+ const number=container.querySelector<HTMLInputElement>('input.num')!,range=container.querySelector<HTMLInputElement>('input[type=range]')!;
+ let ready=0;const off=onCheckpointChange(session,()=>{if(checkpointReady(session))ready++;});
+ const change=(el:HTMLInputElement,value:string)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));};
+ await act(async()=>{number.focus();change(number,'42');number.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));});expect(hasUncommittedChanges(session)).toBe(true);expect(captureCheckpoint(session)).toBeNull();
+ const before=ready;await act(async()=>number.blur());expect(session.activeLayer()!.opacity).toBe(.42);expect(checkpointReady(session)).toBe(true);expect(ready).toBeGreaterThan(before);
+ await act(async()=>{number.focus();key(number,'ArrowDown');});expect(checkpointReady(session)).toBe(false);
+ await act(async()=>number.dispatchEvent(new KeyboardEvent('keyup',{key:'ArrowDown',bubbles:true})));expect(document.activeElement).toBe(number);expect(checkpointReady(session)).toBe(true);
+ await act(async()=>{number.blur();pointer(range,'pointerdown',0,0);});expect(captureCheckpoint(session)).toBeNull();const last=ready;
+ await act(async()=>pointer(range,'pointerup',0,0));expect(checkpointReady(session)).toBe(true);expect(ready).toBeGreaterThan(last);off();
+});
+it('actual stroke final up wakes stable subscriber after one history; fixed COW checkpoint and old receipt survive new branch',async()=>{
+ const {session}=await mount();const layer=session.activeLayer()!;if(layer.kind!=='pixel')throw Error('fixture');const canvas=container.querySelector('.viewport')!;
+ await act(async()=>{editor.setTool('brush');ui.setBrush({size:2,opacity:1,flow:1});});
+ let stableEntry='';const off=onCheckpointChange(session,()=>{if(checkpointReady(session))stableEntry=session.history.current.id;});const initial=session.history.entries.length;
+ await act(async()=>{pointer(canvas,'pointerdown',2,2);pointer(canvas,'pointermove',8,2);});expect(captureCheckpoint(session)).toBeNull();
+ await act(async()=>pointer(canvas,'pointerup',8,2));expect(session.history.entries.length).toBe(initial+1);expect(stableEntry).toBe(session.history.current.id);
+ const fixed=captureCheckpoint(session)!;expect(fixed).not.toBeNull();const fixedLayer=fixed.document.getLayer(layer.id)!;if(fixedLayer.kind!=='pixel')throw Error('fixture');const pixels=Array.from(fixedLayer.raster.readFloat({x:0,y:0,w:16,h:12}));
+ await act(async()=>{key(canvas,'5');key(canvas,'0');});expect(session.activeLayer()!.opacity).toBe(1); // brush parameter is UI-only
+ await run('layer.setOpacity',{value:.6});const next=session.history.current.id;expect(next).not.toBe(fixed.entry);session.markSaved(fixed.entry);expect(session.modified).toBe(true);
+ session.history.undo();expect(session.modified).toBe(false);session.history.redo();expect(session.modified).toBe(true);session.history.undo();await run('layer.setOpacity',{value:.2});expect(session.modified).toBe(true);
+ layer.raster.writeFloat({x:0,y:0,w:1,h:1},new Float32Array([0,1,0,1]));expect(Array.from(fixedLayer.raster.readFloat({x:0,y:0,w:16,h:12}))).toEqual(pixels);expect(fixedLayer.opacity).toBe(1);off();
+});
+
+it('background slot permits actual transform and Modal navigation while their pending edits stay uncapturable',async()=>{
+ const {session}=await mount();const layer=session.activeLayer()!;if(layer.kind!=='pixel')throw Error('fixture');layer.raster.writeFloat({x:0,y:0,w:2,h:2},new Float32Array(16).fill(1));
+ const slot=session.reserveOutput(Promise.resolve(true))!;
+ await act(async()=>key(window,'t',{ctrlKey:true}));expect(session.mode.kind).toBe('transform');expect(captureCheckpoint(session)).toBeNull();await act(async()=>key(window,'Escape'));expect(checkpointReady(session)).toBe(true);
+ await act(async()=>root.render(<><App/><Modal title="Checkpoint draft" onClose={()=>{}}><button>Control</button></Modal></>));expect(captureCheckpoint(session)).toBeNull();
+ const dialog=container.querySelector('[role=dialog]')!,zoom=session.view.zoom;await act(async()=>key(dialog,'+',{ctrlKey:true}));expect(session.view.zoom).toBeGreaterThan(zoom);
+ await act(async()=>root.render(<App/>));expect(checkpointReady(session)).toBe(true);session.releaseOutput(slot);
 });

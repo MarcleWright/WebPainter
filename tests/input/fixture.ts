@@ -1,3 +1,4 @@
+import {setGuard,clearGuards} from "../sessionGuards";
 import {editor} from '../../src/app/editor';
 import {createNative, decodeNative} from '../../src/document/native';
 import {registerTools} from '../../src/tools/registry';
@@ -20,5 +21,5 @@ export function key(target: EventTarget, value: string, init: KeyboardEventInit 
 
 export function clearInputSessions() {
   editor.hostFactory = null;
-  for (const s of [...editor.sessions]) { s.editProtected = false; editor.removeSession(s.id); }
+  for (const s of [...editor.sessions]) { clearGuards(s); editor.removeSession(s.id); }
 }

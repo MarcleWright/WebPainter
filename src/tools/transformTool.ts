@@ -274,7 +274,7 @@ function clearPreview(s: State): void {
 
 export function beginTransform(kind: TransformKind = 'free'): void {
   const s = editor.active;
-  if (!s || !s.canEdit() || s.outputPending || s.closePending) return;
+  if (!s || !s.canEdit()) return;
   if (st) {
     if (kind === 'warp' && !st.warp) setWarpMode();
     return;
@@ -450,7 +450,7 @@ function restoreFailedCommit(s:State,root:ReturnType<typeof cloneLayer>,selectio
   ui.toast('error','Transform failed; retry or press Escape.',String(error));return false;
 }
 export function commitTransform(): void {
-  const s=st;if(!s||s.job||editor.session(s.session.id)!==s.session||!s.session.canEdit()||s.session.outputPending||s.session.closePending)return;
+  const s=st;if(!s||s.job||editor.session(s.session.id)!==s.session||!s.session.canEdit())return;
   lastTransformMetrics=null;
   if(sourceChanged(s))updatePreview(s);
   const admitStart=performance.now();

@@ -9,8 +9,8 @@ import {isComposing,inputEventTarget,isTextTarget,inputBlocked,installInputConte
 import {beginPan,releasePan,invalidatePan,inputPointerRevision,inputPointerBusy,onInputPointerStart} from './heldPan';
 import type {ToolId} from '../tools/toolTypes';
 const BRUSH_TOOLS = new Set<ToolId>(['brush','pencil','eraser','bgEraser','cloneStamp','patternStamp','healing','spotHealing','remove','colorReplace','mixerBrush','blur','sharpen','smudge','dodge','burn','sponge','quickSelect']);
-let pending: {digits: string; flow: boolean; timer: ReturnType<typeof setTimeout>; cancelSession: () => void} | null = null;
-function cancelDigits() {if (pending) {clearTimeout(pending.timer);pending.cancelSession();pending = null;}}
+let pending: {digits: string; flow: boolean; timer: ReturnType<typeof setTimeout>; cancelSession: () => void; end:()=>void} | null = null;
+function cancelDigits() {if (pending) {clearTimeout(pending.timer);pending.cancelSession();const end=pending.end;pending = null;end();}}
 function handleDigit(digit: string, flow: boolean) {
   const s = editor.active;
   if (!s) return;
@@ -24,7 +24,7 @@ function handleDigit(digit: string, flow: boolean) {
     && s.activeLayerId === layer && s.editMask === mask && s.activeChannelId === channel && editor.currentToolId === tool
     && inputPointerRevision() === interaction && !inputPointerBusy() && !editor.currentTool?.busy?.()
     && !useApp.getState().dialogs.length && !isTextTarget(document.activeElement)
-    && s.canEdit() && !s.outputPending && !s.closePending && access(`tool:${tool}`).enabled
+    && s.canEdit() && access(`tool:${tool}`).enabled
     && (brush || action(parameter)?.enabled?.() !== false);
   const apply = () => {
     cancelDigits();
@@ -34,7 +34,7 @@ function handleDigit(digit: string, flow: boolean) {
     else void run(parameter, {value});
   };
   if (digits.length >= 2) apply();
-  else pending = {digits, flow, timer: setTimeout(apply,350), cancelSession: s.on(() => {if (!valid()) cancelDigits();})};
+  else pending = {digits, flow, timer: setTimeout(apply,350), cancelSession: s.on(() => {if (!valid()) cancelDigits();}), end:s.beginUncommitted()};
 }
 function localChord(e: KeyboardEvent): boolean {
   if (e.ctrlKey || e.metaKey || e.altKey) return false;

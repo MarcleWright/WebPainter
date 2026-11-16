@@ -1,3 +1,4 @@
+import {setGuard} from "../sessionGuards";
 // @vitest-environment jsdom
 import {act} from 'react';
 import {createRoot,type Root} from 'react-dom/client';
@@ -37,7 +38,7 @@ beforeEach(()=>{
  vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockImplementation(()=>new Proxy({measureText:()=>({width:10}),createImageData:(w:number,h:number)=>({data:new Uint8ClampedArray(w*h*4),width:w,height:h})},{get:(o,k)=>Reflect.get(o,k)??(()=>{})}) as any);
  container=document.createElement('div');document.body.append(container);root=createRoot(container);registerTools();keymap.reset();ui.set({dialogs:[],tool:'pen'});ui.setToolOptions('pen',{mode:'path'});
 });
-afterEach(async()=>{await act(async()=>{for(const s of [...editor.sessions]){s.editProtected=false;finishPen(s,true);}root.unmount();for(const s of [...editor.sessions])editor.removeSession(s.id);});container.remove();editor.hostFactory=null;keymap.reset();vi.restoreAllMocks();vi.unstubAllGlobals();});
+afterEach(async()=>{await act(async()=>{for(const s of [...editor.sessions]){setGuard(s,"editProtected",false);finishPen(s);}root.unmount();for(const s of [...editor.sessions])editor.removeSession(s.id);});container.remove();editor.hostFactory=null;keymap.reset();vi.restoreAllMocks();vi.unstubAllGlobals();});
 const empty=():VectorPath=>({subpaths:[],fillRule:'nonzero'});
 export const pt=(x:number,y:number,extra:Partial<ToolPointer>={}):ToolPointer=>({x,y,sx:x,sy:y,pressure:1,tiltX:0,tiltY:0,twist:0,button:0,buttons:1,shift:false,alt:false,mod:false,pointerType:'mouse',time:0,clickCount:1,...extra});
 async function fixture(kind='work'){
@@ -100,7 +101,7 @@ it.each(['replaceObject','mutatePath','switchDoc','replaceOwner'])('P1 finish re
  expect(await convert()).toBe('rejected');expect(sample(f)).toBe(0);expect(f.s.history.index).toBe(1);detach();
 });
 it('P1 finish identity check rejects captured owner replacement; pure admission leaves invalid owner intact',async()=>{
- const f=await fixture();await f.click(10,10);await f.click(40,10);const owner=readPenSession(f.s)!;const detach=registerPen({...owner});expect(finishPen(f.s,false,owner)).toBe(false);detach();registerPen(owner);
+ const f=await fixture();await f.click(10,10);await f.click(40,10);const owner=readPenSession(f.s)!;const detach=registerPen({...owner});expect(finishPen(f.s,owner)).toBe(false);detach();registerPen(owner);
 });
 it('P1 selection history failure restores original selection and keeps finished path',async()=>{
  const f=await fixture('saved');f.doc.paths[0].path=triangle();f.doc.selection.selectAll();const push=vi.spyOn(f.s,'push').mockImplementation(()=>{throw Error('injected selection commit failure');});expect(await convert()).toBe('failed');expect(sample(f,90,90)).toBe(1);expect(f.s.history.index).toBe(0);push.mockRestore();expect(await convert()).toBe('changed');
@@ -113,7 +114,7 @@ it('P1 default priority uses explicit Saved/Clipping then Work before Shape or V
 });
 it('P1 action access, mask access, save/close/mode protection preserve the live draft',async()=>{
  const f=await fixture('mask');await f.click(10,10);await f.click(40,10);await f.click(40,40);const owner=readPenSession(f.s);
- for(const field of ['editProtected','outputPending','closePending'] as const){field==='editProtected'?f.s.editProtected=true:f.s[field]=Promise.resolve(true);expect(await convert()).toBe('rejected');field==='editProtected'?f.s.editProtected=false:f.s[field]=null;expect(readPenSession(f.s)).toBe(owner);}
+ for(const field of ['editProtected','outputPending','closePending'] as const){field==='editProtected'?setGuard(f.s,"editProtected",true):setGuard(f.s,field,Promise.resolve(true));expect(await convert()).toBe('rejected');field==='editProtected'?setGuard(f.s,"editProtected",false):setGuard(f.s,field,null);expect(readPenSession(f.s)).toBe(owner);}
  const {installAccessPolicy}=await import('../../src/app/access');for(const denied of ['action:path.toSelection','feature:masks','tool:pen']){const restore=installAccessPolicy(e=>({visible:true,enabled:e!==denied}));expect(await convert()).toBe('rejected');restore();expect(readPenSession(f.s)).toBe(owner);}
  expect(f.s.history.index).toBe(0);expect(sample(f)).toBe(0);
 });
@@ -253,7 +254,7 @@ it.each(['raster','history','finish','parameter','protection'])('F1 %s failure l
  if(failure==='raster'){const spy=vi.spyOn(raster,'rasterizePath').mockImplementation(()=>{throw Error('injected raster');});restore=()=>spy.mockRestore();}
  if(failure==='history'){const push=f.s.push.bind(f.s),spy=vi.spyOn(f.s,'push').mockImplementation((cmd,applied)=>{if(cmd.label==='Make Selection')throw Error('injected selection history');push(cmd,applied);});restore=()=>spy.mockRestore();}
  if(failure==='finish'){const spy=vi.spyOn(owner,'finish').mockReturnValue(false);restore=()=>spy.mockRestore();}
- if(failure==='protection'){f.s.editProtected=true;restore=()=>{f.s.editProtected=false;};}
+ if(failure==='protection'){setGuard(f.s,"editProtected",true);restore=()=>{setGuard(f.s,"editProtected",false);};}
  expect(await convert('replace',failure==='parameter'?{feather:1}:undefined)).toBe(['raster','history'].includes(failure)?'failed':'rejected');expect(f.s.activePathId).toBe('a');expect(f.s.isWorkPathHidden(w)).toBe(false);expect(overlayCalls(f).points).toBe(before.points);expect(overlayCalls(f).lines).toBeGreaterThanOrEqual(2);expect(f.path()).toEqual(beforePath);expect(sample(f)).toBe(0);restore();expect(await convert()).toBe('changed');expect(f.s.history.index).toBe(2);expect(f.s.activePathId).toBeNull();expect(f.s.isWorkPathHidden(w)).toBe(true);
 });
 it('F1 successful selection observer switching the session does not hide or deselect either new context',async()=>{
@@ -301,8 +302,8 @@ it('F2 drag and no-selected-row preserve Pen ownership, then normal release stay
  const w=workFor(f);f.s.activePathId=w.id;f.s.activePathId=null;await f.click(60,60);const idle=readPenSession(f.s)!,idleFinish=vi.spyOn(idle,'finish');await blank();expect(idleFinish).not.toHaveBeenCalled();expect(readPenSession(f.s)).toBe(idle);
 });
 it.each(['editProtected','outputPending','closePending','text','transform'] as const)('F2 blank respects %s protection and keeps selected row',async state=>{
- const f=await fixture('saved');if(state==='editProtected')f.s.editProtected=true;else if(state==='outputPending'||state==='closePending')f.s[state]=Promise.resolve(true);else f.s.mode=state==='text'?{kind:'text',layerId:f.l.id,isNew:false}:{kind:'transform',layerIds:[f.l.id]};
- await blank();expect(f.s.activePathId).toBe('a');expect(f.s.history.index).toBe(0);f.s.editProtected=false;f.s.outputPending=f.s.closePending=null;f.s.mode={kind:'none'};
+ const f=await fixture('saved');if(state==='editProtected')setGuard(f.s,"editProtected",true);else if(state==='outputPending'||state==='closePending')setGuard(f.s,state,Promise.resolve(true));else f.s.mode=state==='text'?{kind:'text',layerId:f.l.id,isNew:false}:{kind:'transform',layerIds:[f.l.id]};
+ await blank();expect(f.s.activePathId).toBe('a');expect(f.s.history.index).toBe(0);setGuard(f.s,"editProtected",false);setGuard(f.s,"outputPending",null);setGuard(f.s,"closePending",null);f.s.mode={kind:'none'};
 });
 it('F2 actual rename IME composition blocks blank focus/deselection until local composition ends',async()=>{
  const f=await fixture('saved');const row=[...pathList().querySelectorAll<HTMLElement>('.list-item')].find(x=>x.textContent==='Path A')!;await act(async()=>row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,button:0})));const input=pathList().querySelector<HTMLInputElement>('input')!;
@@ -316,7 +317,7 @@ it.each(['keyboard','button','context'])('F1 actual %s document-path entry hides
 });
 it.each(['action','output','close'])('F1 %s refusal preserves document row and visible Work',async reason=>{
  const f=await fixture('saved'),w=workFor(f);f.doc.paths.find(p=>p.id==='a')!.path=triangle();const {installAccessPolicy}=await import('../../src/app/access');const restore=reason==='action'?installAccessPolicy(e=>({visible:true,enabled:e!=='action:path.toSelection'})):()=>{};
- if(reason==='output')f.s.outputPending=Promise.resolve(true);if(reason==='close')f.s.closePending=Promise.resolve(true);expect(await convert()).toBe('rejected');expect(f.s.activePathId).toBe('a');expect(f.s.isWorkPathHidden(w)).toBe(false);expect(overlayCalls(f).points).toBeGreaterThan(0);expect(f.s.history.index).toBe(0);restore();f.s.outputPending=f.s.closePending=null;
+ if(reason==='output')setGuard(f.s,"outputPending",Promise.resolve(true));if(reason==='close')setGuard(f.s,"closePending",Promise.resolve(true));expect(await convert()).toBe('rejected');expect(f.s.activePathId).toBe('a');expect(f.s.isWorkPathHidden(w)).toBe(false);expect(overlayCalls(f).points).toBeGreaterThan(0);expect(f.s.history.index).toBe(0);restore();setGuard(f.s,"outputPending",null);setGuard(f.s,"closePending",null);
 });
 it.each(['target','row'])('F1 committed selection with observer changing %s must not clear the new display context',async reason=>{
  const f=await fixture('saved'),w=workFor(f);f.doc.paths.find(p=>p.id==='a')!.path=triangle();const off=f.doc.on(changes=>{if(!changes.some(c=>c.type==='selection'))return;off();if(reason==='target')f.doc.paths[f.doc.paths.findIndex(p=>p.id==='a')]={...f.doc.paths.find(p=>p.id==='a')!};else f.s.activePathId='b';});

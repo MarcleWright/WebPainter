@@ -1,3 +1,4 @@
+import {useEffect} from 'react';
 import {finishPen} from '../../tools/penSession';
 import {isComposing} from '../../app/inputContext';
 import {access} from '../../app/access';
@@ -97,6 +98,7 @@ function toggleEffect(s: DocumentSession, l: Layer, kind: EffectKind | 'all', in
 export function LayersPanel() {
   const s = useSession();
   const [renaming, setRenaming] = useState<LayerId | null>(null);
+  useEffect(()=>renaming?editor.active?.beginUncommitted():undefined,[renaming]);
   const [drop, setDrop] = useState<DropPos>(null);
   const [fxOpen, setFxOpen] = useState<Set<LayerId>>(new Set());
   const [filter, setFilter] = useState('');

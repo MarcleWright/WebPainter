@@ -1,0 +1,20 @@
+import {expect,it} from 'vitest';
+import {snapshotDocument} from '../../src/document/clone';
+import {newDoc,add,solidLayer} from '../helpers/build';
+import {createTextLayer,createMask} from '../../src/document/layerFactory';
+import {TiledRaster} from '../../src/image-engine/tiledRaster';
+import {knot} from '../../src/vector/types';
+it('output snapshot isolates nested preservation data, text/path and all raster owners from later live writes',()=>{
+ const d=newDoc(8,8),p=solidLayer(d,'p',0,0,4,4,[1,0,0,1]);add(d,p);p.mask=createMask(true);p.raster.companion=new TiledRaster(4,8);p.raster.companion.writeFloat({x:0,y:0,w:1,h:1},new Float32Array([.4,.4,.4,1]));
+ const t=createTextLayer('before',8,0,0);add(d,t);d.paths.push({id:'path',name:'before',kind:'saved',path:{fillRule:'nonzero',subpaths:[{closed:false,op:'combine',knots:[knot(1,2)]}]}});
+ d.channels.push({id:'channel',name:'before',kind:'alpha',raster:p.mask.raster.clone(),visible:true,color:{r:1,g:0,b:0},opacity:1,indicatesSelected:false});
+ d.smartSources.set('source',{id:'source',kind:'embedded',name:'before',fileType:'png',data:new Uint8Array([1,2]),preserved:{nested:{v:1}},decoded:{width:4,height:4,raster:p.raster.clone()}});
+ d.patterns.set('pattern',{id:'pattern',name:'before',width:4,height:4,raster:p.raster.clone(),preserved:{nested:{v:1}}});
+ d.metadata={keywords:['before']};p.metadata.custom={nested:{v:1}};d.selection.mask.writeFloat({x:0,y:0,w:1,h:1},new Float32Array([.5]));
+ const fixed=snapshotDocument(d),fixedPixel=fixed.getLayer(p.id) as typeof p;const rasters=[p.raster,p.raster.companion,p.mask.raster,d.channels[0].raster,d.selection.mask,d.smartSources.get('source')!.decoded!.raster,d.patterns.get('pattern')!.raster];
+ const copies=[fixedPixel.raster,fixedPixel.raster.companion!,fixedPixel.mask!.raster,fixed.channels[0].raster,fixed.selection.mask,fixed.smartSources.get('source')!.decoded!.raster,fixed.patterns.get('pattern')!.raster];
+ const before=copies.map(r=>Array.from(r.readFloat({x:0,y:0,w:2,h:2})));
+ for(const r of rasters)r.writeFloat({x:0,y:0,w:1,h:1},new Float32Array(r.channels).fill(0));
+ p.opacity=.3;(p.metadata.custom!.nested as {v:number}).v=2;t.text.text='after';d.paths[0].path.subpaths[0].knots[0].x=99;d.metadata.keywords!.push('after');d.smartSources.get('source')!.data![0]=9;(d.patterns.get('pattern')!.preserved!.nested as {v:number}).v=2;
+ expect(copies.map(r=>Array.from(r.readFloat({x:0,y:0,w:2,h:2})))).toEqual(before);expect(fixedPixel.opacity).toBe(1);expect(fixedPixel.metadata.custom).toEqual({nested:{v:1}});expect((fixed.getLayer(t.id) as typeof t).text.text).toBe('before');expect(fixed.paths[0].path.subpaths[0].knots[0].x).toBe(1);expect(fixed.metadata.keywords).toEqual(['before']);expect(fixed.smartSources.get('source')!.data![0]).toBe(1);expect(fixed.patterns.get('pattern')!.preserved).toEqual({nested:{v:1}});
+});

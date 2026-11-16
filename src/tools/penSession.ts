@@ -9,27 +9,27 @@ export interface PenOwner {
   busy():boolean;
   valid():boolean;
   abandon():void;
-  finish(output?:boolean):boolean;
+  finish():boolean;
   interrupt():void;
   undo(redo:boolean):void;
 }
 let owner:PenOwner|null=null;
 let finishing:PenOwner|null=null;
-export function registerPen(ownerNext:PenOwner):()=>void {owner=ownerNext;return()=>{if(owner===ownerNext)owner=null;};}
+export function registerPen(ownerNext:PenOwner):()=>void {owner=ownerNext;ownerNext.session.notify();return()=>{if(owner===ownerNext){owner=null;ownerNext.session.notify();}};}
 export function penSession(s:DocumentSession|null|undefined):PenOwner|null {
   if(!owner||owner.session!==s)return null;
-  if(!owner.valid()){const old=owner;owner=null;old.abandon();return null;}return owner;
+  if(!owner.valid()){const old=owner;owner=null;old.abandon();old.session.notify();return null;}return owner;
 }
 /** Pure inspection for target admission; unlike penSession it never clears an invalid owner. */
 export function readPenSession(s:DocumentSession|null|undefined):PenOwner|null {return owner?.session===s?owner:null;}
-export function finishPen(s:DocumentSession|null|undefined,output=false,expected?:PenOwner):boolean {
+export function finishPen(s:DocumentSession|null|undefined,expected?:PenOwner):boolean {
   if(finishing?.session===s)return false;
   if(expected){
     if(owner!==expected||expected.session!==s)return false;
     if(!expected.valid()){penSession(s);return false;}
   }
   const current=expected??penSession(s);if(!current)return true;
-  finishing=current;try{return current.finish(output);}finally{finishing=null;}
+  finishing=current;try{return current.finish();}finally{finishing=null;}
 }
 export function penHistoryAllowed(s:DocumentSession):boolean {
   if(!penSession(s))return true;

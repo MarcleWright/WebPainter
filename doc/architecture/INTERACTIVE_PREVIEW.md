@@ -92,3 +92,17 @@ Enter先通过共同几何/总容量预检。支持后台的简单单根RGB/RGBA
 Save/Save As/Save Copy/Export 对原目标会话保留输出请求, 快照前完成有效 Move/文字并取得编辑保护。保护在写盘结果和恢复清理完成后释放; 相同会话或相同路径的竞争输出被拒绝, 不建立排队输出。实际工具、操作辅助函数、共享修改命令和异步结果应用检查该目标是否可编辑, 其他会话不受影响。
 
 文件绑定与写入历史保存点独立更新; 保存点仍沿 history entry 判断 clean。关闭等待既有输出并重新检查状态, 保护确认和清理期间的目标, 失败或仍 modified 时保留文档。恢复数据与输出检查点仍按会话串行核对。具体入口、验证证据及人工缺口由 [保存关闭任务](../ai/tasks/2026-11-06_02_save-close-reliability.md) 维护。
+
+
+## 稳定检查点与输出准入（2026-11-16，main）
+
+`DocumentSession.canEdit()`只表示存活和真实edit owner；输出槽在途与close Promise不是编辑锁。输出owner使用reservation symbol独占、join、释放，不能释放另一输出或transform的保护。交互消费者不得读取Promise猜busy。
+
+`app/checkpoint.ts`组合工具owner与局部未提交token的纯稳定查询；订阅通知合并至微任务，等待本次tool.up/commit/cancel完成后重新判定。Pen开放路径、文字编辑、transform preview/applying、Move active drag、Canvas事务、数字pending、控件buffer/连续手势与document Modal参数未结束均拒绝自动捕获；自动输出不能结束这些操作。NumberField/Slider提交后保持焦点不阻止稳定。
+
+稳定捕获同步seal、绑定history entry/revision并做COW结构快照；编码/IO占输出槽，不应扩大捕获保护寿命。回执只能mark原entry。显式close先按owner收尾，再建立最终内容cutoff；其内部最终输出通过私有截止身份读取，不向普通编辑公开绕锁开关。main手动文件写出/导出仍保留原实际输出保护及路径互斥。
+
+阶段范围、旧判断退休表、输入buffer清点与自动/窗口限制见[无感自动保存任务§11](../ai/tasks/2026-11-16_03_nonblocking-autosave-and-editing.md#11-阶段a实施与验证2026-11-16)。embedded与宿主需按B/C配套接入，不能仅凭本通用接口判完整集成完成。
+
+
+Standalone recovery的正常周期到期需求按session保留，并生产订阅共同稳定通知。遇未提交控件/草稿或输出竞争先延期，最后操作结束无需新输入即可重新检查；成功覆盖最新状态、失败或session失效解除需求。失败不由自身输出释放或其他session唤醒重试，后续正常周期/显式请求保持可用。详见任务§11.4；该机制不代替embedded/ADA调度owner。
