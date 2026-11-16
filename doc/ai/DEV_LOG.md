@@ -179,3 +179,6 @@ Status: 本地环境验证完成; 品牌、性能与 ADA 集成未改动。
 - 安装依赖和匹配 Electron, 生产 build 及隔离小 PSD smoke 通过。
 
 Links: [DEV_SETUP](../engineering/DEV_SETUP.md)。
+
+
+2026-11-16 — [跨分支集成最终记录](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)：Dev→main→embedded→ADA各阶段本地提交与独立技术review Approved；原dirty独立交付，新包来源固定，Owner人工/窗口验收Pending，无推送发布。
