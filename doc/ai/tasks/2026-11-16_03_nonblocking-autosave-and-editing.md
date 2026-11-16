@@ -278,3 +278,11 @@ P2实施结果：`dueSessions`只保留正常周期已到期的session需求，�
 ### 阶段A最终独立审查
 
 原da851ea审查1项P2（standalone recovery到期需求丢失），修复e7604aa后gpt-6.1-sol独立复审Approved，无新增有依据P1/P2。独立新调度/Move输出/transform组63/63通过，diff检查通过，允许进入B。其余前次独立58项结论保持；未冒充窗口或性能验收。
+
+
+### 11.5 A1最小输出reservation身份查询（2026-11-16，实施前）
+
+B集成需要在回执markSaved/失败处理前证明仍持有原输出槽。限定main补只读`DocumentSession.ownsOutput(token:symbol)`：session未disposed且当前槽token一致才true，与releaseOutput同一身份依据，不改变预留/释放/编辑保护。补原token、错误token、释放后替换与dispose测试；相关owner回归和typecheck，本次纯查询不重跑无变化的资源构建。独立本地提交并复审后才允许B单向merge。
+
+
+A1结果：只读查询已实现；原/错token、旧释放不影响替换槽、dispose后原token失效均有真实Session测试。`sessionOutput`、`recoverySchedule`、`moveOutput`共 **30/30**通过，typecheck通过；日志 `doc/material/local/autosave-a1-tests.log` / `autosave-a1-typecheck.log`。不重build，不扩大状态或接口；等待独立复审，尚未由本提交执行B合入。
