@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-16 既有连续绘画诊断已完成F1–F3补测，作为独立文档交付待review及本地提交；边界扫描有有限因果证据，Owner原始观察归因/手绘笔等仍保留限制。原始材料与旧固定包来源不变，不将历史诊断视作本轮包验收。[诊断记录](tasks/2026-11-10_01_continuous-painting-performance-diagnosis.md)。
+
 2026-11-10 当前：局部重做四项独立复审有限Approved；Owner确认周期性卡顿消失、当前手绘笔可用，但较独立WP仍有绘画延迟，后续待测量优化，本轮不改实现。已授权提交并推送当前两集成分支，不合主线/发布。固定包版本不变，完整人工设备验收仍Pending。[反馈及授权](tasks/2026-11-06_03D_ada-document-workflow.md#owner-feedback-and-push-authorization-2026-11-10)。
 
 2026-11-09 Local Rework有限实现/验证完成，待独立review/Owner：main59f81b5只读；实际clean固定源060b6a4/source8160bebe…/bundledf16465d…/port3-native1-policy1。稳定操作seal、后台延期、分批独占transfer/原codec worker、tracked Undo回执及预览worker SHA；75项/types通过。ADA实际包ee4b91cf/drawing-84d363ad，两入口六轮保存窗口无≥50ms longtask；仍有main绘制长帧，人工设备Pending。后续doc提交不重标包源，未推送/发布。[最终交接](tasks/2026-11-06_03D_ada-document-workflow.md#autosave-local-rework-final-handoff-2026-11-09)。以下旧状态保留原时点。
