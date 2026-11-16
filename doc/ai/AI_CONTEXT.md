@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-16 [Dev→main→embedded→ADA集成任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)方案review通过，Owner已授权阶段0→A→B→C及独立本地提交。阶段0已固定四树HEAD、保全dirty，embedded诊断与ADA现有新面板分别整理交独立review；未提交/合并/换包/推送。阶段A–C尚未实施；opacity长scrub多history仍未通过/待定位，最终人工体验由Owner统一执行，窗口未测Pending。
+
 2026-11-12 [Ctrl+T正式确认吞吐](tasks/2026-11-12_01_transform-confirm-throughput.md)已按Owner授权实施，待独立实现review；Owner已观察明显提速；只改专用Worker采样内核。独立b01dcb7 oracle及305项整体回归、P-BUILD、开发/生产实际取消重试通过；同环境4K窗口三类总耗时中位数透明降低39.6–44.3%、不透明42.0–45.5%，最终tile/坐标/输入精确一致。仍约4–5秒，authority长尾最高235ms；原768MiB预算、预览和文件协调不变。本轮Owner另授权提交并推送origin/main；不推进下游，详细证据及限制见任务。
 
 2026-11-11 [Ctrl+T后台确认与透视预览](tasks/2026-11-11_02_transform-commit-and-projective-preview.md)四阶段实施及验证完成，待独立实现review与Owner体验：专用Worker保留CPU原1024采样语义，owner保护/安全拒绝与透视GPU稳定源已接入。295项整体回归，末次取消owner修正后65项复验及构建通过；开发/生产Worker与取消重试有真实窗口证据。透视p95约改善49%，确认最长主线程任务约8秒→94–128ms，总耗时仍6.8–8.0秒；人工/真实设备等Pending，不判整体Go。只main本地提交，不推进embedded/ADA/发布，大画笔不在本轮。

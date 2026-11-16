@@ -4,6 +4,10 @@
 
 ## Recent
 
+### 2026-11-16 跨分支集成阶段0
+
+- [分阶段任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)：方案review通过并获Owner执行授权；阶段0固定输入/保全dirty、整理embedded诊断及ADA现有面板UI交独立review。A–C尚未实施，未提交/合并/换包/推送；人工体验Pending。
+
 ### 2026-11-12 当前架构维护与同步
 
 - 吞吐实现/独立oracle/任务已提交 `dc553cb`；本轮94项定向回归重跑通过。更新架构入口、交互预览/后台确认和PhotoCraft历史对照，Owner已观察明显提速，按授权同步origin/main。原始材料不入Git，完整实现review仍Pending，不推进下游。
