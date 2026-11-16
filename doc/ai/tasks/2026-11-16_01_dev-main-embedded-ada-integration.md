@@ -208,3 +208,7 @@ npm run build
 真实窗口、统一4K显示/吞吐性能对照、Ctrl+J/路径三键/Pen修饰键/透明Move/Enter取消重试保存重开人工体验、真实IME/压感/设备仍Pending；按Owner补充授权由Owner最终统一执行。自动像素与生命周期回归不能证明这些体验。既有R4延期及opacity未通过状态不变。不启动用户窗口、不推进embedded/ADA、不推送或发布。coder自查不能替代本次独立review，待独立审查无阻断后方可进入B。
 
 GPU串行默认后端40.52秒通过；读取完成缓冲前额外发起的显式`$env:CELENNE_GPU_BACKEND='d3d12'`同组37.05秒再次通过，不重复累计。首次并发退出超时未确定根因，不以推测归因；分组覆盖全部要求。最终61个相关相对链接存在，相关文档UTF-8无BOM，git diff --check通过；清除Dev新增fixture末尾多余空行以满足检查。
+
+### 阶段A独立审查
+
+gpt-6.1-sol独立review Approved，核对双亲冲突及session/Canvas/Pen/Move自动合并，无有证据P1/P2。独立重跑7文件281项通过（Pen/pathSelection/transformTask/listeners/batchedPaint/moveSelection/transformThroughput），diff检查通过；允许进入B。窗口/性能/Owner体验继续Pending，首次GPU退出超时未归因。
