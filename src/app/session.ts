@@ -41,6 +41,7 @@ export class DocumentSession {
     if(this.output || this.disposed)return null;
     const token=Symbol('output');this.output={token,pending};this.notify();return token;
   }
+  ownsOutput(token:symbol):boolean {return !this.disposed&&this.output?.token===token;}
   releaseOutput(token:symbol):void {if(this.output?.token===token){this.output=null;this.notify();}}
   setClose(pending:Promise<boolean>):void {this.closing=pending;this.notify();}
   releaseClose(pending:Promise<boolean>):void {if(this.closing===pending){this.closing=null;this.notify();}}
