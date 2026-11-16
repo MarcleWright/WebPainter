@@ -274,3 +274,7 @@ embedded mount的pointer/key/composition避让与焦点规则、port4、背景na
 P2实施结果：`dueSessions`只保留正常周期已到期的session需求，生产订阅共同稳定通知；控件/工具结束、输出原owner释放或close取消后合并执行，只对仍有到期需求的目标运行。显式`autosaveNow()`保留原一遍API。成功仅在最新状态已覆盖时解绑；若保存期间出现新内容，继续保留最新需求。失败立即解绑，自己的finally/其他session稳定通知都不能重试该失败目标，下一正常周期或显式请求仍可重试。session.dispose发最后一次通知，移除后清理订阅；关闭恢复保存偏好或forgetAutosave同样清理。没有新增busy定时器；原一分钟等周期和3秒输入空闲策略保留，工具busy不再提前吞掉到期登记。
 
 补修验证：新真实`startAutosave`调度+React NumberField共 **6/6** 通过（`tests/input/recoverySchedule.test.tsx`），证明到期遇未提交值→最后blur/commit→无后续输入且未经过下一周期即完成恢复PSD，回读opacity按PSD原8位量化精确比较；同时覆盖失败通知不重试、close取消恢复、dispose不复活、输出槽原reservation释放及跨session失败隔离。日志 `doc/material/local/autosave-a-p2-final-6-tests.log`。相关Move/output及transform **57/57** 在组合运行通过，见 `autosave-a-p2-final-63-tests.log`（该次新增多目标用例因fake timer边界少推进1ms失败，修复测试夹具后单文件6/6复验，不能将原组合日志记成63/63）。首次新回读断言误用未量化0.42，已改为round(0.42*255)/255，不改产品codec。P-BUILD通过（`autosave-a-p2-build.log`），最后测试变动后typecheck通过（`autosave-a-p2-final-typecheck.log`）。未新增窗口/设备/性能验收；等待独立P2复审，不推进B。
+
+### 阶段A最终独立审查
+
+原da851ea审查1项P2（standalone recovery到期需求丢失），修复e7604aa后gpt-6.1-sol独立复审Approved，无新增有依据P1/P2。独立新调度/Move输出/transform组63/63通过，diff检查通过，允许进入B。其余前次独立58项结论保持；未冒充窗口或性能验收。
