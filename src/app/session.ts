@@ -245,6 +245,7 @@ export class DocumentSession {
   dispose(): void {
     this.cancelTransformTask?.();
     this.disposed = true;
+    this.notify();
     this.hiddenWorkPath=null;
     if (this.offloadTimer) clearTimeout(this.offloadTimer);
     this.unsub.forEach((u) => u());

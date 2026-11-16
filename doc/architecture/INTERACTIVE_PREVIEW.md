@@ -103,3 +103,6 @@ Save/Save As/Save Copy/Export 对原目标会话保留输出请求, 快照前完
 稳定捕获同步seal、绑定history entry/revision并做COW结构快照；编码/IO占输出槽，不应扩大捕获保护寿命。回执只能mark原entry。显式close先按owner收尾，再建立最终内容cutoff；其内部最终输出通过私有截止身份读取，不向普通编辑公开绕锁开关。main手动文件写出/导出仍保留原实际输出保护及路径互斥。
 
 阶段范围、旧判断退休表、输入buffer清点与自动/窗口限制见[无感自动保存任务§11](../ai/tasks/2026-11-16_03_nonblocking-autosave-and-editing.md#11-阶段a实施与验证2026-11-16)。embedded与宿主需按B/C配套接入，不能仅凭本通用接口判完整集成完成。
+
+
+Standalone recovery的正常周期到期需求按session保留，并生产订阅共同稳定通知。遇未提交控件/草稿或输出竞争先延期，最后操作结束无需新输入即可重新检查；成功覆盖最新状态、失败或session失效解除需求。失败不由自身输出释放或其他session唤醒重试，后续正常周期/显式请求保持可用。详见任务§11.4；该机制不代替embedded/ADA调度owner。

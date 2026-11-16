@@ -262,3 +262,15 @@ embedded mount的pointer/key/composition避让与焦点规则、port4、背景na
 - P-BUILD为 `npm run build`（包含typecheck、Vite renderer、Electron bundles）。源/文档 `git diff --check`及文档UTF-8/链接检查在提交前执行。
 
 未执行真实独立窗口/iframe、真实IME/笔/DPR/设备、4K长帧与COW最长同步任务/Worker批次/IO对照；A不声称产品整体Go、性能目标完成或Owner人工验收。B首次候选包接ADA后的实际流程探针保持原阶段门。回退可revert本阶段main提交；不触及用户作品/恢复数据。
+
+
+### 11.4 A独立review P2补修范围（2026-11-16，实施前）
+
+独立审查 Changes Requested：main恢复保存定时器先清due并更新时间，再调用autosaveNow；若工具/未提交控件未稳定，循环continue丢失到期需求。此前仅提供共同稳定通知接口，没有恢复调度的生产订阅，最终blur/commit且无新输入后会再等完整周期。A的336项自动证据未覆盖此真实定时调度，不能作为该行为已完成证明。
+
+本次限定修复：standalone recovery按session保留到期需求并订阅onCheckpointChange，稳定或输出释放后合并重查；成功且最新状态已覆盖、失败或session失效清除需求，失败不由自身释放通知触发重试；close等待保留，close取消后可恢复，销毁解除订阅。保持共享输出槽、固定检查点、恢复目录和正常周期。补真实startAutosave定时器+NumberField最后blur（无额外输入）恢复成功，以及失败、close和dispose反例；不推进B或扩建任务框架。
+
+
+P2实施结果：`dueSessions`只保留正常周期已到期的session需求，生产订阅共同稳定通知；控件/工具结束、输出原owner释放或close取消后合并执行，只对仍有到期需求的目标运行。显式`autosaveNow()`保留原一遍API。成功仅在最新状态已覆盖时解绑；若保存期间出现新内容，继续保留最新需求。失败立即解绑，自己的finally/其他session稳定通知都不能重试该失败目标，下一正常周期或显式请求仍可重试。session.dispose发最后一次通知，移除后清理订阅；关闭恢复保存偏好或forgetAutosave同样清理。没有新增busy定时器；原一分钟等周期和3秒输入空闲策略保留，工具busy不再提前吞掉到期登记。
+
+补修验证：新真实`startAutosave`调度+React NumberField共 **6/6** 通过（`tests/input/recoverySchedule.test.tsx`），证明到期遇未提交值→最后blur/commit→无后续输入且未经过下一周期即完成恢复PSD，回读opacity按PSD原8位量化精确比较；同时覆盖失败通知不重试、close取消恢复、dispose不复活、输出槽原reservation释放及跨session失败隔离。日志 `doc/material/local/autosave-a-p2-final-6-tests.log`。相关Move/output及transform **57/57** 在组合运行通过，见 `autosave-a-p2-final-63-tests.log`（该次新增多目标用例因fake timer边界少推进1ms失败，修复测试夹具后单文件6/6复验，不能将原组合日志记成63/63）。首次新回读断言误用未量化0.42，已改为round(0.42*255)/255，不改产品codec。P-BUILD通过（`autosave-a-p2-build.log`），最后测试变动后typecheck通过（`autosave-a-p2-final-typecheck.log`）。未新增窗口/设备/性能验收；等待独立P2复审，不推进B。

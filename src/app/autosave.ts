@@ -1,4 +1,5 @@
-import {checkpointReady,captureCheckpoint} from './checkpoint';
+import {checkpointReady,captureCheckpoint,hasUncommittedChanges,onCheckpointChange} from './checkpoint';
+import type {DocumentSession} from './session';
 /**
  * Auto-save & crash recovery.
  *
@@ -22,22 +23,46 @@ const lastSaved = new Map<string, string>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let busy = false;
 
+// Only scheduled due requests are retained; explicit autosaveNow keeps its one-pass API.
+const dueSessions=new Map<DocumentSession,()=>void>();
+let drainQueued=false;
+function clearDue(s:DocumentSession):void {const off=dueSessions.get(s);dueSessions.delete(s);off?.();}
+function wakeDue():void {
+  let ready=false;
+  for(const s of dueSessions.keys()){
+    if(editor.session(s.id)!==s){clearDue(s);continue;}
+    if(!s.modified&&!hasUncommittedChanges(s)){clearDue(s);continue;}
+    if(checkpointReady(s)&&!s.outputBusy&&!s.closeRequested)ready=true;
+  }
+  if(!ready||busy||drainQueued)return;
+  drainQueued=true;
+  queueMicrotask(()=>{drainQueued=false;if(!busy)void runAutosave([...dueSessions.keys()]);});
+}
+function requestDue():void {
+  for(const s of editor.sessions){
+    if(!s.modified&&!hasUncommittedChanges(s))continue;
+    if(!dueSessions.has(s))dueSessions.set(s,onCheckpointChange(s,wakeDue));
+  }
+  wakeDue();
+}
+
 function fingerprint(sessionId: string): string {
   const s = editor.session(sessionId);
   return s ? `${s.history.current.id}:${s.doc.rev}` : '';
 }
 
-export async function autosaveNow(): Promise<number> {
+export function autosaveNow():Promise<number> {return runAutosave(editor.sessions);}
+async function runAutosave(sessions:readonly DocumentSession[]): Promise<number> {
   if (busy) return 0;
   busy = true;
   let n = 0;
   try {
-    for (const s of editor.sessions) {
+    for (const s of sessions) {
       if(s.transformPending && !(await s.transformPending))continue;
-      if(editor.session(s.id)!==s)continue;
+      if(editor.session(s.id)!==s){clearDue(s);continue;}
       if (!s.modified || (!checkpointReady(s) || s.outputBusy || s.closeRequested)) continue;
       let fp = fingerprint(s.id);
-      if (lastSaved.get(s.id) === fp) continue;
+      if (lastSaved.get(s.id) === fp) {clearDue(s);continue;}
       // Yield between documents so the UI stays responsive.
       await new Promise((r) => setTimeout(r, 0));
       let settle!:(ok:boolean)=>void;
@@ -59,13 +84,17 @@ export async function autosaveNow(): Promise<number> {
         });
         s.recoveryWrite = writing;
         await writing;
-        if (saved) { lastSaved.set(s.id, fp); n++; completed=true; }
+        if (saved) { lastSaved.set(s.id, fp); n++; completed=true;
+          if(fingerprint(s.id)===fp&&!hasUncommittedChanges(s))clearDue(s);
+        }
       } catch (e) {
+        clearDue(s); // Do not let our own slot-release notification retry a failed write.
         console.warn(`[autosave] ${s.doc.name}: ${(e as Error).message}`);
       } finally {settle(completed);s.releaseOutput(reservation);}
     }
   } finally {
     busy = false;
+    wakeDue();
   }
   return n;
 }
@@ -83,16 +112,16 @@ function schedule() {
   if (timer) clearInterval(timer);
   timer = null;
   const minutes = editor.prefs.general.autosaveMinutes;
-  if (minutes <= 0) return;
+  if (minutes <= 0) {for(const s of dueSessions.keys())clearDue(s);return;}
   let lastSave = Date.now();
   timer = setInterval(() => {
     if (Date.now() - lastSave >= minutes * 60 * 1000) due = true;
     if (!due) return;
     // Wait for a pause in input, and skip while a long operation is running.
-    if (Date.now() - lastInput < IDLE_MS || ui.get().progress.length || editor.currentTool?.busy?.()) return;
+    if (Date.now() - lastInput < IDLE_MS || ui.get().progress.length) return;
     due = false;
     lastSave = Date.now();
-    void autosaveNow();
+    requestDue();
   }, 1000);
 }
 
@@ -147,4 +176,5 @@ export function markCleanExit(): void {
 
 export function forgetAutosave(sessionId: string): void {
   lastSaved.delete(sessionId);
+  for(const s of dueSessions.keys())if(s.id===sessionId)clearDue(s);
 }

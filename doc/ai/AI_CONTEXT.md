@@ -1,6 +1,6 @@
 # 当前上下文
 
-2026-11-16 [无感自动保存修复任务](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md)阶段0独立review Approved；A已实现main Session输出槽/稳定检查点、交互旧Promise判断退休、工具/控件稳定通知和先收尾再close cutoff，336项定向自动与P-BUILD通过，待独立实现review。只保留实际edit保护；B/port4/embedded背景编码与C/ADA尚未实施，未换包/推送发布。独立选层dirty保留不混提交；实际窗口/性能与设备Pending，详细实施和限制见任务§11。
+2026-11-16 [无感自动保存修复任务](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md)阶段0独立review Approved；A已实现main Session输出槽/稳定检查点、交互旧Promise判断退休、工具/控件稳定通知和先收尾再close cutoff，336项定向自动与P-BUILD通过，独立review指出恢复到期需求丢失P2，已补session需求保留/稳定通知生产订阅及6项真实调度回归，P-BUILD通过，待复审。只保留实际edit保护；B/port4/embedded背景编码与C/ADA尚未实施，未换包/推送发布。独立选层dirty保留不混提交；实际窗口/性能与设备Pending，详细实施和限制见任务§11。
 
 2026-11-16 [跨分支集成](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)阶段0/A/A1/B/C本地实施及独立技术review均Approved。main合Dev d1efe6e，通用输入5924a6d；embedded df3a496/d277f7c clean包e1798e81，ADA现有绘图分支dc1ea564已消费，保留新悬浮UI。dirty已保全独立提交，原操作身份/续期组合有自动证据；Owner人工/新实窗/ASAR/性能与设备Pending，opacity旧scrub及R4未修复。不推送/发布/合ADA主线。
 
