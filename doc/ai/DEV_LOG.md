@@ -1,5 +1,7 @@
 # 工作进展索引
 
+- 2026-11-16 B：main单向merge及Pen/transform捕获、owner token、native新Action适配；A1通用输入scope先main审查后单向合入，自动验证/编译完成待B独立review，未构建固定包或推进C。[集成任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)。
+
 - 2026-11-16 阶段A：固定Dev普通merge，逐函数整合生命周期；390项回归与P-BUILD通过，独立集成review待执行，B/C和Owner窗口体验Pending。见[集成任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)。
 2026-11-09 Local Rework：仅embedded完成稳定检查点/操作边界、分批worker传输/生命周期和port3；最终75项/types、配套ADA95/P229/恢复11、新包production/dev三轮实窗通过，人工与review仍Pending。main未动，不追认旧包；见[最终交接](tasks/2026-11-06_03D_ada-document-workflow.md#autosave-local-rework-final-handoff-2026-11-09)。
 

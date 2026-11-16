@@ -4,10 +4,14 @@ import {ui, useApp} from './store';
 import {chordFromEvent, keymap} from './shortcuts';
 import {run} from './actions';
 const composing = new WeakSet<EventTarget>();
-type KeyLike = {key: string; isComposing?: boolean; keyCode?: number; target: EventTarget | null; nativeEvent?: KeyboardEvent};
+type KeyLike = {key: string; isComposing?: boolean; keyCode?: number; target: EventTarget | null; nativeEvent?: KeyboardEvent; composedPath?: () => EventTarget[]};
+/** Browsers retarget composed events to the shadow host outside its root. */
+export function inputEventTarget(e: {target: EventTarget | null; composedPath?: () => EventTarget[]}): EventTarget | null {
+  return e.composedPath?.()[0] ?? e.target;
+}
 export function isComposing(e: KeyLike): boolean {
   const n = e.nativeEvent ?? e;
-  return !!n.isComposing || n.keyCode === 229 || ['Process', 'Dead', 'Unidentified'].includes(e.key) || !!e.target && composing.has(e.target);
+  return !!n.isComposing || n.keyCode === 229 || ['Process', 'Dead', 'Unidentified'].includes(e.key) || !!inputEventTarget(n) && composing.has(inputEventTarget(n)!);
 }
 export function isTextTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && !!target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
@@ -18,23 +22,23 @@ export function inputBlocked(): boolean {
   return false;
 }
 export const MODAL_VIEW = new Set(['view.zoomIn', 'view.zoomOut', 'view.fit', 'view.fill', 'view.100']);
-export function installInputContext(): () => void {
-  const start = (e: CompositionEvent) => {if (e.target) composing.add(e.target);};
-  const end = (e: CompositionEvent) => {if (e.target) composing.delete(e.target);};
+export function installInputContext(target: EventTarget = window): () => void {
+  const start = (e: CompositionEvent) => {const origin=inputEventTarget(e); if (origin) composing.add(origin);};
+  const end = (e: CompositionEvent) => {const origin=inputEventTarget(e); if (origin) composing.delete(origin);};
   // Only save crosses a text control's stopPropagation; modal/menu boundaries still own input.
   const down = (e: KeyboardEvent) => {
-    if (e.defaultPrevented || isComposing(e) || !isTextTarget(e.target)) return;
+    if (e.defaultPrevented || isComposing(e) || !isTextTarget(inputEventTarget(e))) return;
     if (useApp.getState().dialogs.length || document.querySelector('[role="dialog"],[role="menu"]')) return;
     if (keymap.lookup(chordFromEvent(e)) !== 'file.save') return;
     e.preventDefault(); e.stopPropagation();
     if (!e.repeat) void run('file.save');
   };
-  window.addEventListener('compositionstart', start, true);
-  window.addEventListener('compositionend', end, true);
-  window.addEventListener('keydown', down, true);
+  target.addEventListener('compositionstart', start as EventListener, true);
+  target.addEventListener('compositionend', end as EventListener, true);
+  target.addEventListener('keydown', down as EventListener, true);
   return () => {
-    window.removeEventListener('compositionstart', start, true);
-    window.removeEventListener('compositionend', end, true);
-    window.removeEventListener('keydown', down, true);
+    target.removeEventListener('compositionstart', start as EventListener, true);
+    target.removeEventListener('compositionend', end as EventListener, true);
+    target.removeEventListener('keydown', down as EventListener, true);
   };
 }

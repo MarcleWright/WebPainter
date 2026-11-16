@@ -46,7 +46,7 @@ it('applying cancellation fails waiting output without saving; retry then close 
  const writes:Output[]=[];const {s}=await open(async o=>{writes.push(o);});const old=await applying(),pending=api!.save();ui.get().progress.at(-1)!.cancel!();expect(await pending).toBe(false);expect(writes).toHaveLength(0);expect(old.terminated).toBe(true);expect(transformState()).not.toBeNull();
  commitTransform();await vi.waitFor(()=>expect(HeldWorker.all.at(-1)?.held).toBeTypeOf('function'));const next=HeldWorker.all.at(-1)!,close=api!.requestClose();expect(editor.active).toBe(s);next.held!();expect(await close).toBe(true);expect(editor.active).toBeNull();api!.destroy();api=undefined;
 });
-it('native policy admits finite path actions and context copy; disabled actions/tool cannot mutate a live draft',async()=>{
+it('native policy admits finite path actions and context copy; disabled actions cannot mutate a live draft',async()=>{
  const {s,h}=await open(async()=>{}, {'action:path.toSelection':{visible:false,enabled:false},'action:layer.copyContext':{visible:false,enabled:false}});draft(h);const owner=readPenSession(s),count=s.doc.layerCount();expect(action('path.addToSelection')!.enabled!()).toBe(true);await run('path.toSelection');await run('layer.copyContext');expect(readPenSession(s)).toBe(owner);expect(s.doc.layerCount()).toBe(count);
  await run('path.addToSelection');expect(readPenSession(s)).toBeNull();expect(s.doc.selection.isEmpty()).toBe(false);await api!.save();expect(decodeNative((await api!.captureNative()).bytes).doc.paths).toHaveLength(1);
 });

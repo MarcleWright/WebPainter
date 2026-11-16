@@ -19,7 +19,7 @@ export function App() {
   const screenMode = useApp((s) => s.screenMode);
   const [panelsHidden, setPanelsHidden] = useState(false);
   useEffect(() => {
-    const removeInput = installInputDispatch();
+    const removeInput = installInputDispatch(keyboardTarget());
     const toggle = () => setPanelsHidden((v) => !v);
     window.addEventListener('celenne:togglePanels', toggle);
     return () => {

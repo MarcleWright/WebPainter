@@ -212,3 +212,47 @@ GPU串行默认后端40.52秒通过；读取完成缓冲前额外发起的显式
 ### 阶段A独立审查
 
 gpt-6.1-sol独立review Approved，核对双亲冲突及session/Canvas/Pen/Move自动合并，无有证据P1/P2。独立重跑7文件281项通过（Pen/pathSelection/transformTask/listeners/batchedPaint/moveSelection/transformThroughput），diff检查通过；允许进入B。窗口/性能/Owner体验继续Pending，首次GPU退出超时未归因。
+
+### A1：通用局部输入目标兼容（实施范围）
+
+阶段B发现新输入安装器固定window，不能保持既有embedded keyboardTarget/ShadowRoot边界。按通用修复先main规则，在main增加可选EventTarget（默认window），从composedPath识别原始文本/IME目标，保留window blur；增加ShadowRoot/局部按键、文本Ctrl+S与IME、dispose和外部宿主隔离回归。仅main实现并本地提交、独立review后单向同步；不修改embedded。
+
+A1实现：两安装器增加`target: EventTarget = window`；keydown/up及capture保存/IME、focusin监听同一target，window blur保留。统一`inputEventTarget`读取composedPath，composition WeakSet与isComposing使用相同原始目标，避免shadow host与文本目标身份分裂。相邻embedded候选只读参考，未写入。
+
+A1验证：`npm test -- tests/input --maxWorkers=2`，7文件223项通过；补充keyup工具/文本/dispose用例后，`npm test -- tests/input/scopedDispatch.test.ts --maxWorkers=1` 7项通过，最终覆盖224个不同输入用例（不重复累计）。首轮新增文本保存测试2项失败系测试替身注册遗漏Ctrl+S默认声明，补齐声明后通过，非实现缺陷。`npm run build`完整typecheck/renderer/Electron退出0，保留已有externalization与chunk提示。新增7项覆盖局部Element与ShadowRoot外部宿主不抢键、dispose、默认window与shadow文本Ctrl+S/repeat/stopPropagation、composition原始身份、keyup文本保护、blur/focus held清理。真实窗口/Owner体验仍Pending；独立A1 review待执行，不推进B。
+
+
+## 阶段B执行记录（2026-11-16，coder交独立review）
+
+开工embedded为clean `326b4d7ad4088ea270d7b5ab5a0db2a150e43c8a`，固定已审main为`45771146a210fa583df988f8d27f327fc7da65f4`。普通merge形成`cf4edf8f7e0f067bf2510c04973c8c9dabd7d1d7`，双亲为上述embedded/main，未使用整文件ours/theirs。冲突为README、AI_CONTEXT、DEV_LOG、App、CanvasView及Menu：保留embedded入口/portal/keyboard surface，采用main新dispatch、Pen/Modal/batch及held pan；移除已被替换的旧global工具按键handler。文档保留双方任务索引及历史包来源，AI_CONTEXT收为当前简短状态。
+
+Direct的输入作用域接线需要通用接口，已先报main，由main实施A1 `5924a6dd6deccf4d8239312e13267be53b255624`；主代理确认A1独立Approved（2文件76项独立通过）后才普通merge该main提交。最终generic inputContext/inputDispatch与A1源完全一致，App只调用既有keyboardTarget传给安装器。首个merge中App无参是等待A1的中间态，未构建交付包；最终交审以两次merge后的组合为准，不把嵌入候选当作generic来源。
+
+### embedded owner适配
+
+- busy同时检查Pen owner、transformPending及原pointer/key/text/mode；UI historyRev监听使Pen草稿开始/结束可通知宿主。Pen松开后仍私有持有草稿，后台saveBackground/captureNative延期而不结束工具。
+- 显式native save/generation/composite先占唯一output槽，等待原transform成功，再prepareMoveOutput结束Pen/Move/text并seal历史、取稳定快照。取消/失败明确false或reject，保留preview，不输出半成品；close复用main等待逻辑，destroy仍拒绝活动会话。
+- native短COW、composite及addResource使用独立edit-protection token，只释放自己的保护；原codec/checkpoint worker、独占native transfer、多消费者generation PNG、ICC/DPI、不可变entry和未跟踪mutation防御保留。
+- native上限有限接纳三条path转换Action；layer.copyContext仍经原Action/access及其实际子动作准入，Pen与直接工具入口用原tool/feature gate。visibility不授予执行，codec不依赖产品策略。无port/native/policy破坏变化，仍3/1/1。
+- 未改ADA、750ms/5s调度或10分钟恢复时钟，不引入Profile/Artifact/Results。返回仍由宿主先排空native再以独立checkpoint preview worker异步派生；WP没有新增renew API。
+
+### 新增交叉测试与验证
+
+新增`tests/engine/embeddedIntegration.test.ts`五项，使用实际PenTool和TransformWorkerEngine（受控Worker传输/延迟），覆盖松开后的Pen延期及结束通知、生成仅结束一次、applying输出独占/等待与旧保存回执、新编辑保持dirty、取消/重试/close、destroy拒绝、有限路径策略及composite owner释放。将两embedded实现文件临时替回开工版本（finally恢复）后真实复现4失败/1通过，另有旧实现立即拒绝等待输出导致1条未接回执错误；恢复修复后全部通过。该红灯只用于定位兼容差异，不计为通过。
+
+WP的generation、binding、原transform Promise及输出operation/checkpoint在同编辑实例轮询/在途保存中保持；测试没有伪造WP内Profile字段。**真实同Profile连接续期（Pen、applying、保存中原请求身份）是ADA owner阶段C必测，B端口测试不替代该项。**
+
+实际cwd均为`D:/00_Projects_WSY/AI/Codex_Projects/WebPainter`：
+
+```powershell
+npm test -- tests/engine/embeddedIntegration.test.ts tests/input tests/engine/embeddedAutosave.test.ts tests/engine/embeddedNative.test.ts tests/engine/embeddedLifecycle.test.ts tests/engine/embeddedRpc.test.ts tests/engine/transformTask.test.ts tests/engine/access.test.ts --maxWorkers=2
+npm test -- tests/engine/embeddedIntegration.test.ts tests/engine/native.test.ts tests/engine/moveSelection.test.ts tests/engine/moveSelectionReference.test.ts tests/engine/tileContentBounds.test.ts tests/engine/batchedPaint.test.ts tests/engine/transformThroughput.test.ts tests/engine/embeddedPerformance.test.ts tests/engine/checkpointTransfer.test.ts --maxWorkers=2
+npm test -- tests/gpu/projectivePreview.test.ts tests/gpu/transformPreview.test.ts tests/gpu/moveOutput.test.ts tests/gpu/floatingSelection.test.ts --maxWorkers=1
+npm test -- tests/input tests/engine/embeddedIntegration.test.ts tests/engine/embeddedAutosave.test.ts tests/engine/embeddedNative.test.ts tests/engine/embeddedLifecycle.test.ts tests/engine/embeddedRpc.test.ts tests/engine/checkpointTransfer.test.ts --maxWorkers=2
+npm run typecheck
+npx vite build --config vite.embedded.config.ts
+```
+
+前3组分别13文件289项（第五项新增前）、8通过文件82项及1个opt-in性能诊断跳过、GPU4文件62项通过；跳过因未提供隔离fixture，不算性能验收。最后一组为A1单向合入后的相关最终复验，13文件263项通过，不重复累计。typecheck及embedded Vite编译通过，保留原browser externalization提示；transformWorker及checkpoint worker资源均生成、client预览仍引用该原checkpoint worker。只运行Vite编译验证，**未运行build-embedded.mjs，未生成native.mjs/manifest或可交付固定包**；当前dist-embedded是验证临时输出，不供ADA消费。
+
+真实窗口、4K性能对照、生产iframe实际Worker加载、IME/压感/人工体验仍Pending，由Owner最终统一验收。R4延期及既有opacity长scrub多history未通过不变。待B独立review无P1/P2后才从明确clean源运行build-embedded、校验完整mainBase/embeddedCommit/sourceHash/bundleHash/资源SHA；旧包完整保留。不推送、不发布、不推进C。

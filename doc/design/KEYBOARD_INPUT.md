@@ -12,6 +12,8 @@
 
 ## 输入归属与生命周期
 
+- 输入安装器可指定局部EventTarget（含ShadowRoot），默认window。按键、文本保存capture、composition及焦点保护在该目标监听，使用composedPath原始目标识别文本和IME；window blur仍清理held状态。dispose移除同一目标的监听，局部安装不认领宿主外部按键。
+
 - 文本控件拥有文字、剪贴板、全选、文字撤销、箭头与删除。composition/Process/Dead/keyCode229 优先于局部 Enter/Esc 和全局派发。文本焦点仅有效 `file.save` 可跨过控件的 stopPropagation，仍走原保存入口；对话框/菜单不放行文件命令。
 - Modal/菜单优先处理局部导航和确认/取消。Modal 仅对非文本且未被控件局部键认领/消费的事件转发缩放/适配视图白名单；重绑的字母和编辑组合键不抢文字，Tab、控件激活以及多行 Enter/repeat 保持本地归属。曲线画布可聚焦并选择控制点；裸 Delete/Backspace 删除选中的中间点，保留端点，不穿透清空图层，组合输入和保护期间拒绝。
 - 工具仅认领明确修饰键组合的局部确认/取消/删点/箭头。busy 期间不插入全局 undo；Move pointer 中不插入箭头历史。一个事件只消费一次，一次触发型命令抑制 repeat；箭头和笔刷步进可重复。
