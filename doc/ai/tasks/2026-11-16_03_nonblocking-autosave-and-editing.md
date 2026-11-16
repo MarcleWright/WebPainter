@@ -327,3 +327,7 @@ port状态不把`outputBusy`当`checkpointReady`的否定：快照完成后仍�
 当前仅代码/DOM自动与编译证据；未运行完整生产iframe、真实笔/IME/高DPR/4K性能对照、Owner体验。未声称opacity既有scrub多history或R4修复。快照最长同步任务/复制批次/输入长帧/IO对照仍Pending，需要C候选包真实流程记录。
 
 B独立review无P1/P2后，主代理从clean HEAD构固定包，核对mainBase/embeddedCommit/sourceHash/bundleHash及port4/native1与所有资源/Worker；ADA最小接线后、完整C矩阵前执行§8早期真实iframe延迟保存+X/Space/Pen→Ctrl+Enter→重开探针。回退B源码使用本阶段fix的revert并恢复成对port3消费；不回滚用户作品或删除恢复数据。
+
+### 阶段B独立审查
+
+2026-11-16 gpt-6.1-sol只读独立review Approved（de3258b），无有依据P1/P2。独立精选9文件40项通过，核对通用main来源、reservation/capture/close、旧回执、port4、六Action及Frame/Shadow末事件/IME边界，diff通过。允许从clean源构包；C完整矩阵前须完成早期ADA真实iframe探针，不将本次审查冒充实窗/性能验收。
