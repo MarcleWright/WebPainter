@@ -256,3 +256,7 @@ npx vite build --config vite.embedded.config.ts
 前3组分别13文件289项（第五项新增前）、8通过文件82项及1个opt-in性能诊断跳过、GPU4文件62项通过；跳过因未提供隔离fixture，不算性能验收。最后一组为A1单向合入后的相关最终复验，13文件263项通过，不重复累计。typecheck及embedded Vite编译通过，保留原browser externalization提示；transformWorker及checkpoint worker资源均生成、client预览仍引用该原checkpoint worker。只运行Vite编译验证，**未运行build-embedded.mjs，未生成native.mjs/manifest或可交付固定包**；当前dist-embedded是验证临时输出，不供ADA消费。
 
 真实窗口、4K性能对照、生产iframe实际Worker加载、IME/压感/人工体验仍Pending，由Owner最终统一验收。R4延期及既有opacity长scrub多history未通过不变。待B独立review无P1/P2后才从明确clean源运行build-embedded、校验完整mainBase/embeddedCommit/sourceHash/bundleHash/资源SHA；旧包完整保留。不推送、不发布、不推进C。
+
+### 阶段B独立审查
+
+gpt-6.1-sol独立review Approved（df3a496），核对双亲及main通用输入一致、嵌入生命周期和5交叉用例，无新增P1/P2。独立主组297项、补充53项通过，1性能诊断跳过；typecheck/diff通过。允许clean源构建固定包，Profile transport renew留C验证；窗口/Owner体验Pending。
