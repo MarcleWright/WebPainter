@@ -8,7 +8,7 @@
 | --- | --- |
 | 项目面向谁、与 ADA 的关系 | [产品定位](product/PRODUCT_BRIEF.md) |
 | 快捷键统一、PS 常用绑定与分阶段实施 | [输入约定](design/KEYBOARD_INPUT.md)、[快捷键任务 P1-P5](ai/tasks/2026-11-10_01_shortcut-unification.md), R1–R3 review 已通过（Owner 确认）；R4 延期，人工/Owner Pending |
-| 嵌入端口、首版工具及 native 规格输入 | [Embedded Port v1](architecture/EMBEDDED_PORT_V1.md), 现行 port3/native1/policy1；新包待B独立review后构建 |
+| 嵌入端口、首版工具及 native 规格输入 | [Embedded Port v1](architecture/EMBEDDED_PORT_V1.md), 源码 port4/native1/policy1；现用旧包port3，新包待B独立review后构建 |
 | ADA 首版接什么、以后怎样扩展 | [集成架构](architecture/ADA_INTEGRATION.md)，iframe配套闭环已有有限技术证据，人工/设备验收仍Pending |
 | ADA 共用工作与承载方案如何拆任务 | [父任务 03 与 03A-03F](ai/tasks/2026-11-06_03_ada-integration-architecture.md#ordered-subtasks-and-dependencies), 历史阶段任务及配套证据；Owner已选iframe |
 | WP 独立版、嵌入分支与 ADA 如何更新 | [分支和更新路线](architecture/ADA_INTEGRATION.md#21-仓库分支和更新路线), 已建 integration/embedded 并有阶段提交，未发布 |

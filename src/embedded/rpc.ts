@@ -21,10 +21,10 @@ export function validArgs(method: RpcMethod, a: unknown): a is unknown[] {
 export function connectRpc(port: MessagePort, nonce: string, handlers: Partial<Record<RpcMethod, (...args: any[]) => unknown>>) {
   let serial = 0, disposed = false;
   const pending = new Map<number, { resolve(value: any): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
-  const send = (message: object) => { if (!disposed) port.postMessage({ version: 3, nonce, ...message }, transfers(message)); };
+  const send = (message: object) => { if (!disposed) port.postMessage({ version: 4, nonce, ...message }, transfers(message)); };
   port.onmessage = async event => {
     const m = event.data;
-    if (!record(m) || m.version !== 3 || m.nonce !== nonce || !Number.isSafeInteger(m.id)) return;
+    if (!record(m) || m.version !== 4 || m.nonce !== nonce || !Number.isSafeInteger(m.id)) return;
     if (m.type === 'reply') {
       const p = pending.get(m.id as number); if (!p || typeof m.ok !== 'boolean') return;
       pending.delete(m.id as number); clearTimeout(p.timer);

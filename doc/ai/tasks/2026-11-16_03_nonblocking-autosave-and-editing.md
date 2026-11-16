@@ -286,3 +286,44 @@ B集成需要在回执markSaved/失败处理前证明仍持有原输出槽。限
 
 
 A1结果：只读查询已实现；原/错token、旧释放不影响替换槽、dispose后原token失效均有真实Session测试。`sessionOutput`、`recoverySchedule`、`moveOutput`共 **30/30**通过，typecheck通过；日志 `doc/material/local/autosave-a1-tests.log` / `autosave-a1-typecheck.log`。不重build，不扩大状态或接口；等待独立复审，尚未由本提交执行B合入。
+
+
+## 12. 阶段B实施与验证（2026-11-16）
+
+状态：embedded产品实现、自动验证与Vite编译完成，待独立B实现review；未构建manifest固定交付包、未换ADA、未推进C、未推送发布。基线d277f7c clean。普通merge已审main5d5e97a，merge提交ea1ffb3；只AI_CONTEXT与前次集成任务文档冲突，逐段保留两边历史，boot/surface/keyboardTarget/RPC没有整文件ours/theirs。发现失败回执需要只读原槽所有权时，先交main新增`ownsOutput`，a275a2a独立Approved后普通merge为6e15716，未在embedded私加通用状态机。main选层dirty不修改、不提交，ADA/Dev不操作。
+
+### 12.1 最终owner、退休及兼容边界
+
+| 入口 | 最终职责 / 退休 |
+| --- | --- |
+| embedded native背景与恢复 | 使用main共同checkpointReady/hasUncommittedChanges/captureCheckpoint；预检与实际微任务捕获重检；history.seal、entry/revision与短COW同步绑定，编码/host仅占reservation。不再自行组合Pen/文字/transform忙状态，也不把输出Promise当编辑锁。 |
+| 显式save/生成/composite | reserve唯一输出槽；等待原transform authority后prepareMoveOutput，再验证控件/工具稳定。生成仍原codec+PNG，背景/恢复native-only；composite原显式编码保护保留。 |
+| 输出回执与finally | generation/binding/session及ownsOutput原token都有效才接纳成功；失败保守markUnsaved也有相同前提，deferred不markUnsaved。原槽已替换或作品失效，不改后来saved、不释放新槽；旧generation失败不向新作品发error。 |
+| resource | 保留输出竞争与真实read/import保护，安装命令前只释放自己的token，finally核对原reservation；另有owner仍不能绕过。 |
+| native离开 | requestClose是唯一owner；join已有输出/authority后显式收尾，稳定同步seal+close token绑定最终entry/revision。保存只允许私有close生命周期且验证own edit token，无公开ignore参数；Save/Cancel仅0继续，无放弃。失败/取消释放本次保护及close Promise并保留实例。旧core confirm中的native closing布尔旁路已删除。 |
+| mount / 控件 | 删除永久focused input忙；main控件/Modal/文字owner仍管理未提交值。mount只管理pointer/key/composition事件事务，末次事件独立发通知，blur清遗失集合不提交草稿；Space/修饰键持有不无限延期。Frame/Shadow各自portal/key scope保持。 |
+| contract/client/frame/RPC/producer | port4必填outputBusy/checkpointReady/hasUncommittedChanges，删除公开busy及fallback；client cached初态同步新字段，握手/消息只接受4，build-embedded producer portVersion=4。旧port3配套拒绝，C应正规成对升级，不能重标旧包。 |
+| capability | 显式有限6项color/brush Action并继续交native ceiling与产品policy，不开放全部前缀。Toolbar与dispatcher执行同一Action准入。 |
+
+背景失败为何仍可能markUnsaved：host可能写入后丢回执，此时undo回旧clean不能代表磁盘仍为旧状态。独占原输出槽+有效operation/session证明没有后来成功输出；只有此前提下保守未确认。测试主动替换原槽再确认新saved后，旧成功/失败都不能改新保存点，因此符合§10不能无条件清后来saved。捕获前稳定race明确deferred，不归入失败。
+
+port状态不把`outputBusy`当`checkpointReady`的否定：快照完成后仍有输出时通常可以编辑且checkpointReady=true，但新输出须等待槽。`hasUncommittedChanges`与history dirty并列，Pen尚无正式history或控件尚未commit时仍应显示未保存。ADA保存需求/重试/备份调度继续由C拥有。
+
+### 12.2 自动验证与实际证据限制
+
+最终去重联跑 **344 passed / 1 skipped，20文件通过/1文件跳过**，日志`doc/material/local/autosave-b-final-tests.log`。覆盖`tests/engine/embedded{Continuity,Mount,Integration,Native,Autosave,Lifecycle,Rpc,Performance}`、checkpointTransfer/checkpointSnapshot/sessionOutput、全tests/input、gpu/moveOutput、engine/transformTask。跳过项为既有embeddedPerformance；不将它计为性能通过。
+
+- 新embeddedContinuity实际initializeEditor+production dispatcher+真实工具，分别延迟worker start准备、encode及host.save；worker通过structuredClone transfer及原revive/codec处理固定快照。六Action、E切换、Space held、保存中创建Pen并Ctrl+Enter、路径/选区/保存点实际结果通过；产品policy禁用六Action及真实Toolbar点击不能改变参数。与原02五场景对应，不是只测canEdit。
+- 新embeddedMount使用真实mountFrame/mountDirect wrappers、surface与生产NumberField/Slider/portal（App渲染限定为这两个真实控件fixture），验证未提交文本+IME结束仍延期，最后blur/Arrow keyup保持focus/portal range最后pointerup后无新输入也发ready；focus本身与长按Space不永久延期。此DOM fixture不是完整实际生产iframe/系统IME验收。
+- 原生命周期/codec/transfer/实际transform取消及重试/恢复native/生成竞争保留。迁移原finishPen布尔测试到真实owner API；旧state.busy断言改读含义对应的未提交或输出槽字段。原composite用例中预先持另一edit owner改为明确拒绝，仍断言该owner没有被释放，避免旧测试继续依赖越过真实保护；同一用例还延迟真实PNG exporter，在编码期间追加另一owner，完成后其保护仍保持，未削弱原finally所有权断言。
+- 新反例包含微任务稳定race deferred不清clean；原reservation被替换后迟到成功/失败不改新saved或释放新槽；切binding旧失败不向新generation报错；requestClose截止点拒绝真实X与新history，Cancel恢复dispatcher，retry精确保存后关闭。旧失败后undo回原clean的uncertain防御保留。
+- 最终原生相关3文件 **24/24** 再验证（refactor私有capture intent后），日志`autosave-b-final-native-tests.log`。独立复跑Autosave+Move输出 **38/38**，日志`autosave-b-final-lifecycle-tests.log`。最终补强composite other-owner期间保护后，integration单文件5/5复验通过（`autosave-b-final-owner-tests.log`），typecheck再次通过。它们是344项中的复验，不重复相加。
+- typecheck通过，日志`autosave-b-final-typecheck.log`。Vite embedded配置编译通过，输出仅ignored `doc/material/local/autosave-b-compile`，日志`autosave-b-final-build.log`；没有执行build-embedded交付producer、没有新manifest/sourceHash/bundleHash，没有将dirty编译充当clean包。producer源的port4声明已同步，待review通过后由clean source正式构建与逐文件校验。
+
+首轮异常保留范围：旧integration fixture仍用finishPen(s,true)与busy字段导致typecheck失败，按新owner合同迁移；composite预先已有真实保护的旧断言失败，修为拒绝且保留owner。首次将reservation闭包用于ownsOutput时TS不能跨闭包缩窄symbol|null，已在reserve失败同步throw的边界后明确非空，最终typecheck通过。早次342项联跑有Vitest终止fork超时警告，但退出0；最终344项同命令重跑无此警告。文档首次脚本未指定UTF-8而read失败，没有写入；已明确UTF-8重跑并检查。本轮新增链接均可定位；DEV_LOG从main merge继承的LAYER_PICKING_ASSESSMENT链接在embedded缺目标（该文档仍为main独立未跟踪材料），不纳入本轮、不复制或修改选层材料。以上不作为最终失败或额外通过数量。
+
+### 12.3 交审与下一阶段门
+
+当前仅代码/DOM自动与编译证据；未运行完整生产iframe、真实笔/IME/高DPR/4K性能对照、Owner体验。未声称opacity既有scrub多history或R4修复。快照最长同步任务/复制批次/输入长帧/IO对照仍Pending，需要C候选包真实流程记录。
+
+B独立review无P1/P2后，主代理从clean HEAD构固定包，核对mainBase/embeddedCommit/sourceHash/bundleHash及port4/native1与所有资源/Worker；ADA最小接线后、完整C矩阵前执行§8早期真实iframe延迟保存+X/Space/Pen→Ctrl+Enter→重开探针。回退B源码使用本阶段fix的revert并恢复成对port3消费；不回滚用户作品或删除恢复数据。

@@ -1,6 +1,20 @@
 # Embedded Port v1 — 03A 实施边界
 
-## Current Port v3 / Native v1
+## Current source Port v4 / Native v1 (2026-11-16)
+
+阶段B源码已实施，等待独立review，未构建或替换固定交付包。ADA现用port3包保持原来源；C必须成对升级port **4**，native **1** / policy **1** 不变。client握手、frame与RPC仅接受4，无busy或旧版本fallback。
+
+`EditorState`必含`outputBusy`（唯一输出槽在途）、`checkpointReady`（工具/控件/输入事务允许稳定捕获，不包含输出竞争）、`hasUncommittedChanges`（草稿/控件buffer/未结束输入事务）。`dirty`仅表示history相对已确认点，不能单凭false显示全部保存。宿主同时检查checkpointReady/outputBusy，订阅state后重查保留的最新需求。
+
+- 背景saveBackground/captureNative不结束工具；main共同owner同步重检、seal、绑定entry/revision并短COW捕获。worker准备/分批私有transfer/编码/host.save只占输出槽。捕获前race返回deferred，不清保存点、不报保存失败。真实resource/transform保护保持。
+- 显式save/saveAndCapture等待transform authority、收尾Pen/text/Move并查共同稳定准入，未提交控件或未确认transform拒绝。生成/恢复/正式输出仍互斥。回执核对generation/binding/session及原输出reservation，只标原entry。有效原操作独占槽内编码/host失败可能已经写盘，因此保守markUnsaved；旧槽替换或binding失效的迟到成功/失败不能改新保存点、释放新槽或向新generation报错。
+- native requestClose唯一离开owner先等原输出/transform、显式收尾，再同步绑定最终entry/revision与close edit token。dirty时host.confirm按钮固定`['Save','Cancel']`，仅整数0继续，无破坏性放弃。私有close捕获校验原保护token后保存最终native，成功移除session；失败/取消finally仅释放自己保护及close Promise。宿主不得先循环flush追赶活跃编辑。非native测试端仍复用main closeSession。
+- mountFrame/Shadow只避让真实pointer/key/composition事务，删除永久focus忙判断；未提交值由main控件owner登记。末次up/keyup/compositionend/focusout后通知读取React提交结果；Space/修饰键持有不无限延期稳定文档。window blur清遗失输入集合但不结束工具草稿。原keyboardTarget/portalTarget作用域保持。
+- native显式新增color.reset/swap、brush.size.decrease/increase、brush.hardness.decrease/increase六项，仍与宿主policy相交，未开放整个前缀。
+
+自动证据与Pending见[无感保存任务§12](../ai/tasks/2026-11-16_03_nonblocking-autosave-and-editing.md#12-阶段b实施与验证2026-11-16)。真实生产iframe探针在B独立review通过并消费clean候选包后执行，本轮DOM fixture不替代该证据。
+
+## Historical Port v3 / Native v1
 
 2026-11-09 自动保存局部重做：正式宿主必须成对消费 port **3**，native **1** / policy **1** 不变。独立 main 不变，编码仍调用原 codec；不导入 ADA 业务。
 
@@ -11,7 +25,7 @@
 
 源码/固定包及实测见[当前03D任务](../ai/tasks/2026-11-06_03D_ada-document-workflow.md)。v2/v1 以下均为原时点历史，不追认旧包测试，不代表独立review或Owner验收通过。
 
-### Main integration lifecycle (2026-11-16, stage B implementation pending independent review)
+### Historical main integration lifecycle (2026-11-16, previous integration task)
 
 Pen拥有者在松开指针后仍表示未完成草稿；state.busy和后台native/recovery准入同时检查Pen owner与transformPending，UI historyRev通知补齐草稿结束唤醒。后台入口不结束Pen/transform。显式save/saveAndCapture/composite输出先占用唯一output槽，等待原transform成功，再由原prepareMoveOutput结束Pen/Move/text；失败返回false或拒绝，未确认preview仍拒绝输出。捕获使用独立owner token，释放不恢复旧布尔保护。port/native/policy版本不变。
 

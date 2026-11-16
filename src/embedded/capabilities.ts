@@ -20,7 +20,7 @@ export function nativeSupports(entry:string,actions:ReadonlySet<string>):boolean
   case 'feature':return id==='masks';
   case 'action':
    if(!actions.has(id))return false;
-   if(['path.toSelection','path.addToSelection','path.subtractFromSelection'].includes(id))return true;
+   if(['color.reset','color.swap','brush.size.decrease','brush.size.increase','brush.hardness.decrease','brush.hardness.increase','path.toSelection','path.addToSelection','path.subtractFromSelection'].includes(id))return true;
    if(id.startsWith('file.'))return ['file.save','file.close','file.closeAll'].includes(id);
    if(/^(app\.|channel\.|slice\.|image\.(depth|mode)\.|edit\.(preferences|generative|contentAware|definePattern)|image.generative|select\.(subject|sky|focusArea|save|load)|layer\.(style|copyStyle|pasteStyle|setStyle)|type\.(warp|path)|view\.(slices|clearSlices))/.test(id)||/smart|knockout|blendIf/i.test(id)||id==='edit.transform.warp')return false;
    if(id.startsWith('layer.newFill.'))return id==='layer.newFill.solid';

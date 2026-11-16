@@ -19,7 +19,7 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
   const frame = document.createElement('iframe'); frame.title = 'WebPainter comparison';
   frame.style.cssText = 'border:0;width:100%;height:100%';
   const channel = new MessageChannel();
-  let cached: EditorState = { generation: 0, open: false, dirty: false };
+  let cached: EditorState = { generation: 0, open: false, dirty: false,outputBusy:false,checkpointReady:false,hasUncommittedChanges:false };
   const rpc = connectRpc(channel.port1, nonce, {
     readResource: (...a) => host.readResource(a[0], a[1]), hostSave: o => host.save(o), hostExport: o => host.export(o),
     confirm: (...a) => host.confirm(a[0], a[1], a[2]), dirty: s => { cached = s; host.dirty(s); }, error: e => host.error(e),
@@ -28,8 +28,8 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('message', ready); };
     const timer = setTimeout(() => { cleanup(); rpc.dispose(); frame.remove(); reject(new Error('Iframe handshake timeout')); }, 15000);
     const ready = (e: MessageEvent) => {
-      if (e.source !== frame.contentWindow || e.origin !== url.origin || e.data?.type !== 'wp-ready' || e.data?.version !== 3 || e.data?.nonce !== nonce) return;
-      cleanup(); frame.contentWindow!.postMessage({ type: 'wp-connect', version: 3, nonce, nativeVersion:host.nativeVersion,capabilityPolicy:host.capabilityPolicy }, url.origin, [channel.port2]); resolve();
+      if (e.source !== frame.contentWindow || e.origin !== url.origin || e.data?.type !== 'wp-ready' || e.data?.version !== 4 || e.data?.nonce !== nonce) return;
+      cleanup(); frame.contentWindow!.postMessage({ type: 'wp-connect', version: 4, nonce, nativeVersion:host.nativeVersion,capabilityPolicy:host.capabilityPolicy }, url.origin, [channel.port2]); resolve();
     };
     window.addEventListener('message', ready); frame.src = url.href; container.append(frame);
   });

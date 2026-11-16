@@ -6,7 +6,7 @@ const nonce = new URLSearchParams(location.hash.slice(1)).get('nonce');
 // Local same-origin resources only. An opaque file:// deployment needs explicit future design.
 if (!nonce || location.origin === 'null' || window.parent === window) throw new Error('Invalid embedded origin');
 const handshake = (event: MessageEvent) => {
-  if (event.source !== parent || event.origin !== location.origin || event.data?.type !== 'wp-connect' || event.data?.version !== 3 || event.data?.nonce !== nonce || event.ports.length !== 1) return;
+  if (event.source !== parent || event.origin !== location.origin || event.data?.type !== 'wp-connect' || event.data?.version !== 4 || event.data?.nonce !== nonce || event.ports.length !== 1) return;
   window.removeEventListener('message', handshake);
   const rpc = connectRpc(event.ports[0], nonce, {
     open: (binding, token) => api.open(binding, token), save: () => api.save(),saveBackground:()=>api.saveBackground(), capture: () => api.captureComposite(),
@@ -24,4 +24,4 @@ const handshake = (event: MessageEvent) => {
   const api = mountFrame(document.getElementById('root')!, host);
 };
 window.addEventListener('message', handshake);
-parent.postMessage({ type: 'wp-ready', version: 3, nonce }, location.origin);
+parent.postMessage({ type: 'wp-ready', version: 4, nonce }, location.origin);

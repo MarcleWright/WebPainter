@@ -1,5 +1,7 @@
 # 工作进展索引
 
+- 2026-11-16 无感保存B：main5d5e97a与A1 a275a2a单向merge，port4状态/非阻塞checkpoint/close截止点与六Action完成，真实worker延迟和Frame/Shadow控件末次通知有自动证据，待独立review，未构包换ADA。见[任务§12](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md#12-阶段b实施与验证2026-11-16)。
+
 - 2026-11-16 B：main单向merge及Pen/transform捕获、owner token、native新Action适配；A1通用输入scope先main审查后单向合入，自动验证/编译完成待B独立review，未构建固定包或推进C。[集成任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)。
 
 - 2026-11-16 阶段A：固定Dev普通merge，逐函数整合生命周期；390项回归与P-BUILD通过，独立集成review待执行，B/C和Owner窗口体验Pending。见[集成任务](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)。

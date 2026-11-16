@@ -13,18 +13,18 @@ import type {HostPort,Output} from '../../src/embedded/contract';
 import type {ToolPointer,ToolHost} from '../../src/tools/tool';
 vi.mock('../../src/embedded/checkpoint-output',()=>({checkpointOutput:async(d:any,kind:string)=>({bytes:(await import('../../src/document/native')).encodeNative(d),preview:kind==='generation'?await (await import('../../src/formats/registry')).exporters.find(e=>e.id==='png')!.export(d,{}):undefined})}));
 let api:ReturnType<typeof initializeEditor>|undefined;
-afterEach(()=>{cancelTransform();for(const s of [...editor.sessions]){finishPen(s,true);editor.removeSession(s.id);}api?.destroy();api=undefined;editor.hostFactory=null;vi.restoreAllMocks();vi.unstubAllGlobals();ui.set({dialogs:[],progress:[],tool:'brush'});});
+afterEach(()=>{cancelTransform();for(const s of [...editor.sessions]){finishPen(s);editor.removeSession(s.id);}api?.destroy();api=undefined;editor.hostFactory=null;vi.restoreAllMocks();vi.unstubAllGlobals();ui.set({dialogs:[],progress:[],tool:'brush'});});
 async function open(save:HostPort['save']=async()=>{},entries:NonNullable<HostPort['capabilityPolicy']>['entries']={}){
- const events:any[]=[];api=initializeEditor({nativeVersion:1,capabilityPolicy:{version:1,entries},readResource:async()=>({name:'fixture.wpnative',bytes:createNative(32,24)}),save,export:async()=>{},confirm:async()=>1,dirty:s=>events.push(s),error(){}});await api.open('same-edit-instance','resource');
+ const events:any[]=[];api=initializeEditor({nativeVersion:1,capabilityPolicy:{version:1,entries},readResource:async()=>({name:'fixture.wpnative',bytes:createNative(32,24)}),save,export:async()=>{},confirm:async()=>0,dirty:s=>events.push(s),error(){}});await api.open('same-edit-instance','resource');
  const s=editor.active!,h:ToolHost={editor,session:s,redraw(){},setCursor(){},viewportSize:()=>({w:320,h:240})};editor.hostFactory=()=>h;return{s,h,events};
 }
 const point=(x:number,y:number):ToolPointer=>({x,y,sx:x,sy:y,pressure:1,tiltX:0,tiltY:0,twist:0,button:0,buttons:1,shift:false,alt:false,mod:false,pointerType:'mouse',time:0,clickCount:1});
 function draft(h:ToolHost){editor.setTool('pen');ui.setToolOptions('pen',{mode:'path'});const pen=editor.currentTool as PenTool;for(const [x,y]of [[2,2],[20,2],[20,18]]){pen.down(h,point(x,y));pen.up();}return pen;}
 it('real Pen between clicks defers background and recovery; explicit generation ends once and releases busy notification',async()=>{
  let saved:Output|undefined;const {s,h,events}=await open(async o=>{saved=o;});const pen=draft(h),owner=readPenSession(s),checkpoint=s.history.current.id;
- expect(pen.busy()).toBe(false);expect(api!.state().busy).toBe(true);expect(events.at(-1).busy).toBe(true);
+ expect(pen.busy()).toBe(false);expect(api!.state().hasUncommittedChanges).toBe(true);expect(events.at(-1).hasUncommittedChanges).toBe(true);
  expect(await api!.saveBackground()).toBe('deferred');await expect(api!.captureNative()).rejects.toThrow('deferred');expect(readPenSession(s)).toBe(owner);expect(s.history.current.id).toBe(checkpoint);
- const output=await api!.saveAndCapture();expect(output).toBe(saved);expect(output.preview!.length).toBeGreaterThan(0);expect(readPenSession(s)).toBeNull();expect(s.history.entries).toHaveLength(2);expect(decodeNative(output.bytes).doc.paths[0].path.subpaths[0].knots).toHaveLength(3);expect(api!.state().busy).toBe(false);expect(events.at(-1).busy).toBe(false);
+ const output=await api!.saveAndCapture();expect(output).toBe(saved);expect(output.preview!.length).toBeGreaterThan(0);expect(readPenSession(s)).toBeNull();expect(s.history.entries).toHaveLength(2);expect(decodeNative(output.bytes).doc.paths[0].path.subpaths[0].knots).toHaveLength(3);expect(api!.state().hasUncommittedChanges).toBe(false);expect(events.at(-1).hasUncommittedChanges).toBe(false);
  await api!.save();expect(s.history.entries).toHaveLength(2);
 });
 class HeldWorker {
@@ -52,6 +52,9 @@ it('native policy admits finite path actions and context copy; disabled actions 
 });
 
 it('composite capture waits real applying authority and preserves another owner when encoding settles',async()=>{
- const {s}=await open(),worker=await applying();const capture=api!.captureComposite();expect(api!.state().busy).toBe(true);expect(s.canEdit()).toBe(false);worker.held!();const output=await capture;expect(output.format).toBe('png');expect(output.bytes.length).toBeGreaterThan(0);expect(transformState()).toBeNull();expect(s.canEdit()).toBe(true);
- const other=s.acquireEditProtection('unrelated-owner');try{await api!.captureComposite();expect(s.canEdit()).toBe(false);}finally{s.releaseEditProtection(other);}expect(s.canEdit()).toBe(true);
+ const {s}=await open(),worker=await applying();const capture=api!.captureComposite();expect(api!.state().outputBusy).toBe(true);expect(s.canEdit()).toBe(false);worker.held!();const output=await capture;expect(output.format).toBe('png');expect(output.bytes.length).toBeGreaterThan(0);expect(transformState()).toBeNull();expect(s.canEdit()).toBe(true);
+ const other=s.acquireEditProtection('unrelated-owner');try{await expect(api!.captureComposite()).rejects.toThrow('busy');expect(s.canEdit()).toBe(false);}finally{s.releaseEditProtection(other);}expect(s.canEdit()).toBe(true);
+ const {exporters}=await import('../../src/formats/registry'),png=exporters.find(e=>e.id==='png')!,encode=png.export;let release!:()=>void;
+ vi.spyOn(png,'export').mockImplementation(async(d,o)=>{await new Promise<void>(r=>release=r);return encode(d,o);});
+ const delayed=api!.captureComposite();await vi.waitFor(()=>expect(release).toBeTypeOf('function'));const later=s.acquireEditProtection('later-owner');release();expect((await delayed).format).toBe('png');expect(s.canEdit()).toBe(false);s.releaseEditProtection(later);expect(s.canEdit()).toBe(true);
 });
