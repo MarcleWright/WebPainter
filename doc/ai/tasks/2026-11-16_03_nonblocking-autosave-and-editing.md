@@ -1,6 +1,8 @@
 # 无感自动保存与连续编辑：分阶段修复
 
-日期：2026-11-16。状态：**方案review通过（两项非阻断补充已纳入），Owner已授权goal模式按0→A→B→C实施、必要验证、独立审查和分阶段本地提交。** 每阶段审查无阻断后继续；subagent统一gpt-6.1-sol，不推送/发布、不合ADA主线。
+日期：2026-11-16。当前状态：**0/A/A1/B/C0/Cfull本地实施与分阶段独立技术审查均Approved；最终记录见§13。人工/设备/发布验收仍Pending。**
+
+原执行授权：**方案review通过（两项非阻断补充已纳入），Owner已授权goal模式按0→A→B→C实施、必要验证、独立审查和分阶段本地提交。** 每阶段审查无阻断后继续；subagent统一gpt-6.1-sol，不推送/发布、不合ADA主线。
 
 ## 1. 产品要求与事实输入
 
@@ -331,3 +333,39 @@ B独立review无P1/P2后，主代理从clean HEAD构固定包，核对mainBase/e
 ### 阶段B独立审查
 
 2026-11-16 gpt-6.1-sol只读独立review Approved（de3258b），无有依据P1/P2。独立精选9文件40项通过，核对通用main来源、reservation/capture/close、旧回执、port4、六Action及Frame/Shadow末事件/IME边界，diff通过。允许从clean源构包；C完整矩阵前须完成早期ADA真实iframe探针，不将本次审查冒充实窗/性能验收。
+
+阶段 B 原始记录见 §12；后续固定包与配套验收见 §13。
+
+## 13. 最终交付与逐项核对（2026-11-16）
+
+本轮subagent统一gpt-6.1-sol，按阶段审查后推进。A首次审查的恢复需求丢失P2已修复并复审Approved；A1独立Approved后才合入B。B产品de3258b、审查记录5398194独立Approved（9文件40项），最终去重自动344 passed/1既有性能诊断skipped，typecheck/Vite通过。B详细退休表与结果保留在embedded同路径任务的阶段B实施及独立审查；本main节为最终汇总，不复制运行材料。
+
+### 配套提交和固定包
+
+- main产品：da851eab986034f14c6afde4134de783f9c58756、P2 e7604aaf9474eb476af0cd05466949c46eab8c88、A1 a275a2aa6f13b02c79abe5c3a7d3b307416e0bb2。
+- embedded：ea1ffb3/6e15716普通merge已审main；产品de3258b，clean固定源539819458079d4bbd476d38374397e27e7f66d6d。后续不追改该构建来源。
+- port4/native1，mainBase a275a2a，sourceHash `7a0cf500fc5550d40beffa117bc80d8d73a7c9677ab9d7c8530c215d490326f7`，bundleHash `7187443385ac5e2a960d01969d3cb0246b488ff2714a54d07d90f48a35c13f2f`，137资源，uncommitted=false。
+- ADA原绘图分支：C0 e37d0650129c0d7e94ebd11e2ef8ab6730676295，Cfull 0816d6b595b7c3e19d642ebe93ca4e7fa95d0585。完整记录在ADA `doc/ai/tasks/2026-11-16_002_nonblocking-autosave-stage-c.md`。
+
+### 要求—实现—证据
+
+| 要求 / 阶段门 | 已核对的实现和证据 |
+| --- | --- |
+| 阶段0明确mount退休边界 | §4/§10纳入mount.tsx，退休永久焦点busy；main真实控件拥有未提交状态，embedded pointer/key/composition末事件通知；B Frame/Shadow实际挂载回归 |
+| 操作完成后无新输入仍唤醒 | A生产恢复订阅+真实NumberField定时调度6项；Cfull真实owner末blur同时唤醒Primary及10分钟恢复需求，仅一项历史；未提交值反例不捕获 |
+| 后台输出不等同编辑保护 | Session独占输出槽与实际edit token分离；真实dispatcher/工具/Modal旧输出判断退休，手动输出和显式离开仍使用所属保护；B去重344项与C真实输入验证 |
+| native背景编码与旧回执 | 原codec/COW/checkpoint Worker复用；ownsOutput及generation/binding/session验证；旧A输出不确认新C，失败不忙重试，替换binding旧回执不污染新作品 |
+| 能力遗漏 | 仅补六个color/brush Action，显式策略禁用仍有效；实际iframe X生效，不开放全部能力 |
+| C完整矩阵前早期探针 | B clean构包→C0最小消费→实际app:// ADA正式iframe延迟保存、X/Space/Pen→CtrlEnter→native重开；C0独立Approved后才展开Cfull |
+| 保存点/历史/恢复 | C真实owner10/10含A→B→undo/redo→分叉C→旧回执→最终准确重开；原API32/32含CAS、恢复、D/r→S→Results及投递身份，contracts3、P2原29、IO/相关类型通过 |
+| 离开与失败 | 唯一requestClose建立截止点；Cfull迁移精确port4 Save/Cancel回答，真实dirty Return无模态并准确重开；失败释放原保护、作品仍在，显式重试；未提交字段保留而不无限flush |
+| 固定版本与最终产品一致性 | public/dist各137资源逐SHA通过；Cfull final-source-seal十项产品SHA匹配，main→embedded祖先关系成立；未手改vendor，未重标旧窗口证据 |
+| 有限实际4K验证 | Cfull a9372006同4K非均匀文档/同笔画，基线与真实HTTP成功回执延迟输入区间均无≥50ms longtask；snapshot最大1.1ms、tile batch最大1.9ms；实际DB/磁盘唯一native、revision4、hash准确、Provider0 |
+
+C0与Cfull均有独立只读Approved，无有依据P1/P2。Cfull独立复跑真实owner10/API32、137资源及实际DB/磁盘证据、产品seal；没有重新运行窗口。根代理最终再核对包资源、十项产品SHA与实际DB证据。4K样本heartbeat最大38.4/40.1ms、rAF最大18.1/18.4ms；1027ms是原HTTP成功回执交付等待，非磁盘延迟。实际worker HTTP/API2373.6ms含本机HTTP/校验/持久化，不能当吞吐改善。窗口来源分别为6da525c8+dirty（C0）及e37d0650+dirty（Cfull）；成功样本不追认最终clean提交或ASAR，前期失败探针保留且不计通过。
+
+### 保全、退出范围和未验收
+
+main既有KNOWN_ISSUES.md与未跟踪LAYER_PICKING_ASSESSMENT.md保留，SHA与阶段0一致，未混提交。选层反馈由Auto-Select关闭导致，本轮不加入选层修复、不改变默认值。embedded保持固定构包源clean；ADA在原绘图分支本地提交，不合ADA主线。未推送或发布；自有窗口进程已退出，用户正常ADA进程未操作。
+
+Owner人工体验、真实IME/手绘笔/压感、高DPR/更多硬件、更长重复性能样本、全工具/全格式和生产ASAR仍Pending/Inconclusive；旧opacity长scrub/R4保持原状态。当前完成的是本轮授权的分阶段本地实现、有限验证与独立技术审查，不代表整体产品Go或发布验收。正常用户已打开的旧窗口应重新启动加载当前构建。

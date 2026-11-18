@@ -182,11 +182,11 @@ export function Slider({ label, value, onChange, onCommit, min = 0, max = 100, s
   );
 }
 
-export function Select<T extends string>({ label, value, options, onChange, title, width }: { label?: string; value: T; options: { value: T; label: string; disabled?: boolean }[]; onChange: (v: T) => void; title?: string; width?: number }) {
+export function Select<T extends string>({ label, ariaLabel, value, options, onChange, title, width }: { label?: string; ariaLabel?: string; value: T; options: { value: T; label: string; disabled?: boolean }[]; onChange: (v: T) => void; title?: string; width?: number }) {
   return (
     <label className="field" title={title}>
       {label && <span className="lbl">{label}</span>}
-      <select className="sel" style={{ width }} value={value} onChange={(e) => onChange(e.target.value as T)} onKeyDown={(e) => e.stopPropagation()}>
+      <select className="sel" aria-label={ariaLabel} style={{ width }} value={value} onChange={(e) => onChange(e.target.value as T)} onKeyDown={(e) => e.stopPropagation()}>
         {options.map((o) => (
           <option key={o.value} value={o.value} disabled={o.disabled}>
             {o.label}

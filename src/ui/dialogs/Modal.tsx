@@ -13,13 +13,15 @@ const nonDocumentDialogs=new Set(['newDocument','customZoom','saveCompat','prefe
 const positions = new Map<string,{x:number;y:number}>();
 const owners: {token:object;clear:()=>void}[] = [];
 
-export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLeft, width, okDisabled, noFooter, positionKey }: {
+export function Modal({ title, children, onClose, onOk, okLabel = 'OK', cancelLabel = 'Cancel', closeLabel = 'Close', footerLeft, width, okDisabled, noFooter, positionKey }: {
   positionKey?: string;
   title: string;
   children: ReactNode;
   onClose: () => void;
   onOk?: () => void;
   okLabel?: string;
+  cancelLabel?: string;
+  closeLabel?: string;
   footerLeft?: ReactNode;
   width?: number;
   okDisabled?: boolean;
@@ -59,7 +61,7 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
   }, []);
   useEffect(() => {
     const el = ref.current;
-    const first = el?.querySelector<HTMLElement>('input, select, textarea, button.primary');
+    const first = el?.querySelector<HTMLElement>('[data-modal-autofocus]') ?? el?.querySelector<HTMLElement>('input, select, textarea, button.primary');
     first?.focus();
   }, []);
   const onKey = (e: React.KeyboardEvent) => {
@@ -117,13 +119,13 @@ export function Modal({ title, children, onClose, onOk, okLabel = 'OK', footerLe
           }}
         >
           {title}
-          <span className="x"><IconButton icon="close" title="Close" onClick={onClose} /></span>
+          <span className="x"><IconButton icon="close" title={closeLabel} onClick={onClose} /></span>
         </div>
         <div className="modal-body">{children}</div>
         {!noFooter && (
           <div className="modal-foot">
             <div className="left">{footerLeft}</div>
-            <button className="btn" onClick={onClose}>Cancel</button>
+            <button className="btn" onClick={onClose}>{cancelLabel}</button>
             {onOk && <button className="btn primary" disabled={okDisabled} onClick={onOk}>{okLabel}</button>}
           </div>
         )}
