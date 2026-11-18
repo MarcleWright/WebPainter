@@ -31,3 +31,20 @@ export interface EmbeddedEditor {
   requestClose(): Promise<boolean>;
   destroy(): void | Promise<void>;
 }
+
+/** Additive composition-page feature. Detached from the port v4 RPC. */
+export const NEW_DOCUMENT_PICKER_VERSION = 1 as const;
+export type NewDocumentPickerOptions = {
+  pickerId: string;
+  maxWidth: number;
+  maxHeight: number;
+  locale?: 'en' | 'zh-CN';
+};
+export type NewDocumentPickerResult = {
+  pickerId: string;
+  size: { width: number; height: number } | null;
+};
+export interface EmbeddedPageEditor extends EmbeddedEditor {
+  showNewDocumentPicker(options: NewDocumentPickerOptions, settle: (result: NewDocumentPickerResult) => void): void;
+  cancelNewDocumentPicker(pickerId: string): void;
+}

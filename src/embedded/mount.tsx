@@ -2,7 +2,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from '../ui/App';
 import { installSurface } from '../ui/surface';
 import { initializeEditor } from './editor';
-import type { EmbeddedEditor, HostPort } from './contract';
+import type { EmbeddedEditor, EmbeddedPageEditor, HostPort, NewDocumentPickerOptions, NewDocumentPickerResult } from './contract';
+import { NewDocumentSizeDialog } from '../ui/dialogs/NewDocumentSizeFields';
+import { NATIVE_LIMITS } from '../document/native';
 import css from '../ui/styles.css?inline';
 import dockCss from 'flexlayout-react/style/dark.css?inline';
 import { colorEngine } from '../color/cms';
@@ -10,20 +12,79 @@ import { fonts } from '../typography/fonts';
 import { ui } from '../app/store';
 import { useApp } from '../app/store';
 
-function EmbeddedApp() {
+type PickerRequest = {
+  options: NewDocumentPickerOptions;
+  finish: (size: NewDocumentPickerResult['size']) => void;
+};
+function EmbeddedApp({ picker }: { picker: PickerRequest | null }) {
   const sessions = useApp(s => s.sessions);
-  return sessions.length ? <App /> : <div className="empty">Open a work from the host.</div>;
+  if (sessions.length) return <App />;
+  if (!picker) return <div className="empty">Open a work from the host.</div>;
+  const { pickerId, maxWidth, maxHeight, locale } = picker.options;
+  return <NewDocumentSizeDialog key={pickerId} limits={{ width: maxWidth, height: maxHeight }}
+    locale={locale} confirm={picker.finish} cancel={() => picker.finish(null)} />;
 }
 
 /** Own React 19 root and styles; never renders WP elements with the host's React 18. */
 export function mountDirect(container: HTMLElement, host: HostPort): EmbeddedEditor {
-  return mountSurface(container, host, true);
+  return mountSurface(container, host, true).editor;
 }
 /** The iframe already owns its document/CSS/key scope. */
 export function mountFrame(container: HTMLElement, host: HostPort): EmbeddedEditor {
-  return mountSurface(container, host, false);
+  return mountSurface(container, host, false).editor;
 }
-function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean): EmbeddedEditor {
+export function mountPageSurface(container: HTMLElement, host: HostPort): EmbeddedPageEditor {
+  const { editor, render } = mountSurface(container, host, false);
+  let live = true;
+  let opening = false;
+  let picker: PickerRequest | null = null;
+  return {
+    ...editor,
+    async open(binding, token) {
+      if (picker || opening) throw new Error('Finish the current picker or open first');
+      opening = true;
+      try { await editor.open(binding, token); }
+      finally { opening = false; }
+    },
+    destroy() {
+      if (opening) throw new Error('Wait for the current open before destroy');
+      const result = editor.destroy();
+      live = false;
+      picker = null;
+      return result;
+    },
+    showNewDocumentPicker(options, settle) {
+      if (!live || host.nativeVersion !== 1 || picker || opening || editor.state().open) {
+        throw new Error('New document picker is unavailable');
+      }
+      const { pickerId, maxWidth, maxHeight, locale } = options;
+      const maxAxis = Math.sqrt(NATIVE_LIMITS.pixels);
+      if (typeof pickerId !== 'string' || !pickerId || pickerId.length > 128 || typeof settle !== 'function'
+          || ![maxWidth, maxHeight].every(size => Number.isSafeInteger(size) && size >= 1 && size <= maxAxis)
+          || locale !== undefined && locale !== 'en' && locale !== 'zh-CN') {
+        throw new Error('Invalid new document picker options');
+      }
+      const request: PickerRequest = {
+        options: { pickerId, maxWidth, maxHeight, locale },
+        finish(size) {
+          if (picker !== request) return;
+          picker = null;
+          render();
+          settle({ pickerId, size });
+        },
+      };
+      picker = request;
+      render(picker);
+    },
+    cancelNewDocumentPicker(pickerId) {
+      if (picker?.options.pickerId !== pickerId) return;
+      picker = null;
+      render();
+    },
+  };
+}
+
+function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean) {
   if (container.shadowRoot) throw new Error('Container already used');
 
   const surface = isolated ? container.attachShadow({ mode: 'open' }) : container;
@@ -52,11 +113,13 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean)
   const events:[string,EventListener][]=[['pointerdown',pointerDown as EventListener],['pointerup',pointerUp as EventListener],['pointercancel',pointerUp as EventListener],['keydown',keyDown as EventListener],['keyup',keyUp as EventListener],['compositionstart',composition],['compositionend',composition],['focusin',focus],['focusout',focus],['blur',blur]];
   for(const [type,fn]of events)window.addEventListener(type,fn,true);
   const api=initializeEditor(host,{busy(){return pointers.size>0||keys.size>0||composing;},subscribe(fn){listeners.add(fn);return()=>{listeners.delete(fn);};}});
-  const root = createRoot(rootNode); root.render(<EmbeddedApp />);
+  const root = createRoot(rootNode);
+  const render = (picker: PickerRequest | null = null) => root.render(<EmbeddedApp picker={picker} />);
+  render();
   let live = true;
   void fonts.load().catch(e => { if (live) host.error({ generation: api.state().generation, message: String(e) }); });
   void colorEngine.init().then(() => { if (live) ui.bump('viewRev'); });
-  return { ...api, destroy() {
+  const editor: EmbeddedEditor = { ...api, destroy() {
     if (api.state().open) throw new Error('Request close before destroy');
     live = false; for(const [type,fn]of events)window.removeEventListener(type,fn,true);listeners.clear();root.unmount();
     container.removeEventListener('keydown', stop); container.removeEventListener('keyup', stop);
@@ -64,4 +127,5 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean)
     const diagnostics = window as unknown as { __celenneViewport?: unknown; __celenneRenderer?: string; __celennePanelOpen?: unknown };
     delete diagnostics.__celenneViewport; delete diagnostics.__celenneRenderer; delete diagnostics.__celennePanelOpen;
   } };
+  return { editor, render };
 }

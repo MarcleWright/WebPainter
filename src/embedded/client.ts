@@ -4,12 +4,12 @@ export async function mountDirect(container: HTMLElement, host: HostPort): Promi
   return (await import('./mount')).mountDirect(container, host);
 }
 /** A composition page owns its document; the host may place its own UI beside WP. */
-export async function mountPage(container: HTMLElement, host: HostPort): Promise<EmbeddedEditor> {
-  return (await import('./mount')).mountFrame(container, host);
+export async function mountPage(container: HTMLElement, host: HostPort): Promise<EmbeddedPageEditor> {
+  return (await import('./mount')).mountPageSurface(container, host);
 }
-export type { EmbeddedEditor, HostPort, Output } from './contract';
-export { PORT_VERSION } from './contract';
-import type { EmbeddedEditor, HostPort, EditorState } from './contract';
+export type { EmbeddedEditor, EmbeddedPageEditor, HostPort, NewDocumentPickerOptions, NewDocumentPickerResult, Output } from './contract';
+export { NEW_DOCUMENT_PICKER_VERSION, PORT_VERSION } from './contract';
+import type { EmbeddedEditor, EmbeddedPageEditor, HostPort, EditorState } from './contract';
 import { connectRpc } from './rpc';
 
 export async function mountIframe(container: HTMLElement, host: HostPort, frameUrl: string): Promise<EmbeddedEditor> {
