@@ -363,9 +363,11 @@ export function flattenImage(): void {
       s.setActive(bg.id);
     }, { action: 'image.flatten' });
   if (hidden) {
+    const ownsEdit = () => editor.active === s && !s.closeRequested && s.canEdit();
     import('../platform/platform').then(async ({ platform }) => {
+      if (!ownsEdit()) return;
       const r = await platform().confirm('Discard hidden layers?', `${hidden} hidden layer(s) will be removed.`, ['OK', 'Cancel']);
-      if (r === 0) doFlatten();
+      if (r === 0 && ownsEdit()) doFlatten();
     });
   } else doFlatten();
 }
