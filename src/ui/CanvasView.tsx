@@ -180,6 +180,7 @@ export function CanvasView() {
       if (w > 1) r.resize(w, h, dpr);
       // GPU compositing runs on the WebGPU renderer's device.
       const gpu = r.kind === 'webgpu' && editor.prefs.performance.gpuCompositing ? (await import('../gpu/device')).currentGpu() : null;
+      if (disposed || current !== made || rendererRef.current !== r) return;
       setGpuCompositor(gpu?.compositor ?? null);
       dirty.current = true;
       (window as unknown as { __celenneRenderer?: string }).__celenneRenderer = r.kind === 'webgpu' && gpu ? 'webgpu (GPU compositing)' : r.kind;
@@ -615,16 +616,23 @@ export function CanvasView() {
 
   // The cursor position feeds the status bar and Info panel (which samples the composite), so it is
   // published at most once per frame and only when the pixel under the pointer changes.
-  const cursorPending = useRef<{ x: number; y: number; inside: boolean } | null>(null);
-  const publishCursor = (x: number, y: number, inside: boolean) => {
+  const cursorPending = useRef<{ owner: NonNullable<typeof editor.active>; cursor: { x: number; y: number; inside: boolean } } | null>(null);
+  const cursorFrame = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (cursorFrame.current !== null) cancelAnimationFrame(cursorFrame.current);
+    cursorFrame.current = null;
+    cursorPending.current = null;
+  }, []);
+  const publishCursor = (owner: NonNullable<typeof editor.active>, x: number, y: number, inside: boolean) => {
     const prev = useApp.getState().cursor;
     if (Math.floor(prev.x) === Math.floor(x) && Math.floor(prev.y) === Math.floor(y) && prev.inside === inside && !cursorPending.current) return;
-    const first = !cursorPending.current;
-    cursorPending.current = { x, y, inside };
-    if (first) requestAnimationFrame(() => {
-      const c = cursorPending.current;
+    cursorPending.current = { owner, cursor: { x, y, inside } };
+    if (cursorFrame.current !== null) return;
+    cursorFrame.current = requestAnimationFrame(() => {
+      cursorFrame.current = null;
+      const pending = cursorPending.current;
       cursorPending.current = null;
-      if (c) ui.set({ cursor: c });
+      if (pending && editor.active === pending.owner) ui.set({ cursor: pending.cursor });
     });
   };
 
@@ -654,7 +662,7 @@ export function CanvasView() {
       overlayDirty.current = true;
       return;
     }
-    publishCursor(p.x, p.y, p.x >= 0 && p.y >= 0 && p.x < s.doc.width && p.y < s.doc.height);
+    publishCursor(s, p.x, p.y, p.x >= 0 && p.y >= 0 && p.x < s.doc.width && p.y < s.doc.height);
     if (pointerDown.current && (pointerSession.current !== s || !s.canEdit() || !access('tool:'+editor.currentToolId).enabled)) return;
     const t = pointerDown.current ? activeTool.current : panHeld(s) ? editor.tool('hand') : currentTool();
     if (pointerDown.current && t?.move) {
