@@ -12,6 +12,34 @@ export const NATIVE_LIMITS = { bytes: 512 * 1024 * 1024, manifest: 4 * 1024 * 10
 export function createNative(width:number,height:number,name='Untitled'):Uint8Array {
   const doc=new CelenneDocument(name,{width,height,resolution:72,colorMode:'rgb',bitDepth:8});doc.insertLayer(createPixelLayer('Sketch',8));return encodeNative(doc);
 }
+
+/** Creates a native document from packed, straight-alpha sRGB bytes. */
+export function createNativeFromRgba8(
+  width: number,
+  height: number,
+  name: string,
+  pixels: Uint8Array,
+  source?: { id: string; hash: string },
+): Uint8Array {
+  v.integer(width, 1, 8192);
+  v.integer(height, 1, 8192);
+  v.check(width * height <= NATIVE_LIMITS.pixels, 'canvas pixel limit');
+  v.string(name, 1000);
+  v.check(pixels instanceof Uint8Array && pixels.byteLength === width * height * 4, 'invalid packed RGBA8 pixels');
+  if (source) {
+    v.string(source.id, 256);
+    v.check(source.id.length > 0 && typeof source.hash === 'string' && /^[a-f0-9]{64}$/.test(source.hash), 'invalid historical source descriptor');
+  }
+
+  const samples = new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength);
+  const layer = createPixelLayer('Image', 8, TiledRaster.fromPixels(width, height, 4, 8, samples));
+  // This document owns its pixels. Import history does not create a live source dependency.
+  if (source) layer.metadata.custom = { importedFrom: { id: source.id, hash: source.hash } };
+  const doc = new CelenneDocument(name, { width, height, resolution: 72, colorMode: 'rgb', bitDepth: 8 });
+  doc.insertLayer(layer);
+  return encodeNative(doc);
+}
+
 const MAGIC = new TextEncoder().encode('WPNAT001'), HEADER = 20;
 const crcTable = Uint32Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;return c>>>0;});
 export function nativeChecksum(bytes: Uint8Array): number { let c=0xffffffff;for(const b of bytes)c=crcTable[(c^b)&255]^(c>>>8);return(c^0xffffffff)>>>0; }
