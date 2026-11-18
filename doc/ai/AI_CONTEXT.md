@@ -1,5 +1,7 @@
 # 当前上下文
 
+2026-11-18 [ADA 画板任务](tasks/2026-11-18_01_drawing-board-workflow-and-open-performance.md)0–E 的本地实现与验证完成，画板分支代码 46659d1。WP 通用代码 0382d4c → embedded 9b6aaf5 → 固定包 01006e09…。WP 尺寸确认后由 ADA 创建、图片导入原尺寸首层、返回释放文档但同项目保留 WP、元数据不整读 native。正式环境、Owner 真笔／IME／高 DPR 与 Desktop 包验收待确认，详见[执行台账](tasks/2026-11-18_01_execution-loop.md)。
+
 2026-11-16 [无感自动保存任务](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md)0/A/A1/B/C0/Cfull本地实施及分阶段独立技术review均Approved。main输出槽与edit保护分离、稳定末事件唤醒；embedded port4六Action与原Worker背景checkpoint；ADA固定bundle71874433，产品0816d6b5，真实iframe早探针及有限4K/准确native重开完成。完整版本、矩阵及证据边界见§12。Owner/IME/笔/高DPR/更多性能/生产ASAR仍Pending，旧opacity/R4不变；两项独立选层dirty保留，未推送发布/合ADA主线。
 
 2026-11-16 [跨分支集成](tasks/2026-11-16_01_dev-main-embedded-ada-integration.md)阶段0/A/A1/B/C本地实施及独立技术review均Approved。main合Dev d1efe6e，通用输入5924a6d；embedded df3a496/d277f7c clean包e1798e81，ADA现有绘图分支dc1ea564已消费，保留新悬浮UI。dirty已保全独立提交，原操作身份/续期组合有自动证据；Owner人工/新实窗/ASAR/性能与设备Pending，opacity旧scrub及R4未修复。不推送/发布/合ADA主线。
