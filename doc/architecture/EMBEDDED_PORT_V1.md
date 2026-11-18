@@ -1,6 +1,14 @@
 # Embedded Port v1 — 03A 实施边界
 
-## Current source Port v4 / Native v1 (2026-11-16)
+## 组合页面 Port 4 / Native 1 扩展（2026-11-18）
+
+`mountPage` 在同一编辑器实例上提供组合页面附加能力 `NEW_DOCUMENT_PICKER_VERSION = 1`。空文档态用 `showNewDocumentPicker` 显示共用 WP 预设和受限像素尺寸，立即确认请求已受理，浏览器随后渲染窗口。用户确认或取消经一次性回调交给宿主。宿主负责其 Artifact 和投影。主动撤销 picker ID 后，旧回调失效。独立 WP 和旧 `mountFrame`／`mountDirect` 保持原入口。
+
+组合页面 `requestClose` 成功后释放旧文档、输入捕获、图层渲染资源和临时界面，React root、通道和实例资源可供同一宿主继续使用。失败保留原文档和交互。宿主有权销毁实例，并应按 document binding/generation 约束业务请求。
+
+固定 codec `createNativeFromRgba8` 接受受限整数尺寸与精确的 RGBA8 字节，创建首个像素图层，继续使用 Native 1。可选来源元数据用于描述导入历史。ADA 的部署包固定到 embedded `9b6aaf5`、bundle `01006e09…318f`，详见[画板任务](../../../WebPainter_main_native/doc/ai/tasks/2026-11-18_01_drawing-board-workflow-and-open-performance.md)。
+
+## Historical source Port v4 / Native v1 (2026-11-16)
 
 阶段B源码已实施，等待独立review，未构建或替换固定交付包。ADA现用port3包保持原来源；C必须成对升级port **4**，native **1** / policy **1** 不变。client握手、frame与RPC仅接受4，无busy或旧版本fallback。
 
