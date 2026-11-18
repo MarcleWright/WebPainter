@@ -28,6 +28,11 @@
 
 ## Recent
 
+### 2026-11-18 ADA 画板创建与 Web 打开提速
+
+- [画板任务](tasks/2026-11-18_01_drawing-board-workflow-and-open-performance.md) 0–E 已完成本地代码与证据交付。ADA 代码 46659d1、固定 WP 01006e09…。真实 Chrome 验证预设、源图导入、同 iframe 待命及跨项目退役，打开性能用同包对照。详见[执行台账](tasks/2026-11-18_01_execution-loop.md)。
+
+
 ### 2026-11-16 无感自动保存规划
 
 - [分阶段修复任务](tasks/2026-11-16_03_nonblocking-autosave-and-editing.md)：Owner已授权分阶段实施/独立review/本地提交；阶段0§10已补源码落点、旧判断退休表、控件稳定通知与离开时序，待独立review。本阶段仅文档，未实施源码/提交/构包。
