@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodeNative, decodeNative, nativeChecksum, inspectNative, createNative } from '../../src/document/native';
+import { encodeNative, decodeNative, nativeChecksum, inspectNative, createNative, createNativeFromRgba8 } from '../../src/document/native';
 import { newDoc, add, solidLayer } from '../helpers/build';
 import { createAdjustmentLayer, createGroupLayer, createMask, createShapeLayer, createTextLayer, createFillLayer } from '../../src/document/layerFactory';
 import { defaultAdjustment } from '../../src/adjustments/types';
@@ -39,6 +39,40 @@ it('round-trips stable identity, all declared fields, alpha/mask tiles, text/pat
   s.history.undo();expect(sameBytes(encodeNative(copy),saved)).toBe(true);s.history.redo();expect(decodeNative(encodeNative(copy)).doc.getLayer(p.id)?.opacity).toBe(.25);s.dispose();
 });
 it('creates a valid editable transparent work without a host',()=>{const d=decodeNative(createNative(80,60,'new')).doc;expect(d.allLayers().map(l=>l.kind)).toEqual(['pixel']);expect(d.width).toBe(80);expect(()=>createNative(0,60)).toThrow();});
+it('creates a first image layer with exact straight alpha, using only the supplied RGBA8 view', () => {
+  const width = 257, height = 2;
+  const backing = new Uint8Array(width * height * 4 + 7).fill(255);
+  const pixels = backing.subarray(3, backing.byteLength - 4);
+  for (let offset = 0; offset < pixels.length; offset++) pixels[offset] = (offset * 13 + 11) % 256;
+  pixels.set([23, 53, 91, 0], 0);
+  pixels.set([51, 101, 161, 128], (width - 1) * 4);
+  const originalPixels = new Uint8ClampedArray(pixels);
+  const source = { id: 'original-image', hash: 'c'.repeat(64) };
+
+  const bytes = createNativeFromRgba8(width, height, 'image work', pixels, source);
+  const { doc } = decodeNative(bytes);
+  const [layer] = doc.allLayers();
+
+  expect(doc.name).toBe('image work');
+  expect(doc.canvas).toMatchObject({ width, height, colorMode: 'rgb', bitDepth: 8 });
+  expect(doc.profile.builtin).toBe('srgb');
+  expect(layer.kind).toBe('pixel');
+  if (layer.kind !== 'pixel') throw Error('Expected a pixel layer');
+  expect(layer.raster.readPixels({ x: 0, y: 0, w: width, h: height })).toEqual(originalPixels);
+  expect(layer.metadata.custom).toEqual({ importedFrom: source });
+  expect(inspectNative(bytes)).toMatchObject({ width, height, layerCount: 1, sources: [] });
+  expect(sameBytes(encodeNative(doc), bytes)).toBe(true);
+});
+it('rejects invalid RGBA8 geometry, packed byte count and historical provenance', () => {
+  const pixel = new Uint8Array(4);
+  expect(() => createNativeFromRgba8(0, 1, 'image', pixel)).toThrow();
+  expect(() => createNativeFromRgba8(1.5, 1, 'image', pixel)).toThrow();
+  expect(() => createNativeFromRgba8(8193, 1, 'image', pixel)).toThrow();
+  expect(() => createNativeFromRgba8(1, 8193, 'image', pixel)).toThrow();
+  expect(() => createNativeFromRgba8(1, 1, 'image', new Uint8Array(3))).toThrow(/packed RGBA8/);
+  expect(() => createNativeFromRgba8(1, 1, 'image', new Uint8Array(5))).toThrow(/packed RGBA8/);
+  expect(() => createNativeFromRgba8(1, 1, 'image', pixel, { id: 'source', hash: 'bad' })).toThrow(/historical source/);
+});
 describe('hostile input never changes an existing document/session',()=>{
   const mutations:Record<string,(m:any)=>void>={
     version:m=>m.schemaVersion=99, dimensions:m=>m.canvas.width=1e9, depth:m=>m.canvas.bitDepth=16, unknown:m=>m.extra=true,
