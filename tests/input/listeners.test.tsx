@@ -552,3 +552,49 @@ it('background slot permits actual transform and Modal navigation while their pe
  const dialog=container.querySelector('[role=dialog]')!,zoom=session.view.zoom;await act(async()=>key(dialog,'+',{ctrlKey:true}));expect(session.view.zoom).toBeGreaterThan(zoom);
  await act(async()=>root.render(<App/>));expect(checkpointReady(session)).toBe(true);session.releaseOutput(slot);
 });
+
+
+it('Flatten suppresses the old hidden-layer prompt when its document changes before import settles', async () => {
+  const {session}=await mount();
+  const hidden=createPixelLayer('Hidden',8);
+  hidden.visible=false;
+  await act(async()=>{
+    session.doc.insertLayer(hidden);
+    void run('image.flatten');
+    inputSession();
+    await vi.dynamicImportSettled();
+  });
+  expect(io.confirm).not.toHaveBeenCalled();
+  expect(session.doc.getLayer(hidden.id)).toBe(hidden);
+});
+
+it.each(['switch','close','same owner'] as const)('Flatten settles its own document confirmation on %s',async change=>{
+  const {session}=await mount();
+  const hidden=createPixelLayer('Hidden',8);
+  hidden.visible=false;
+  const initial=session.history.current.id;
+  let allow!: (choice:number)=>void,begin!:()=>void;
+  const prompted=new Promise<void>(resolve=>{begin=resolve;});
+  io.confirm.mockImplementationOnce(()=>{
+    begin();
+    return new Promise<number>(resolve=>{allow=resolve;});
+  });
+  const closing=Promise.resolve(false);
+  await act(async()=>{
+    session.doc.insertLayer(hidden);
+    void run('image.flatten');
+    await prompted;
+    if(change==='switch')inputSession();
+    if(change==='close')session.setClose(closing);
+    allow(0);
+    await vi.dynamicImportSettled();
+  });
+  session.releaseClose(closing);
+  if(change==='same owner'){
+    expect(session.doc.getLayer(hidden.id)).toBeNull();
+    expect(session.history.current.id).not.toBe(initial);
+  }else{
+    expect(session.doc.getLayer(hidden.id)).toBe(hidden);
+    expect(session.history.current.id).toBe(initial);
+  }
+});
