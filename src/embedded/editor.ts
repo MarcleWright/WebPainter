@@ -20,8 +20,13 @@ import type { EmbeddedEditor, HostPort, Operation, Output } from './contract';
 
 let active = false;
 let nextGeneration = 0;
+type InputBoundary = {
+  busy(): boolean;
+  subscribe(listener: () => void): () => void;
+  releaseDocument?(): void;
+};
 /** One active editor per JS realm; no desktop boot, recovery, updater or plugin activation. */
-export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscribe(fn:()=>void):()=>void}={busy:()=>false,subscribe:()=>()=>{}}): EmbeddedEditor {
+export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()=>false,subscribe:()=>()=>{}}): EmbeddedEditor {
   if (active || editor.sessions.length) throw new Error('An editor is already active');
   const original=actionDefinitions();
   const policy=host.nativeVersion===1?nativePolicy(host.capabilityPolicy,new Set(original.filter(a=>!a.comingSoon).map(a=>a.id))):null;
@@ -51,6 +56,19 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
   };
   const stopBoundary=boundary.subscribe(notify);
   const stopToolState=useApp.subscribe((state,prev)=>{if(state.historyRev!==prev.historyRev||state.tool!==prev.tool)notify();});
+  const finishClose = (hadDocument: boolean) => {
+    offSession();
+    offSession = () => {};
+    binding = '';
+    generation = ++nextGeneration;
+    if (hadDocument && !editor.sessions.length && boundary.releaseDocument) {
+      editor.clipboard = null;
+      editor.releaseToolInstances();
+      ui.set({ dialogs: [], toasts: [], progress: [] });
+      boundary.releaseDocument();
+    }
+    notify();
+  };
   const unsupported = async (): Promise<never> => { throw new Error('Capability unavailable in embedded mode'); };
   const services: Platform = {
     kind: 'browser', canWriteInPlace: true, bridge: null,
@@ -207,30 +225,32 @@ export function initializeEditor(host: HostPort, boundary:{busy():boolean;subscr
     async requestClose() {
       assertLive(); if (opening) return false;
       const s=editor.active;
-      let ok:boolean;
-      if(host.nativeVersion!==1||!s)ok=await closeSession();
-      else {
-        const existing=s.joinClose();if(existing)return existing;
-        let protection:symbol|undefined;
-        const closing=Promise.resolve().then(async()=>{
-          const output=s.joinOutput();if(output&&!(await output))return false;
-          await awaitAuthority(s);
-          if(!prepareMoveOutput(s)||!ready())return false;
-          s.history.seal();protection=s.acquireEditProtection('embedded-close');
-          closeCapture={token:protection,entry:s.history.current.id,revision:s.doc.rev};
-          if(s.modified){
-            const answer=await host.confirm('Save changes before closing?',undefined,['Save','Cancel']);
-            if(answer!==0)return false;
-            await nativeCheckpoint(true,false,'close');
-          }
-          if(editor.session(s.id)!==s||s.history.current.id!==closeCapture.entry||s.doc.rev!==closeCapture.revision||s.modified)return false;
-          editor.removeSession(s.id);return true;
-        }).catch(e=>{host.error({generation,message:String(e)});return false;});
-        s.setClose(closing);
-        try{ok=await closing;}finally{closeCapture=null;s.releaseClose(closing);if(protection)s.releaseEditProtection(protection);}
+      if(host.nativeVersion!==1||!s){
+        const ok=await closeSession();
+        if(ok)finishClose(!!s);
+        return ok;
       }
-      if (ok) { offSession(); offSession = () => {}; binding = ''; generation = ++nextGeneration; notify(); }
-      return ok;
+      const existing=s.joinClose();if(existing)return existing;
+      let protection:symbol|undefined;
+      const closing=Promise.resolve().then(async()=>{
+        const output=s.joinOutput();if(output&&!(await output))return false;
+        await awaitAuthority(s);
+        if(!prepareMoveOutput(s)||!ready())return false;
+        s.history.seal();protection=s.acquireEditProtection('embedded-close');
+        closeCapture={token:protection,entry:s.history.current.id,revision:s.doc.rev};
+        if(s.modified){
+          const answer=await host.confirm('Save changes before closing?',undefined,['Save','Cancel']);
+          if(answer!==0)return false;
+          await nativeCheckpoint(true,false,'close');
+        }
+        if(editor.session(s.id)!==s||s.history.current.id!==closeCapture.entry||s.doc.rev!==closeCapture.revision||s.modified)return false;
+        editor.removeSession(s.id);
+        if(editor.session(s.id))return false;
+        finishClose(true);
+        return true;
+      }).catch(e=>{host.error({generation,message:String(e)});return false;});
+      s.setClose(closing);
+      try{return await closing;}finally{closeCapture=null;s.releaseClose(closing);if(protection)s.releaseEditProtection(protection);}
     },
     destroy() {
       assertLive();

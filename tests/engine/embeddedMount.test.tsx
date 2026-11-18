@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {act} from 'react';
+import {act,useEffect} from 'react';
 import {createPortal} from 'react-dom';
 import {afterEach,it,expect,vi} from 'vitest';
 import {mountDirect,mountFrame,mountPageSurface} from '../../src/embedded/mount';
@@ -7,8 +7,17 @@ import {NumberField,Slider} from '../../src/ui/controls';
 import {portalTarget,keyboardTarget} from '../../src/ui/surface';
 import {editor} from '../../src/app/editor';
 import {run} from '../../src/app/actions';
-import {createNative} from '../../src/document/native';
-vi.mock('../../src/ui/App',()=>({App:()=> <><NumberField label="Number" value={100} onChange={v=>void run('layer.setOpacity',{value:v/100})}/>{createPortal(<Slider label="Slider" value={100} onChange={v=>void run('layer.setOpacity',{value:v/100})}/>,portalTarget())}</>}));
+import {createNative,encodeNative} from '../../src/document/native';
+import {SetLayerPropsCommand} from '../../src/commands/layerCommands';
+import {ui} from '../../src/app/store';
+const mounts = vi.hoisted(() => ({ released: 0 }));
+vi.mock('../../src/embedded/checkpoint-output',()=>({
+  checkpointOutput: async (document: Parameters<typeof encodeNative>[0]) => ({ bytes: encodeNative(document) }),
+}));
+vi.mock('../../src/ui/App',()=>({App:()=>{
+  useEffect(()=>()=>{mounts.released++;},[]);
+  return <><NumberField label="Number" value={100} onChange={v=>void run('layer.setOpacity',{value:v/100})}/>{createPortal(<Slider label="Slider" value={100} onChange={v=>void run('layer.setOpacity',{value:v/100})}/>,portalTarget())}</>;
+}}));
 vi.mock('../../src/typography/fonts',()=>({fonts:{load:async()=>{},list:()=>[]}}));
 vi.mock('../../src/color/cms',()=>({colorEngine:{init:async()=>{}}}));
 let api:ReturnType<typeof mountFrame>|undefined,node:HTMLDivElement;
@@ -47,7 +56,13 @@ it('composition picker settles once and leaves formal document open to the host'
   expect(resource).not.toHaveBeenCalled();
 
   const create = node.querySelector<HTMLButtonElement>('button.primary')!;
-  await act(async () => { create.click(); create.click(); });
+  await act(async () => {
+    const input = node.querySelector('input')!;
+    input.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyR', key: 'r', bubbles: true }));
+    input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    create.click();
+    create.click();
+  });
   expect(settle).toHaveBeenCalledExactlyOnceWith({
     pickerId: options.pickerId, size: { width: 1920, height: 1080 },
   });
@@ -57,6 +72,7 @@ it('composition picker settles once and leaves formal document open to the host'
   await act(async () => page.open('binding', 'resource'));
   expect(page.state().open).toBe(true);
   expect(resource).toHaveBeenCalledTimes(1);
+  expect(page.state().checkpointReady).toBe(true);
   expect(() => page.showNewDocumentPicker(options, settle)).toThrow();
 });
 
@@ -116,4 +132,108 @@ it('composition picker and destroy cannot compete with an opening document', asy
   expect(() => page.destroy()).toThrow();
   await act(async () => { release(); await opening; });
   expect(page.state().open).toBe(true);
+});
+
+
+it('composition close retains live owners on failed save and releases them before warm reopen', async () => {
+  node = document.createElement('div');
+  document.body.append(node);
+  const resource = vi.fn(async (_op: unknown, token: string) => ({
+    name: 'drawing.wpnative', bytes: createNative(token === 'one' ? 24 : 32, 16),
+  }));
+  const saves: Array<{ started: Promise<void>; begin: () => void; result: Promise<void>; finish: (success: boolean) => void }> = [];
+  const makeSave = () => {
+    let begin!: () => void, finish!: (success: boolean) => void;
+    const started = new Promise<void>(resolve => { begin = resolve; });
+    const result = new Promise<void>((resolve, reject) => {
+      finish = success => { if (success) resolve(); else reject(Error('save unavailable')); };
+    });
+    const save = { started, begin, result, finish };
+    saves.push(save);
+    return save;
+  };
+  const first = makeSave(), second = makeSave();
+  const page = await act(async () => mountPageSurface(node, {
+    nativeVersion: 1, readResource: resource, async save() {
+      const save = saves.shift()!;
+      save.begin();
+      await save.result;
+    },
+    export: async () => {}, confirm: async () => 0, dirty() {}, error() {},
+  }));
+  api = page;
+  await act(async () => page.open('old-binding', 'one'));
+  const old = editor.active!, oldGeneration = page.state().generation;
+  const tool = editor.tool('move');
+  const dispose = vi.spyOn(old.engine, 'dispose');
+  const oldStyle = node.querySelector('style');
+  const oldClipboard = { kind: 'layers' as const, layers: [old.activeLayer()!], sourceDocId: old.doc.id };
+  editor.clipboard = oldClipboard;
+  const previousReleases = mounts.released;
+  const diagnostics = window as Window & { __celenneViewport?: object; __celenneRenderer?: string; __celennePanelOpen?: object };
+  diagnostics.__celenneViewport = {};
+  diagnostics.__celenneRenderer = 'first';
+  diagnostics.__celennePanelOpen = {};
+  await act(async () => {
+    const layer = old.activeLayer()!;
+    old.push(new SetLayerPropsCommand('Opacity', layer.id, { opacity: 1 }, { opacity: .5 }));
+    ui.openDialog('docInfo');
+    ui.progress('Old drawing');
+    ui.toast('info', 'Old drawing', undefined, 0);
+  });
+
+  const input = (start: boolean) => {
+    const boundary = node.querySelector('#wp-root')!;
+    const props = { bubbles: true, composed: true };
+    const pointer = new MouseEvent(start ? 'pointerdown' : 'pointerup', props);
+    Object.defineProperty(pointer, 'pointerId', { value: 13 });
+    boundary.dispatchEvent(pointer);
+    boundary.dispatchEvent(new KeyboardEvent(start ? 'keydown' : 'keyup', { ...props, code: 'KeyR', key: 'r' }));
+    boundary.dispatchEvent(new CompositionEvent(start ? 'compositionstart' : 'compositionend', props));
+  };
+  await act(async () => {
+    const close = page.requestClose();
+    await first.started;
+    input(true);
+    first.finish(false);
+    expect(await close).toBe(false);
+  });
+  expect(page.state()).toMatchObject({ open: true, generation: oldGeneration, dirty: true, checkpointReady: false });
+  expect(editor.active).toBe(old);
+  expect(dispose).not.toHaveBeenCalled();
+  expect(editor.clipboard).toBe(oldClipboard);
+  expect(editor.tool('move')).toBe(tool);
+  expect(mounts.released).toBe(previousReleases);
+  expect(ui.get()).toMatchObject({ dialogs: [{ type: 'docInfo' }], progress: [{ label: 'Old drawing' }], toasts: [{ message: 'Old drawing' }] });
+  expect(diagnostics.__celenneViewport).toBeDefined();
+
+  await act(async () => { input(false); });
+  expect(page.state().checkpointReady).toBe(true);
+  await act(async () => {
+    const close = page.requestClose(), duplicate = page.requestClose();
+    await second.started;
+    input(true);  // No release events follow this final closing cutoff.
+    second.finish(true);
+    expect(await duplicate).toBe(true);
+    expect(await close).toBe(true);
+    expect(page.state().open).toBe(false);
+    expect(mounts.released).toBe(previousReleases + 1);
+    expect(node.querySelector('input')).toBeNull();
+    expect(node.querySelector('style')).toBe(oldStyle);
+    expect(editor.clipboard).toBeNull();
+    expect(ui.get()).toMatchObject({ dialogs: [], progress: [], toasts: [] });
+    expect(diagnostics.__celenneViewport).toBeUndefined();
+    expect(diagnostics.__celenneRenderer).toBeUndefined();
+    expect(diagnostics.__celennePanelOpen).toBeUndefined();
+    await page.open('new-binding', 'two');
+  });
+  expect(dispose).toHaveBeenCalledTimes(1);
+  expect(editor.active).not.toBe(old);
+  expect(editor.tool('move')).not.toBe(tool);
+  expect(editor.active!.doc.width).toBe(32);
+  expect(page.state()).toMatchObject({ open: true, dirty: false, checkpointReady: true, hasUncommittedChanges: false });
+  expect(page.state().generation).not.toBe(oldGeneration);
+  expect(resource.mock.calls.map(([op, token]) => [(op as { binding: string }).binding, token])).toEqual([
+    ['old-binding', 'one'], ['new-binding', 'two'],
+  ]);
 });
