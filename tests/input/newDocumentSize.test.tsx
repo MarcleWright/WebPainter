@@ -41,12 +41,32 @@ it('offers WP screen presets and confirms an exact hosted size without opening a
   const height = dialog.querySelector<HTMLInputElement>('input[aria-label="高度"]')!;
   expect(document.activeElement).toBe(width);
   expect([width.value, height.value]).toEqual(['1920', '1080']);
-  const preset = dialog.querySelector<HTMLSelectElement>('select[aria-label="预设"]')!;
-  expect([...preset.options].map(option => option.text)).toContain('竖版 (1080 × 1920)');
-  expect([...preset.options].map(option => option.text).join(' ')).not.toMatch(/A4|16K|300 ppi/);
-  await act(async () => selectValue(preset, [...preset.options].find(option => option.text.includes('竖版'))!.value));
-  expect([width.value, height.value]).toEqual(['1080', '1920']);
+  const group = dialog.querySelector('[role="group"][aria-label="尺寸预设"]')!;
+  const presets = [...group.querySelectorAll<HTMLButtonElement>('button')];
+  const [landscape, , , , square, portrait] = presets;
+  const selected = () => presets.filter(button => button.getAttribute('aria-pressed') === 'true');
+  expect(dialog.querySelector('select')).toBeNull();
+  expect(presets.map(button => button.textContent)).toEqual([
+    '1920 × 1080', '2560 × 1440', '3840 × 2160', '7680 × 4320', '1080 × 1080', '1080 × 1920',
+  ]);
+  expect(landscape.querySelector('span[style]')?.getAttribute('style')).toContain('aspect-ratio: 1920 / 1080');
+  expect(square.querySelector('span[style]')?.getAttribute('style')).toContain('aspect-ratio: 1080 / 1080');
+  expect(portrait.querySelector('span[style]')?.getAttribute('style')).toContain('aspect-ratio: 1080 / 1920');
+  expect(selected()).toEqual([landscape]);
 
+  await act(async () => portrait.click());
+  expect([width.value, height.value]).toEqual(['1080', '1920']);
+  expect(selected()).toEqual([portrait]);
+  expect(confirm).not.toHaveBeenCalled();
+
+  await act(async () => inputValue(width, '1023'));
+  expect(selected()).toEqual([]);
+  await act(async () => inputValue(width, '1080'));
+  expect(selected()).toEqual([]);
+  await act(async () => portrait.click());
+  expect(selected()).toEqual([portrait]);
+  await act(async () => inputValue(height, '1080'));
+  expect(selected()).toEqual([]);
   await act(async () => {
     inputValue(width, '1023');
     inputValue(height, '2050');
@@ -68,9 +88,9 @@ it('keeps invalid dimensions visible and cancels the hosted dialog with Escape',
     confirm={confirm} cancel={cancel} />));
   const input = container.querySelector<HTMLInputElement>('input')!;
   const create = container.querySelector<HTMLButtonElement>('button.primary')!;
-  const options = container.querySelector('select')!.textContent!;
-  expect(options).toContain('4K UHD');
-  expect(options).not.toContain('8K UHD');
+  const options = container.querySelector('[role="group"]')!.textContent!;
+  expect(options).toContain('3840 × 2160');
+  expect(options).not.toContain('7680 × 4320');
 
   for (const invalid of ['', '20.5', '0', '4097']) {
     await act(async () => inputValue(input, invalid));
