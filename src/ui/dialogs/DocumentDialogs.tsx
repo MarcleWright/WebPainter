@@ -3,6 +3,7 @@ import {access} from '../../app/access';
 import { workingCmykProfile } from '../../app/colorSettings';
 import { useState } from 'react';
 import { Modal } from './Modal';
+import { DEFAULT_NEW_DOCUMENT_PRESET, NewDocumentSizeFields } from './NewDocumentSizeFields';
 import { Check, NumberField, Select, BlendSelect, ColorSwatch } from '../controls';
 import { newDocument, untitledName } from '../../app/fileOps';
 import { editor } from '../../app/editor';
@@ -23,24 +24,11 @@ type Unit = 'px' | 'in' | 'cm' | 'mm';
 const toPx = (v: number, u: Unit, res: number) => (u === 'px' ? v : u === 'in' ? v * res : u === 'cm' ? (v * res) / 2.54 : (v * res) / 25.4);
 const fromPx = (v: number, u: Unit, res: number) => (u === 'px' ? v : u === 'in' ? v / res : u === 'cm' ? (v / res) * 2.54 : (v / res) * 25.4);
 
-const PRESETS = [
-  { name: 'Default (1920 × 1080)', w: 1920, h: 1080, res: 72 },
-  { name: 'Web Large (2560 × 1440)', w: 2560, h: 1440, res: 72 },
-  { name: '4K UHD (3840 × 2160)', w: 3840, h: 2160, res: 72 },
-  { name: '8K UHD (7680 × 4320)', w: 7680, h: 4320, res: 72 },
-  { name: 'Square Social (1080 × 1080)', w: 1080, h: 1080, res: 72 },
-  { name: 'Story (1080 × 1920)', w: 1080, h: 1920, res: 72 },
-  { name: 'A4 @ 300 ppi', w: 2480, h: 3508, res: 300 },
-  { name: 'US Letter @ 300 ppi', w: 2550, h: 3300, res: 300 },
-  { name: 'Postcard 6×4 in @ 300', w: 1800, h: 1200, res: 300 },
-  { name: 'Large Print 16K (16384 × 16384)', w: 16384, h: 16384, res: 300 },
-];
-
 export function NewDocumentDialog({ close }: { close: () => void }) {
   const [name, setName] = useState(untitledName());
-  const [w, setW] = useState(1920);
-  const [h, setH] = useState(1080);
-  const [res, setRes] = useState(72);
+  const [w, setW] = useState(DEFAULT_NEW_DOCUMENT_PRESET.w);
+  const [h, setH] = useState(DEFAULT_NEW_DOCUMENT_PRESET.h);
+  const [res, setRes] = useState(DEFAULT_NEW_DOCUMENT_PRESET.res);
   const [unit, setUnit] = useState<Unit>('px');
   const [mode, setMode] = useState<'rgb' | 'grayscale' | 'cmyk' | 'lab'>('rgb');
   const [depth, setDepth] = useState<BitDepth>(8);
@@ -57,12 +45,9 @@ export function NewDocumentDialog({ close }: { close: () => void }) {
     <Modal title="New Document" onClose={close} onOk={ok} okLabel="Create" width={560} footerLeft={<span className="faint">Image size: {(bytes / 1048576).toFixed(1)} MB</span>}>
       <div className="grid2">
         <span className="lbl">Name</span><input className="txt" value={name} onChange={(e) => setName(e.target.value)} />
-        <span className="lbl">Preset</span>
-        <Select value="" onChange={(v) => { const p = PRESETS[Number(v)]; if (p) { setW(p.w); setH(p.h); setRes(p.res); } }} options={[{ value: '' as string, label: 'Choose a preset…' }, ...PRESETS.map((p, i) => ({ value: String(i), label: p.name }))]} />
-        <span className="lbl">Width</span>
-        <div className="row"><NumberField value={fromPx(w, unit, res)} onChange={(v) => setW(Math.max(1, Math.min(300000, toPx(v, unit, res))))} step={unit === 'px' ? 1 : 0.01} width={90} /><Select value={unit} onChange={setUnit} options={[{ value: 'px', label: 'Pixels' }, { value: 'in', label: 'Inches' }, { value: 'cm', label: 'Centimeters' }, { value: 'mm', label: 'Millimeters' }]} /></div>
-        <span className="lbl">Height</span>
-        <div className="row"><NumberField value={fromPx(h, unit, res)} onChange={(v) => setH(Math.max(1, Math.min(300000, toPx(v, unit, res))))} step={unit === 'px' ? 1 : 0.01} width={90} /><button className="btn small" onClick={() => { setW(h); setH(w); }}>⇄ Swap</button></div>
+        <NewDocumentSizeFields onPreset={p => { setW(p.w); setH(p.h); setRes(p.res); }}
+          widthField={<div className="row"><NumberField value={fromPx(w, unit, res)} onChange={(v) => setW(Math.max(1, Math.min(300000, toPx(v, unit, res))))} step={unit === 'px' ? 1 : 0.01} width={90} /><Select value={unit} onChange={setUnit} options={[{ value: 'px', label: 'Pixels' }, { value: 'in', label: 'Inches' }, { value: 'cm', label: 'Centimeters' }, { value: 'mm', label: 'Millimeters' }]} /></div>}
+          heightField={<div className="row"><NumberField value={fromPx(h, unit, res)} onChange={(v) => setH(Math.max(1, Math.min(300000, toPx(v, unit, res))))} step={unit === 'px' ? 1 : 0.01} width={90} /><button className="btn small" onClick={() => { setW(h); setH(w); }}>⇄ Swap</button></div>} />
         <span className="lbl">Resolution</span><NumberField value={res} onChange={(v) => setRes(Math.max(1, v))} unit="ppi" width={90} />
         <span className="lbl">Color Mode</span>
         <div className="row">
