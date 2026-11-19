@@ -7,6 +7,7 @@
 - 阶段 0 真实 Web 基线与独立核查完成。阶段 A 通过独立审查与正式入口的隔离 Chrome 验证，已提交画板分支。A–D 已在画板分支 a4eaaa2 完成集成、独立代码审查与自动化。E 的独立 WP 复测已采集，最终画板分支真实 Web 复测与对照核对已经完成。最终代码 46659d1，ADA 归档 4f94ead5。
 - ADA 独立工作树 `auto_design_Agent_drawing_board` 在 `18bf864f` 完成 detached 基线。随后保存 `f71d80e5` 到 `codex/archive-drawing-plan-f71d80e5`，用原 SHA 检查对齐 `codex/isolate-drawing-interface-20261104` 至 `18bf864f` 并在独立树检出。原 dev 保持原引用与启动器改动。C 独立 `auto_design_Agent_drawing_standby`／`codex/drawing-board-standby`，D 独立 `auto_design_Agent_drawing_open`／`codex/drawing-board-open-metadata`，均以 A 完成点 `56894feb` 为基线，先验证再合回画板分支。
 - WP `main @ b7bcedf` 的选层文档和现有任务文档改动保留。embedded `5398194` 的固定包 `71874433…` 供基线使用。ADA dev 启动器及 Hybrid Session 恢复改动留在原工作树。
+- 2026-11-18 Owner 追加授权[缩略图 F1/F2](2026-11-18_01F_drawing-board-thumbnail-refresh.md)。F1 本地提交 `08a709c1`，已回到原 `auto_design_Agent_drawing_board`。F2 排除通用 mip，采用通过独立审查的受限单图层直出。WP main `596d132`、embedded `50b0846`、ADA 本地消费固定包 `8f03c328…`，实际 Chrome 返回及 Chrome/Electron Worker 对照通过。F1、F2 完成本地验证，生产未验。WP main 原有两项选层文档改动保留。
 
 ## 阶段索引
 
