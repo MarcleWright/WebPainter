@@ -11,6 +11,7 @@ import { snapshotDocument, cloneLayer } from '../document/clone';
 import { decodeNative, isNative } from '../document/native';
 import { CreateLayerCommand } from '../commands/layerCommands';
 import { adoptLayers, spaceOfDoc } from '../color/convertDocument';
+import { fitRasterToCanvas } from '../image-engine/fitRaster';
 import { findImporter, exporters } from '../formats/registry';
 import { registerTools } from '../tools/registry';
 import { keymap } from '../app/shortcuts';
@@ -208,6 +209,15 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
         if(layers.length!==1||layers[0].kind!=='pixel'||result.doc.width*result.doc.height>8192*8192)throw Error('Unsupported image resource');
         if(!valid(op)||editor.session(s.id)!==s)throw Error('Stale resource');
         const layer=cloneLayer(layers[0],true);adoptLayers(s.doc,spaceOfDoc(result.doc),[layer]);
+        if(resource.placement==='fitCanvas'){
+          if(s.doc.canvas.colorMode!=='rgb'||s.doc.canvas.bitDepth!==8)throw Error('Fitted images require an RGB8 canvas');
+          const fitted=fitRasterToCanvas(layer.raster,{
+            x:-layer.x,y:-layer.y,w:result.doc.width,h:result.doc.height,
+          },s.doc.width,s.doc.height);
+          layer.raster=fitted.raster;
+          layer.x=fitted.x;
+          layer.y=fitted.y;
+        }
         if(resource.source)layer.metadata.custom={source:{...resource.source}};
         // The owner-held reservation protects the async read; release only for this command.
         s.releaseEditProtection(protection);s.push(new CreateLayerCommand('Add image resource',layer,null,s.doc.root.children.length));s.setActive(layer.id);

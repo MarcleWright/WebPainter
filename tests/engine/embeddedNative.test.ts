@@ -5,7 +5,7 @@ import { editor } from '../../src/app/editor';
 import { createNative,decodeNative } from '../../src/document/native';
 import { SetLayerPropsCommand } from '../../src/commands/layerCommands';
 import { exporters } from '../../src/formats/registry';
-import { decodePNG } from '../../src/formats/codecs';
+import { decodePNG, encodePNG } from '../../src/formats/codecs';
 import { flattenToPixels } from '../../src/rendering/flatten';
 import {nativePolicy} from '../../src/embedded/capabilities';
 import {access} from '../../src/app/access';
@@ -51,6 +51,23 @@ it('explicit image resource uses core command history, immutable provenance and 
   await api!.addResource('resource-a');expect(s.doc.layerCount()).toBe(2);const added=s.doc.allLayers()[1];expect(added.metadata.custom?.source).toEqual({id:'image-a',hash:'a'.repeat(64)});
   const output=await api!.captureNative();expect(decodeNative(output.bytes).doc.getLayer(added.id)).toBeTruthy();
   s.history.undo();expect(s.doc.layerCount()).toBe(1);s.history.redo();expect(s.doc.getLayer(added.id)).toBeTruthy();
+});
+it('fits an opted-in image in one native RGB8 layer and leaves the ordinary resource at its original offset',async()=>{
+ const h=host();
+ vi.mocked(h.readResource).mockResolvedValue({name:'work.wpnative',bytes:createNative(4,5)});
+ const s=await open(h),source={id:'result-a',hash:'b'.repeat(64)};
+ vi.mocked(h.readResource).mockResolvedValue({name:'reference.png',bytes:encodePNG(4,2,new Uint8ClampedArray(4*2*4).fill(127),8,{})});
+ await api!.addResource('ordinary');
+ expect(s.activeLayer()).toMatchObject({kind:'pixel',x:0,y:0});
+ const image=encodePNG(4,2,new Uint16Array(4*2*4).fill(32768),16,{});
+ vi.mocked(h.readResource).mockResolvedValue({name:'result.png',bytes:image,source,placement:'fitCanvas'});
+ await api!.addResource('fitted');
+ const layer=s.activeLayer()!;
+ expect(layer).toMatchObject({kind:'pixel',x:0,y:1,raster:{depth:8},metadata:{custom:{source}}});
+ const native=await api!.captureNative();
+ expect(decodeNative(native.bytes).doc.getLayer(layer.id)).toMatchObject({x:0,y:1,raster:{depth:8}});
+ s.history.undo();expect(s.doc.getLayer(layer.id)).toBeFalsy();
+ s.history.redo();expect(s.doc.getLayer(layer.id)).toBeTruthy();
 });
 it('unsupported native content fails without clean/save; PSD export is separate and leaves dirty',async()=>{
   const h=host();const s=await open(h);edit();s.doc.allLayers()[0].effects={} as never;

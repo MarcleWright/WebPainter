@@ -2,7 +2,7 @@ import type {CapabilityPolicy} from './capabilities';
 /** Portable port v4. No React, Window, Electron or ADA business identities. */
 export const PORT_VERSION = 4 as const;
 export type Operation = { generation: number; operationId: string; binding: string };
-export type Resource = { name: string; bytes: Uint8Array; source?: {id:string;hash:string}; recovered?:boolean };
+export type Resource = { name: string; bytes: Uint8Array; source?: {id:string;hash:string}; recovered?:boolean; placement?: 'fitCanvas' };
 export type Output = Operation & { format: 'psd-test' | 'png' | 'psd' | 'wpnative'; bytes: Uint8Array; transfer?:true; checkpoint?: string; preview?: Uint8Array };
 export type EditorState = { outputBusy:boolean;checkpointReady:boolean;hasUncommittedChanges:boolean;change?:number;generation: number; open: boolean; dirty: boolean; checkpoint?: string | null };
 export interface HostPort {
