@@ -242,7 +242,7 @@ export function ShortcutsDialog({ close }: { close: () => void }) {
       const chord = normalizeChord(chordFromEvent(e));
       const other = keymap.conflicts(chord, recording).join(", " );
       if (other) setPending({ id: recording, chord, conflictId: other });
-      else keymap.set(recording, [...keymap.bindingsFor(recording).filter((c) => normalizeChord(c) !== chord), chord]);
+      else keymap.reassign(recording, chord);
       setRecording(null);
       } catch (error) { ui.toast('error', 'Could not assign shortcut', (error as Error).message); }
     };
@@ -280,7 +280,7 @@ export function ShortcutsDialog({ close }: { close: () => void }) {
                       <td>{r.label.replace('…', '')}</td>
                       <td style={{ width: 260 }}>
                         {b.map((c) => (
-                          <span key={c} className="kbd">{c}<button className="icon-x" title="Remove shortcut" aria-label={`Remove ${c}`} onClick={() => keymap.set(r.id, b.filter((x) => x !== c))}>×</button></span>
+                          <span key={c} className="kbd">{c}<button className="icon-x" title="Remove shortcut" aria-label={`Remove ${c}`} onClick={() => keymap.remove(r.id, c)}>×</button></span>
                         ))}
                         {recording === r.id ? <span className="tag">Press keys… (Esc to cancel)</span> : <button className="btn small" onClick={() => setRecording(r.id)}>+</button>}
                       </td>

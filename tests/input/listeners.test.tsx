@@ -598,3 +598,54 @@ it.each(['switch','close','same owner'] as const)('Flatten settles its own docum
     expect(session.history.current.id).toBe(initial);
   }
 });
+
+it('Web bindings invoke the existing transform and layer actions through the mounted editor', async () => {
+  const restore = keymap.installHostProfile('web');
+  try {
+    const {session} = await mount(<textarea aria-label="Prompt"/>);
+    const layer = session.activeLayer();
+    if (layer?.kind !== 'pixel') throw Error('Expected the fixture pixel layer');
+    layer.raster.writeFloat({x:0,y:0,w:2,h:2},new Float32Array(16).fill(1));
+
+    const prompt = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')!;
+    await act(async () => {
+      prompt.focus();
+      expect(key(prompt, 'f', {ctrlKey:true,shiftKey:true}).defaultPrevented).toBe(false);
+      prompt.blur();
+      expect(key(window, 't', {ctrlKey:true}).defaultPrevented).toBe(false);
+    });
+    expect(session.mode.kind).toBe('none');
+
+    const restoreAccess = installAccessPolicy(id => ({visible:true,enabled:id!=='action:edit.freeTransform'}));
+    try {
+      await act(async () => key(window, 'f', {ctrlKey:true,shiftKey:true}));
+      expect(session.mode.kind).toBe('none');
+    } finally {
+      restoreAccess();
+    }
+
+    await act(async () => key(window, 'f', {ctrlKey:true,shiftKey:true}));
+    expect(session.mode.kind).toBe('transform');
+    await act(async () => key(window, 'Escape'));
+    expect(session.mode.kind).toBe('none');
+
+    await act(async () => {
+      const menu = [...container.querySelectorAll<HTMLElement>('.menu-title')].find(item => item.textContent === 'Edit')!;
+      menu.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));
+    });
+    const transform = [...document.querySelectorAll<HTMLElement>('[role=menuitem]')].find(item => item.textContent?.includes('Ctrl+Shift+F'))!;
+    await act(async () => transform.click());
+    expect(session.mode.kind).toBe('transform');
+    await act(async () => key(window, 'Escape'));
+
+    const count = session.doc.layerCount();
+    await act(async () => {
+      key(window, 'n', {ctrlKey:true,shiftKey:true});
+      key(window, 'F2', {shiftKey:true});
+      key(window, 'F2', {shiftKey:true,repeat:true});
+    });
+    expect(session.doc.layerCount()).toBe(count + 1);
+  } finally {
+    await act(async () => restore());
+  }
+});
