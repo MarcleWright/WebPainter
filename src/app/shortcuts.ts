@@ -7,6 +7,7 @@ import {loadJSON, saveJSON} from './settings';
 const KEY = 'celenne.shortcuts.v1';
 const COPY_INIT = 'celenne.shortcuts.copyContext.v1';
 export type Overrides = Record<string, string[]>;
+export type HostShortcutProfile = 'desktop' | 'web';
 export type BindingKind = 'command' | 'exactTool' | 'toolGroup' | 'cycle' | 'held' | 'digits';
 export interface Binding {chord: string; ids: string[]; kind: BindingKind; source: 'user' | 'default' | 'derived'; index: number}
 export const INPUT_BINDINGS = [
@@ -15,6 +16,17 @@ export const INPUT_BINDINGS = [
   {id: 'input.flow', label: 'Flow / fill opacity digits', keys: Array.from({length: 10}, (_, i) => `Shift+${i}`), kind: 'digits' as const},
 ];
 export const RESERVED_CHORDS = ['Alt+F4', 'Alt+Tab', 'Ctrl+Alt+Delete', 'Ctrl+Escape', 'Ctrl+Shift+Escape'];
+const WEB_HOST_DEFAULTS = new Map([
+  ['edit.freeTransform', ['Ctrl+Shift+F']],
+  ['layer.new', ['Shift+F2']],
+]);
+// Chromium reserves these browser window and tab commands on Windows.
+// Other browser defaults remain eligible for the page's input dispatcher.
+const WEB_RESERVED_CHORDS = new Set([
+  'Ctrl+T', 'Ctrl+Shift+T', 'Ctrl+N', 'Ctrl+Shift+N',
+  'Ctrl+W', 'Ctrl+Shift+W', 'Ctrl+F4',
+  'Ctrl+Tab', 'Ctrl+Shift+Tab', 'Ctrl+PageUp', 'Ctrl+PageDown',
+]);
 const names = ['Space', 'Tab', 'Enter', 'Escape', 'Backspace', 'Delete', 'Insert', 'Home', 'End', 'PageUp', 'PageDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
 export function chordFromEvent(e: KeyboardEvent): string {
   if (e.ctrlKey && e.metaKey) return '';
@@ -37,6 +49,7 @@ export function normalizeChord(c: string): string {
 }
 
 export class Keymap {
+  private hostProfile: HostShortcutProfile = 'desktop';
   private overrides: Overrides;
   private map = new Map<string, Binding>();
   private listeners = new Set<() => void>();
@@ -56,9 +69,29 @@ export class Keymap {
     return old || occupied ? {...value, 'layer.copyContext': []} : value;
   }
   on(l: () => void): () => void {this.listeners.add(l); return () => {this.listeners.delete(l);};}
-  private definitions() {
+  /** The single active editor in this realm installs the profile and releases it on unmount. */
+  installHostProfile(profile: HostShortcutProfile): () => void {
+    const previous = this.hostProfile;
+    if (profile === previous) return () => {};
+    const apply = (next: HostShortcutProfile) => {
+      if (this.hostProfile === next) return;
+      const map = this.resolve(this.overrides, next);
+      this.hostProfile = next;
+      this.map = map;
+      for (const listener of this.listeners) listener();
+    };
+    apply(profile);
+    let installed = true;
+    return () => {
+      if (!installed) return;
+      installed = false;
+      apply(previous);
+    };
+  }
+  private definitions(profile = this.hostProfile) {
+    const defaults = profile === 'web' ? WEB_HOST_DEFAULTS : undefined;
     return [
-      ...allActions().map(a => ({id: a.id, keys: a.shortcuts ?? (a.shortcut ? [a.shortcut] : []), kind: 'command' as BindingKind})),
+      ...allActions().map(a => ({id: a.id, keys: defaults?.get(a.id) ?? a.shortcuts ?? (a.shortcut ? [a.shortcut] : []), kind: 'command' as BindingKind})),
       ...TOOLS.map(t => ({id: `tool:${t.id}`, keys: t.shortcut ? [t.shortcut] : [], kind: 'toolGroup' as BindingKind})),
       ...INPUT_BINDINGS,
     ];
@@ -75,12 +108,13 @@ export class Keymap {
     }
     return out;
   }
-  private resolve(overrides: Overrides): Map<string, Binding> {
+  private resolve(overrides: Overrides, profile = this.hostProfile): Map<string, Binding> {
     const candidates = new Map<string, Binding[]>();
-    for (const d of this.definitions()) {
+    for (const d of this.definitions(profile)) {
       const user = Object.hasOwn(overrides, d.id);
       (user ? overrides[d.id] : d.keys).forEach((key, index) => {
         const chord = normalizeChord(key);
+        if (profile === 'web' && WEB_RESERVED_CHORDS.has(chord)) return;
         const b: Binding = {chord, ids: [d.id], kind: d.kind === 'toolGroup' && user ? 'exactTool' : d.kind, source: user ? 'user' : 'default', index};
         candidates.set(chord, [...candidates.get(chord) ?? [], b]);
       });
@@ -103,11 +137,20 @@ export class Keymap {
   }
   binding(chord: string): Binding | undefined {try {return this.map.get(normalizeChord(chord));} catch {return undefined;}}
   lookup(chord: string): string | undefined {return this.binding(chord)?.ids[0];}
-  bindingsFor(id: string): string[] {return [...this.map.values()].filter(b => b.kind !== 'cycle' && b.ids.includes(id)).sort((a,b) => a.index-b.index).map(b => b.chord);}
+  private chordsFor(id: string, map: ReadonlyMap<string, Binding>): string[] {
+    return [...map.values()].filter(b => b.kind !== 'cycle' && b.ids.includes(id)).sort((a,b) => a.index-b.index).map(b => b.chord);
+  }
+  bindingsFor(id: string): string[] {return this.chordsFor(id, this.map);}
+  private sharedBindingMap() {
+    // Persist shared preferences from Desktop defaults, never from temporary Web defaults.
+    return this.hostProfile === 'web' ? this.resolve(this.overrides, 'desktop') : this.map;
+  }
   conflicts(chord: string, exceptId = ''): string[] {return this.binding(chord)?.ids.filter(id => id !== exceptId) ?? [];}
   conflict(chord: string, exceptId: string): string | undefined {return this.conflicts(chord, exceptId)[0];}
   private commit(value: unknown) {
     const next = this.validate(value), map = this.resolve(next);
+    // Browser-reserved chords remain stored for Desktop even when inactive in the Web table.
+    if (this.hostProfile === 'web') this.resolve(next, 'desktop');
     // A failed persistence write must leave the live map and notifications untouched.
     if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(next));
     this.overrides = next; this.map = map;
@@ -115,16 +158,23 @@ export class Keymap {
   }
   rebuild(): void {this.map = this.resolve(this.overrides); for (const l of this.listeners) l();}
   set(id: string, chords: string[]): void {this.commit({...this.overrides, [id]: chords});}
+  remove(id: string, chord: string): void {
+    const key = normalizeChord(chord);
+    const current = this.overrides[id] ?? this.chordsFor(id, this.sharedBindingMap());
+    this.set(id, current.filter(saved => saved !== key));
+  }
   reassign(id: string, chord: string): void {
     const next = structuredClone(this.overrides), n = normalizeChord(chord);
+    const sharedMap = this.sharedBindingMap();
+    const savedBindings = (actionId: string) => this.overrides[actionId] ?? this.chordsFor(actionId, sharedMap);
     for (const other of this.conflicts(n, id)) {
       // An explicit Shift chord suppresses only the derived cycle, preserving the base group.
       const b = this.binding(n)!;
       if (b.kind === 'cycle') continue;
       const remove = n;
-      next[other] = this.bindingsFor(other).filter(c => c !== remove);
+      next[other] = savedBindings(other).filter(c => c !== remove);
     }
-    next[id] = [...this.bindingsFor(id).filter(c => c !== n), n];
+    next[id] = [...savedBindings(id).filter(c => c !== n), n];
     this.commit(next);
   }
   reset(id?: string): void {

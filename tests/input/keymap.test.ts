@@ -41,3 +41,81 @@ it('failed storage write preserves effective map and emits no partial update',()
  const original=Storage.prototype.setItem;Storage.prototype.setItem=()=>{throw new Error('quota');};
  try {expect(()=>k.importJSON('{"file.save":["F7"]}')).toThrow('quota');expect(k.exportJSON()).toBe(before);expect(k.lookup('F6')).toBe('file.save');expect(notifications).toBe(0);}finally{Storage.prototype.setItem=original;}
 });
+
+it('resolves Web host defaults and reserves browser tab/window chords only in the Web profile', () => {
+  const keymap = new Keymap({});
+  expect(keymap.lookup('Ctrl+T')).toBe('edit.freeTransform');
+  expect(keymap.lookup('Ctrl+Shift+N')).toBe('layer.new');
+  const restore = keymap.installHostProfile('web');
+  expect(keymap.bindingsFor('edit.freeTransform')).toEqual(['Ctrl+Shift+F']);
+  expect(keymap.bindingsFor('layer.new')).toEqual(['Shift+F2']);
+  expect(keymap.lookup('Ctrl+Shift+F')).toBe('edit.freeTransform');
+  expect(keymap.lookup('Shift+F2')).toBe('layer.new');
+  expect(keymap.lookup('Ctrl+F')).toBe('edit.commandPalette');
+  for (const chord of ['Ctrl+T','Ctrl+Shift+T','Ctrl+N','Ctrl+Shift+N','Ctrl+W','Ctrl+Shift+W','Ctrl+F4','Ctrl+Tab','Ctrl+Shift+Tab','Ctrl+PageUp','Ctrl+PageDown']) {
+    expect(keymap.lookup(chord)).toBeUndefined();
+    expect(keymap.conflicts(chord)).toEqual([]);
+  }
+  keymap.rebuild();
+  expect(keymap.lookup('Shift+F2')).toBe('layer.new');
+  restore();
+  restore();
+  expect(keymap.lookup('Ctrl+T')).toBe('edit.freeTransform');
+  expect(keymap.lookup('Ctrl+Shift+N')).toBe('layer.new');
+  expect(keymap.lookup('Ctrl+Shift+F')).toBeUndefined();
+  const releaseDesktop = keymap.installHostProfile('desktop');
+  expect(keymap.lookup('Ctrl+Shift+N')).toBe('layer.new');
+  releaseDesktop();
+  const releaseSecondWeb = keymap.installHostProfile('web');
+  restore(); // A repeated cleanup from the first mount must not undo the second.
+  expect(keymap.lookup('Shift+F2')).toBe('layer.new');
+  releaseSecondWeb();
+  expect(keymap.lookup('Ctrl+Shift+N')).toBe('layer.new');
+});
+
+it('keeps stored overrides reversible and suppresses reserved entries without reviving defaults', () => {
+  const keymap = new Keymap({});
+  keymap.set('edit.freeTransform', ['Ctrl+T']);
+  keymap.set('layer.new', ['Ctrl+Shift+N','F8']);
+  keymap.set('file.open', ['Ctrl+Shift+F']);
+  const stored = localStorage.getItem('celenne.shortcuts.v1');
+  const restore = keymap.installHostProfile('web');
+  expect(keymap.bindingsFor('edit.freeTransform')).toEqual([]);
+  expect(keymap.bindingsFor('layer.new')).toEqual(['F8']);
+  expect(keymap.lookup('Ctrl+Shift+F')).toBe('file.open');
+  expect(localStorage.getItem('celenne.shortcuts.v1')).toBe(stored);
+  expect(JSON.parse(keymap.exportJSON())).toEqual(JSON.parse(stored!));
+  expect(() => keymap.set('file.open', ['Ctrl+T'])).toThrow(/Shortcut conflict/);
+  expect(localStorage.getItem('celenne.shortcuts.v1')).toBe(stored);
+  const overrides = JSON.parse(keymap.exportJSON());
+  keymap.importJSON(JSON.stringify({...overrides, 'file.open':['Ctrl+W','Ctrl+Shift+F']}));
+  expect(keymap.bindingsFor('file.open')).toEqual(['Ctrl+Shift+F']);
+  expect(JSON.parse(keymap.exportJSON())['file.open']).toEqual(['Ctrl+W','Ctrl+Shift+F']);
+  keymap.reassign('layer.new','F9');
+  expect(keymap.bindingsFor('layer.new')).toEqual(['F8','F9']);
+  restore();
+  expect(keymap.bindingsFor('edit.freeTransform')).toEqual(['Ctrl+T']);
+  expect(keymap.bindingsFor('layer.new')).toEqual(['Ctrl+Shift+N','F8','F9']);
+  expect(keymap.bindingsFor('file.open')).toEqual(['Ctrl+W','Ctrl+Shift+F']);
+});
+
+it('does not persist or remove another host default when reassigning or editing Web shortcuts', () => {
+  const keymap = new Keymap({});
+  const restore = keymap.installHostProfile('web');
+
+  keymap.reassign('edit.undo', 'Shift+F2');
+  expect(keymap.lookup('Shift+F2')).toBe('edit.undo');
+  expect(keymap.bindingsFor('layer.new')).toEqual([]);
+  keymap.reassign('edit.freeTransform', 'F8');
+  expect(keymap.bindingsFor('edit.freeTransform')).toEqual(['F8']);
+  keymap.remove('edit.freeTransform', 'F8');
+  expect(keymap.bindingsFor('edit.freeTransform')).toEqual([]);
+
+  const preferences = JSON.parse(localStorage.getItem('celenne.shortcuts.v1')!);
+  expect(preferences['layer.new']).toEqual(['Ctrl+Shift+N']);
+  expect(preferences['edit.freeTransform']).toEqual(['Ctrl+T']);
+  restore();
+  expect(keymap.lookup('Ctrl+Shift+N')).toBe('layer.new');
+  expect(keymap.lookup('Ctrl+T')).toBe('edit.freeTransform');
+  expect(keymap.bindingsFor('edit.undo')).toEqual(['Ctrl+Z','Shift+F2']);
+});
