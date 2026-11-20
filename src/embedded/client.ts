@@ -8,11 +8,13 @@ export async function mountPage(container: HTMLElement, host: HostPort): Promise
   return (await import('./mount')).mountPageSurface(container, host);
 }
 export type { EmbeddedEditor, EmbeddedPageEditor, HostPort, NewDocumentPickerOptions, NewDocumentPickerResult, Output } from './contract';
-export { NEW_DOCUMENT_PICKER_VERSION, PORT_VERSION } from './contract';
+export { HOST_SHORTCUT_PROFILE_VERSION, NEW_DOCUMENT_PICKER_VERSION, PORT_VERSION } from './contract';
+import { HOST_SHORTCUT_PROFILE_VERSION, resolveHostShortcutProfile } from './contract';
 import type { EmbeddedEditor, EmbeddedPageEditor, HostPort, EditorState } from './contract';
 import { connectRpc } from './rpc';
 
 export async function mountIframe(container: HTMLElement, host: HostPort, frameUrl: string): Promise<EmbeddedEditor> {
+  const shortcutProfile = resolveHostShortcutProfile(host.shortcutProfile);
   const url = new URL(frameUrl, location.href);
   if (url.origin !== location.origin || location.origin === 'null') throw new Error('Local same-origin iframe required');
   const nonce = crypto.randomUUID(); url.hash = new URLSearchParams({ nonce }).toString();
@@ -26,10 +28,26 @@ export async function mountIframe(container: HTMLElement, host: HostPort, frameU
   });
   await new Promise<void>((resolve, reject) => {
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('message', ready); };
-    const timer = setTimeout(() => { cleanup(); rpc.dispose(); frame.remove(); reject(new Error('Iframe handshake timeout')); }, 15000);
+    const fail = (message: string) => {
+      cleanup();
+      rpc.dispose();
+      channel.port2.close();
+      frame.remove();
+      reject(new Error(message));
+    };
+    const timer = setTimeout(() => fail('Iframe handshake timeout'), 15000);
     const ready = (e: MessageEvent) => {
       if (e.source !== frame.contentWindow || e.origin !== url.origin || e.data?.type !== 'wp-ready' || e.data?.version !== 4 || e.data?.nonce !== nonce) return;
-      cleanup(); frame.contentWindow!.postMessage({ type: 'wp-connect', version: 4, nonce, nativeVersion:host.nativeVersion,capabilityPolicy:host.capabilityPolicy }, url.origin, [channel.port2]); resolve();
+      if (shortcutProfile === 'web' && e.data.shortcutProfileVersion !== HOST_SHORTCUT_PROFILE_VERSION) {
+        fail('Embedded frame does not support the Web shortcut profile');
+        return;
+      }
+      cleanup();
+      frame.contentWindow!.postMessage({
+        type: 'wp-connect', version: 4, nonce, nativeVersion: host.nativeVersion,
+        capabilityPolicy: host.capabilityPolicy, shortcutProfile,
+      }, url.origin, [channel.port2]);
+      resolve();
     };
     window.addEventListener('message', ready); frame.src = url.href; container.append(frame);
   });

@@ -17,7 +17,7 @@ import { registerTools } from '../tools/registry';
 import { keymap } from '../app/shortcuts';
 import { installTextEngine } from '../app/textEngine';
 import { ui,useApp } from '../app/store';
-import type { EmbeddedEditor, HostPort, Operation, Output } from './contract';
+import { resolveHostShortcutProfile, type EmbeddedEditor, type HostPort, type Operation, type Output } from './contract';
 
 let active = false;
 let nextGeneration = 0;
@@ -31,6 +31,7 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
   if (active || editor.sessions.length) throw new Error('An editor is already active');
   const original=actionDefinitions();
   const policy=host.nativeVersion===1?nativePolicy(host.capabilityPolicy,new Set(original.filter(a=>!a.comingSoon).map(a=>a.id))):null;
+  const restoreShortcuts = keymap.installHostProfile(resolveHostShortcutProfile(host.shortcutProfile));
   const fileIndex=MENUS.findIndex(m=>m.id==='file'),fileMenu=MENUS[fileIndex];
   const hostFiles=!!policy&&['file.save','file.close','file.closeAll'].every(id=>{const a=policy('action:'+id);return !a.visible&&!a.enabled;});
   if(hostFiles&&fileIndex>=0)MENUS.splice(fileIndex,1);
@@ -270,6 +271,7 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
       editor.releaseToolInstances();
       for (const a of original) register(a);
       if(hostFiles&&fileMenu&&!MENUS.includes(fileMenu))MENUS.splice(fileIndex,0,fileMenu);
+      restoreShortcuts();
       keymap.rebuild(); restorePlatform(); stopAccess(); active = false;
       ui.set({ dialogs: [], toasts: [], progress: [] });
     },

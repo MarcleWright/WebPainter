@@ -9,6 +9,7 @@ import { SetLayerPropsCommand } from '../../src/commands/layerCommands';
 import type { HostPort, EmbeddedEditor, Output } from '../../src/embedded/contract';
 import { action, run } from '../../src/app/actions';
 import { validArgs } from '../../src/embedded/rpc';
+import { keymap } from '../../src/app/shortcuts';
 
 let api: EmbeddedEditor | undefined;
 afterEach(async () => { if (api) { for (const s of [...editor.sessions]) editor.removeSession(s.id); api.destroy(); api = undefined; } });
@@ -81,4 +82,36 @@ it('does not call the host for preview/pixel notifications without a dirty trans
   for(let i=0;i<100;i++)s.doc.emit({type:'pixels',layerId:s.activeLayerId!,rect:{x:0,y:0,w:1,h:1}});
   expect(vi.mocked(host.dirty).mock.calls.length).toBe(calls);
   edit();expect(vi.mocked(host.dirty).mock.calls.length).toBeLessThanOrEqual(calls+2);
+});
+
+it('keeps Web shortcuts through document close and reopen, then restores defaults on destroy', async () => {
+  const stored = localStorage.getItem('celenne.shortcuts.v1');
+  const overrides = keymap.exportJSON();
+  expect(keymap.lookup('Ctrl+T')).toBe('edit.freeTransform');
+
+  api = initializeEditor({...fixture(), shortcutProfile:'web'});
+  expect(keymap.lookup('Ctrl+Shift+F')).toBe('edit.freeTransform');
+  expect(keymap.lookup('Shift+F2')).toBe('layer.new');
+  expect(keymap.lookup('Ctrl+T')).toBeUndefined();
+  expect(() => initializeEditor({...fixture(), shortcutProfile:'desktop'})).toThrow('already active');
+  expect(keymap.lookup('Ctrl+Shift+F')).toBe('edit.freeTransform');
+  await api.open('one', 'token');
+  expect(await api.requestClose()).toBe(true);
+  expect(keymap.lookup('Ctrl+Shift+F')).toBe('edit.freeTransform');
+  await api.open('two', 'token');
+  expect(keymap.lookup('Shift+F2')).toBe('layer.new');
+  expect(await api.requestClose()).toBe(true);
+  api.destroy();
+  api = undefined;
+
+  expect(keymap.lookup('Ctrl+T')).toBe('edit.freeTransform');
+  expect(keymap.lookup('Ctrl+Shift+N')).toBe('layer.new');
+  expect(keymap.lookup('Shift+F2')).toBeUndefined();
+  api = initializeEditor(fixture());
+  expect(keymap.lookup('Ctrl+T')).toBe('edit.freeTransform');
+  api.destroy();
+  api = initializeEditor({...fixture(), shortcutProfile:'desktop'});
+  expect(keymap.lookup('Ctrl+Shift+N')).toBe('layer.new');
+  expect(localStorage.getItem('celenne.shortcuts.v1')).toBe(stored);
+  expect(keymap.exportJSON()).toBe(overrides);
 });

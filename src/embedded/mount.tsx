@@ -4,7 +4,7 @@ import { App } from '../ui/App';
 import { installSurface } from '../ui/surface';
 import { initializeEditor } from './editor';
 import { editor as editorModel } from '../app/editor';
-import type { EmbeddedEditor, EmbeddedPageEditor, HostPort, NewDocumentPickerOptions, NewDocumentPickerResult } from './contract';
+import { resolveHostShortcutProfile, type EmbeddedEditor, type EmbeddedPageEditor, type HostPort, type NewDocumentPickerOptions, type NewDocumentPickerResult } from './contract';
 import { NewDocumentSizeDialog } from '../ui/dialogs/NewDocumentSizeFields';
 import { NATIVE_LIMITS } from '../document/native';
 import css from '../ui/styles.css?inline';
@@ -95,6 +95,8 @@ function clearDocumentDiagnostics() {
 
 function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean, reusable = false) {
   if (container.shadowRoot) throw new Error('Container already used');
+  // Reject a malformed host profile before adding DOM or input listeners.
+  resolveHostShortcutProfile(host.shortcutProfile);
 
   const surface = isolated ? container.attachShadow({ mode: 'open' }) : container;
   const style = document.createElement('style');

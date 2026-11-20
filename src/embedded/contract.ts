@@ -1,6 +1,15 @@
+import type {HostShortcutProfile} from '../app/shortcuts';
 import type {CapabilityPolicy} from './capabilities';
 /** Portable port v4. No React, Window, Electron or ADA business identities. */
 export const PORT_VERSION = 4 as const;
+/** Optional host keymap support, independent of document and RPC versions. */
+export const HOST_SHORTCUT_PROFILE_VERSION = 1 as const;
+
+export function resolveHostShortcutProfile(value: unknown): HostShortcutProfile {
+  if (value === undefined) return 'desktop';
+  if (value === 'desktop' || value === 'web') return value;
+  throw new Error('Invalid host shortcut profile');
+}
 export type Operation = { generation: number; operationId: string; binding: string };
 export type Resource = { name: string; bytes: Uint8Array; source?: {id:string;hash:string}; recovered?:boolean; placement?: 'fitCanvas' };
 export type Output = Operation & { format: 'psd-test' | 'png' | 'psd' | 'wpnative'; bytes: Uint8Array; transfer?:true; checkpoint?: string; preview?: Uint8Array };
@@ -8,6 +17,7 @@ export type EditorState = { outputBusy:boolean;checkpointReady:boolean;hasUncomm
 export interface HostPort {
   nativeVersion?: 1;
   capabilityPolicy?: CapabilityPolicy;
+  shortcutProfile?: HostShortcutProfile;
   readResource(op: Operation, token: string): Promise<Resource>;
   save(output: Output): Promise<void>;
   export(output: Output): Promise<void>;

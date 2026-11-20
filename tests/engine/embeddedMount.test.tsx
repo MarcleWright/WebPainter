@@ -3,6 +3,10 @@ import {act,useEffect} from 'react';
 import {createPortal} from 'react-dom';
 import {afterEach,it,expect,vi} from 'vitest';
 import {mountDirect,mountFrame,mountPageSurface} from '../../src/embedded/mount';
+import {HOST_SHORTCUT_PROFILE_VERSION,mountIframe,mountPage} from '../../src/embedded/client';
+import type {HostPort} from '../../src/embedded/contract';
+import {connectRpc} from '../../src/embedded/rpc';
+import {keymap} from '../../src/app/shortcuts';
 import {NumberField,Slider} from '../../src/ui/controls';
 import {portalTarget,keyboardTarget} from '../../src/ui/surface';
 import {editor} from '../../src/app/editor';
@@ -236,4 +240,74 @@ it('composition close retains live owners on failed save and releases them befor
   expect(resource.mock.calls.map(([op, token]) => [(op as { binding: string }).binding, token])).toEqual([
     ['old-binding', 'one'], ['new-binding', 'two'],
   ]);
+});
+
+function shortcutTestHost(): HostPort {
+  return {
+    nativeVersion: 1,
+    readResource: async () => ({ name: 'fixture.wpnative', bytes: createNative(24, 16) }),
+    save: async () => {}, export: async () => {}, confirm: async () => 0, dirty() {}, error() {},
+  };
+}
+
+it('composition capability installs a Web profile and rejects malformed props without mounting', async () => {
+  node = document.createElement('div');
+  document.body.append(node);
+  const invalid = {...shortcutTestHost(), shortcutProfile: 'bad' as HostPort['shortcutProfile']};
+  expect(() => mountDirect(node, invalid)).toThrow('Invalid host shortcut profile');
+  expect(node.shadowRoot).toBeNull();
+  await expect(mountPage(node, invalid)).rejects.toThrow('Invalid host shortcut profile');
+  expect(node.childElementCount).toBe(0);
+  expect(HOST_SHORTCUT_PROFILE_VERSION).toBe(1);
+  expect(keymap.lookup('Ctrl+T')).toBe('edit.freeTransform');
+
+  const page = await act(async () => mountPage(node, {...shortcutTestHost(), shortcutProfile:'web'}));
+  api = page;
+  expect(keymap.bindingsFor('edit.freeTransform')).toEqual(['Ctrl+Shift+F']);
+  await act(async () => page.destroy());
+  api = undefined;
+  expect(keymap.bindingsFor('edit.freeTransform')).toEqual(['Ctrl+T']);
+  expect(node.childElementCount).toBe(0);
+});
+
+it.each([
+  {profile:'web', version:undefined, accepts:false},
+  {profile:'web', version:HOST_SHORTCUT_PROFILE_VERSION, accepts:true},
+  {profile:undefined, version:undefined, accepts:true},
+] as const)('generic iframe checks its announced profile capability ($profile, $version)', async ({profile,version,accepts}) => {
+  node = document.createElement('div');
+  document.body.append(node);
+  const pending = mountIframe(node, {...shortcutTestHost(), shortcutProfile:profile}, './embedded.html');
+  const frame = node.querySelector('iframe')!;
+  const frameWindow = frame.contentWindow!;
+  const nonce = new URLSearchParams(new URL(frame.src).hash.slice(1)).get('nonce')!;
+  let frameRpc: ReturnType<typeof connectRpc> | undefined;
+  const post = vi.spyOn(frameWindow,'postMessage').mockImplementation((...args: unknown[]) => {
+    const [port] = args[2] as MessagePort[];
+    frameRpc = connectRpc(port,nonce,{
+      state: () => ({generation:0,open:false,dirty:false,outputBusy:false,checkpointReady:false,hasUncommittedChanges:false}),
+      destroy: () => {},
+    });
+  });
+  const ready = (eventNonce:string) => window.dispatchEvent(new MessageEvent('message', {
+    source:frameWindow, origin:location.origin,
+    data:{type:'wp-ready',version:4,nonce:eventNonce,...(version===undefined?{}:{shortcutProfileVersion:version})},
+  }));
+  try {
+    ready('wrong');
+    expect(post).not.toHaveBeenCalled();
+    ready(nonce);
+    if (!accepts) {
+      await expect(pending).rejects.toThrow('does not support the Web shortcut profile');
+      expect(post).not.toHaveBeenCalled();
+    } else {
+      const editor = await pending;
+      try { expect(post.mock.calls[0]?.[0]).toMatchObject({ type:'wp-connect', shortcutProfile:profile??'desktop' }); }
+      finally { await editor.destroy(); }
+    }
+    expect(node.querySelector('iframe')).toBeNull();
+  } finally {
+    frameRpc?.dispose();
+    post.mockRestore();
+  }
 });
