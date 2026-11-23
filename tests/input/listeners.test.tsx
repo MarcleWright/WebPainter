@@ -21,6 +21,7 @@ vi.mock('../../src/rendering/viewportRenderer',()=>({createViewportRendererAsync
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
 let root:Root,container:HTMLDivElement;
 beforeEach(()=>{
+ ui.setToolOptions('move', { showTransformControls: false });
  HTMLElement.prototype.setPointerCapture=()=>{};HTMLElement.prototype.releasePointerCapture=()=>{};HTMLElement.prototype.hasPointerCapture=()=>false;
  vi.stubGlobal('__APP_VERSION__','test');
  vi.stubGlobal('ResizeObserver',class {observe(){} disconnect(){}});
