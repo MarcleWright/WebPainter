@@ -1,7 +1,7 @@
 import {reviveCheckpoint,tileSlots} from './checkpoint-wire';
 import {decodeNative,encodeNative} from '../document/native';
 import {flattenToPixels} from '../rendering/flatten';
-import {renderAlignedRasterThumbnail} from '../rendering/thumbnail';
+import {renderAlignedRasterThumbnail,renderCompositeThumbnail} from '../rendering/thumbnail';
 import {builtinProfileICC} from '../color/icc';
 import {embedJpegICC,encodePNG,encodeWithPlatform} from '../formats/codecs';
 import {supportsDirectNativePreview} from './preview-engine';
@@ -19,9 +19,11 @@ self.onmessage=async({data:m})=>{try{if(m.type==='start'){staged=m.document;slot
    timings.referenceJpeg=performance.now()-encodeStart;
  }
  else if(m.kind==='preview'){
+   const maxEdge=m.maxEdge===undefined?512:m.maxEdge;
+   if(maxEdge!==512&&maxEdge!==1024)throw Error('Unsupported native preview edge');
    const browser=navigator as WorkerBrowser;
    let thumbnail:Uint8Array|undefined;
-   if(supportsDirectNativePreview(browser.userAgent,browser.userAgentData?.brands)){
+   if(maxEdge===512&&supportsDirectNativePreview(browser.userAgent,browser.userAgentData?.brands)){
      try{
        const small=renderAlignedRasterThumbnail(d);
        if(small){
@@ -32,10 +34,8 @@ self.onmessage=async({data:m})=>{try{if(m.type==='start'){staged=m.document;slot
    }
    if(thumbnail)bytes=thumbnail;
    else{
-     const p=flattenToPixels(d,{depth:8}),scale=Math.min(1,512/Math.max(p.width,p.height)),canvas=new OffscreenCanvas(Math.max(1,Math.round(p.width*scale)),Math.max(1,Math.round(p.height*scale))),source=new OffscreenCanvas(p.width,p.height);
-     source.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(p.data),p.width,p.height),0,0);
-     canvas.getContext('2d')!.drawImage(source,0,0,canvas.width,canvas.height);
-     bytes=encodePNG(canvas.width,canvas.height,canvas.getContext('2d')!.getImageData(0,0,canvas.width,canvas.height).data,8,pngOptions);
+     const image=renderCompositeThumbnail(d,maxEdge);
+     bytes=encodePNG(image.width,image.height,image.data,8,pngOptions);
      timings.previewFallback=performance.now()-start;
    }
  }
