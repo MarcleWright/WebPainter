@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CelenneDocument } from '../../src/document/document';
 import { createFillLayer, createGroupLayer, createMask, createPixelLayer } from '../../src/document/layerFactory';
 import { TILE_SIZE } from '../../src/image-engine/tiledRaster';
-import { renderAlignedRasterThumbnail } from '../../src/rendering/thumbnail';
+import { renderAlignedRasterThumbnail, renderCompositeThumbnail } from '../../src/rendering/thumbnail';
 
 function fixture(width = 4096, height = 2304) {
   const doc = new CelenneDocument('Thumbnail', { width, height, resolution: 72, colorMode: 'rgb', bitDepth: 8 });
@@ -24,7 +24,7 @@ beforeEach(() => {
     constructor(readonly data: Uint8ClampedArray, readonly width: number, readonly height: number) {}
   });
   vi.stubGlobal('OffscreenCanvas', class {
-    constructor(width: number, height: number) {
+    constructor(readonly width: number, readonly height: number) {
       allocate(width, height);
     }
     getContext() {
@@ -34,6 +34,16 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.unstubAllGlobals());
+
+it.each([
+  [2048, 153, 512, 512, 38],
+  [2048, 153, 1024, 1024, 77],
+  [320, 173, 1024, 320, 173],
+])('composites %s × %s within edge %s with the canonical aspect ratio', (width, height, edge, expectedWidth, expectedHeight) => {
+  const {doc} = fixture(width, height);
+  expect(renderCompositeThumbnail(doc, edge)).toMatchObject({width: expectedWidth, height: expectedHeight});
+  expect(allocate.mock.calls).toEqual([[expectedWidth, expectedHeight], [width, height]]);
+});
 
 describe('aligned raster thumbnail', () => {
   it('writes only in-canvas tiles straight to integer thumbnail rectangles', () => {

@@ -2,10 +2,24 @@ import type { CelenneDocument } from '../document/document';
 import { defaultAdvanced } from '../document/layerFactory';
 import type { AdvancedBlending } from '../document/types';
 import { keyToTile, TILE_SIZE } from '../image-engine/tiledRaster';
+import { flattenToPixels } from './flatten';
 
 const THUMBNAIL_EDGE = 512;
 const MAX_SOURCE_AREA = 4096 * 4096;
 const DEFAULT_ADVANCED_ENTRIES = Object.entries(defaultAdvanced()) as [keyof AdvancedBlending, unknown][];
+
+/** Composite with the normal document renderer, then downsample without enlarging the document. */
+export function renderCompositeThumbnail(doc: CelenneDocument, maxEdge: number) {
+  if (!Number.isSafeInteger(maxEdge) || maxEdge < 1) throw new RangeError('Invalid thumbnail edge');
+  const {width, height, data} = flattenToPixels(doc, {depth: 8});
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  const output = new OffscreenCanvas(Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)));
+  const source = new OffscreenCanvas(width, height);
+  source.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(data), width, height), 0, 0);
+  const context = output.getContext('2d')!;
+  context.drawImage(source, 0, 0, output.width, output.height);
+  return {width: output.width, height: output.height, data: context.getImageData(0, 0, output.width, output.height).data};
+}
 
 function hasDefaultAdvanced(advanced: AdvancedBlending): boolean {
   return Object.keys(advanced).length === DEFAULT_ADVANCED_ENTRIES.length
