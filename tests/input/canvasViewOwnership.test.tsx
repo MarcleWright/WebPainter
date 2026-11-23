@@ -7,7 +7,7 @@ import {CanvasView} from '../../src/ui/CanvasView';
 import {gpuCompositor} from '../../src/rendering/renderEngine';
 import {editor} from '../../src/app/editor';
 import {installInputDispatch} from '../../src/app/inputDispatch';
-import {captureWebCanvasKeyDown,enableWebCanvasInput,observeWebCanvasPointer,resetWebCanvasAlt} from '../../src/app/webCanvasInput';
+import {captureWebCanvasKeyDown,enableWebCanvasInput,interruptWebCanvasBareAlt,observeWebCanvasPointer,resetWebCanvasAlt} from '../../src/app/webCanvasInput';
 import {ui} from '../../src/app/store';
 import {clearInputSessions,inputSession} from './fixture';
 
@@ -112,7 +112,7 @@ it('drops cursor frames from the previous document and cancels a pending frame o
   expect(ui.get().cursor).toEqual(cursor);
 });
 
-it('cancels Alt release after a focused Web viewport handles zoom, while delivering the release to Pen first', async () => {
+it('delivers Alt release to Pen before canceling a bare tap or accepted viewport zoom', async () => {
   const {session}=inputSession();
   await act(async()=>root.render(<CanvasView/>));
   const viewport=container.querySelector<HTMLElement>('.viewport')!;
@@ -127,6 +127,7 @@ it('cancels Alt release after a focused Web viewport handles zoom, while deliver
   const disable=enableWebCanvasInput(container);
   const dispose=installInputDispatch();
   window.addEventListener('keydown',captureWebCanvasKeyDown,true);
+  window.addEventListener('wheel',interruptWebCanvasBareAlt,{capture:true,passive:true});
   try{
     await act(async()=>{
       viewport.focus();
@@ -136,7 +137,7 @@ it('cancels Alt release after a focused Web viewport handles zoom, while deliver
       observeTool.mockImplementation((_host,event)=>{releases.push(event.defaultPrevented);return false;});
 
       key('keydown');
-      expect(key('keyup').defaultPrevented).toBe(false);
+      expect(key('keyup').defaultPrevented).toBe(true);
 
       key('keydown');
       const before=session.view.zoom;
@@ -175,6 +176,7 @@ it('cancels Alt release after a focused Web viewport handles zoom, while deliver
     });
   }finally{
     window.removeEventListener('keydown',captureWebCanvasKeyDown,true);
+    window.removeEventListener('wheel',interruptWebCanvasBareAlt,true);
     dispose();
     disable();
   }
@@ -216,6 +218,9 @@ it('hands zoom back to the Web canvas from buttons and known notifications witho
       viewport.blur();
       expect(altZoom(document.body).defaultPrevented).toBe(false);
       toast.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true}));
+      key(document.body,'keydown','Alt','AltLeft',true);
+      expect(key(document.body,'keyup','Alt','AltLeft').defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(document.body);
       expect(altZoom(document.body).defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(viewport);
     });

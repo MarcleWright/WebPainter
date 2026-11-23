@@ -9,6 +9,7 @@ type AltGesture = {
   session: DocumentSession;
   document: DocumentSession['doc'];
   viewport: HTMLElement | null;
+  interrupted: boolean;
 };
 
 let root: HTMLElement | null = null;
@@ -83,7 +84,11 @@ export function captureWebCanvasKeyDown(event: KeyboardEvent): void {
       && previous.session === session && previous.document === session.doc) alt = previous;
     return;
   }
-  if (!event.repeat) alt = { code: event.code, target, session, document: session.doc, viewport: null };
+  if (!event.repeat) alt = { code: event.code, target, session, document: session.doc, viewport: null, interrupted: false };
+}
+
+export function interruptWebCanvasBareAlt(): void {
+  if (alt) alt.interrupted = true;
 }
 
 export function noteWebCanvasAltZoom(event: WheelEvent, viewport: HTMLElement, session: DocumentSession): void {
@@ -96,10 +101,16 @@ export function noteWebCanvasAltZoom(event: WheelEvent, viewport: HTMLElement, s
 export function finishWebCanvasAlt(event: KeyboardEvent): void {
   const gesture = alt;
   resetWebCanvasAlt();
-  if (!gesture?.viewport || event.key !== 'Alt' || event.code !== gesture.code || !event.cancelable
+  if (!gesture || event.key !== 'Alt' || event.code !== gesture.code || !event.cancelable
     || hasOtherModifiers(event) || isComposing(event) || inputEventTarget(event) !== gesture.target
-    || !root?.contains(gesture.viewport) || !ownsFocus(gesture.target, gesture.session)
+    || isTextTarget(gesture.target) || !ownsFocus(gesture.target, gesture.session)
     || editor.active !== gesture.session || gesture.session.doc !== gesture.document) return;
+
+  if (!gesture.viewport) {
+    if (!gesture.interrupted) event.preventDefault();
+    return;
+  }
+  if (!root?.contains(gesture.viewport)) return;
   event.preventDefault();
   toastOwner = null;
   if (gesture.target !== gesture.viewport) gesture.viewport.focus({preventScroll:true});

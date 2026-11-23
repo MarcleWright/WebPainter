@@ -5,7 +5,7 @@ import { installSurface } from '../ui/surface';
 import { initializeEditor } from './editor';
 import { editor as editorModel } from '../app/editor';
 import { releasePan } from '../app/heldPan';
-import { captureWebCanvasKeyDown, enableWebCanvasInput, observeWebCanvasFocus, observeWebCanvasPointer, resetWebCanvasAlt, resetWebCanvasInput } from '../app/webCanvasInput';
+import { captureWebCanvasKeyDown, enableWebCanvasInput, interruptWebCanvasBareAlt, observeWebCanvasFocus, observeWebCanvasPointer, resetWebCanvasAlt, resetWebCanvasInput } from '../app/webCanvasInput';
 import { resolveHostShortcutProfile, type EmbeddedEditor, type EmbeddedPageEditor, type HostPort, type NewDocumentPickerOptions, type NewDocumentPickerResult } from './contract';
 import { NewDocumentSizeDialog } from '../ui/dialogs/NewDocumentSizeFields';
 import { NATIVE_LIMITS } from '../document/native';
@@ -118,14 +118,17 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean,
   const owns=(e:Event)=>(!reusable||!!editorModel.active)&&e.composedPath().some(n=>n===rootNode||n===portals);
   const wake=()=>setTimeout(()=>listeners.forEach(fn=>fn()),0);
   const pointerDown=(e:PointerEvent)=>{if(webPage)observeWebCanvasPointer(e);if(owns(e)){pointers.add(e.pointerId);wake();}};
-  const pointerUp=(e:PointerEvent)=>{if(pointers.delete(e.pointerId))wake();};
+  const pointerUp=(e:PointerEvent)=>{if(webPage)interruptWebCanvasBareAlt();if(pointers.delete(e.pointerId))wake();};
   const keyDown=(e:KeyboardEvent)=>{
     if(webPage)captureWebCanvasKeyDown(e);
     if(owns(e)&&!['Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight'].includes(e.code)){keys.add(e.code);wake();}
   };
   const keyUp=(e:KeyboardEvent)=>{
     // An ADA panel may stop propagation after it receives the release.
-    if(webPage)releasePan(e);
+    if(webPage){
+      if(e.key!=='Alt')interruptWebCanvasBareAlt();
+      releasePan(e);
+    }
     if(keys.delete(e.code))wake();
   };
   const composition=(e:Event)=>{
@@ -137,6 +140,11 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean,
   const blur=(event:Event)=>{if(event.target===window){resetInput();wake();}};
   const events:[string,EventListener][]=[['pointerdown',pointerDown as EventListener],['pointerup',pointerUp as EventListener],['pointercancel',pointerUp as EventListener],['keydown',keyDown as EventListener],['keyup',keyUp as EventListener],['compositionstart',composition],['compositionend',composition],['focusin',focus as EventListener],['focusout',focus as EventListener],['blur',blur]];
   for(const [type,fn]of events)window.addEventListener(type,fn,true);
+  if(webPage){
+    // Observe input before controls can consume it. Only CanvasView may claim it as zoom.
+    window.addEventListener('wheel',interruptWebCanvasBareAlt,{capture:true,passive:true});
+    window.addEventListener('click',interruptWebCanvasBareAlt,true);
+  }
   const api=initializeEditor(host,{
     busy(){return pointers.size>0||keys.size>0||composing;},
     subscribe(fn){listeners.add(fn);return()=>{listeners.delete(fn);};},
@@ -157,6 +165,10 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean,
   const editor: EmbeddedEditor = { ...api, destroy() {
     if (api.state().open) throw new Error('Request close before destroy');
     live = false; for(const [type,fn]of events)window.removeEventListener(type,fn,true);listeners.clear();root.unmount();
+    if(webPage){
+      window.removeEventListener('wheel',interruptWebCanvasBareAlt,true);
+      window.removeEventListener('click',interruptWebCanvasBareAlt,true);
+    }
     disableWebCanvasInput?.();
     container.removeEventListener('keydown', stop); container.removeEventListener('keyup', stop);
     restoreSurface(); api.destroy(); surface.replaceChildren();

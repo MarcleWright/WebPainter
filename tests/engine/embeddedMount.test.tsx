@@ -46,7 +46,7 @@ it.each([
   ['Web page',mountPageSurface,'web',true],
   ['Desktop page',mountPageSurface,'desktop',false],
   ['Web frame',mountFrame,'web',false],
-] as const)('%s handles only its matching release across a shadow host panel',async(_name,mount,shortcutProfile,releases)=>{
+] as const)('%s preserves host-panel ownership and gates bare Alt and held Pan to the Web page',async(_name,mount,shortcutProfile,releases)=>{
   node=document.createElement('div');
   const panel=document.createElement('div');
   const button=document.createElement('button');
@@ -64,13 +64,67 @@ it.each([
   const session=editor.active!;
   const viewport=node.querySelector<HTMLElement>('#wp-root')!;
   viewport.tabIndex=0;
+  const toolButton=document.createElement('button');
+  viewport.append(toolButton);
   const dispose=installInputDispatch();
-  const key=(target: HTMLElement,type: string,value: string,code: string)=>{
-    const event=new KeyboardEvent(type,{key:value,code,bubbles:true,composed:true,cancelable:true});
+  const key=(target: HTMLElement,type: string,value: string,code: string,init: KeyboardEventInit={})=>{
+    const event=new KeyboardEvent(type,{key:value,code,bubbles:true,composed:true,cancelable:true,...init});
     target.dispatchEvent(event);
     return event;
   };
+  const pressAlt=(target: HTMLElement=toolButton,init: KeyboardEventInit={})=>key(target,'keydown','Alt','AltLeft',{altKey:true,...init});
+  const releaseAlt=(target: HTMLElement=toolButton,init: KeyboardEventInit={})=>key(target,'keyup','Alt','AltLeft',init);
   try{
+    toolButton.focus();
+    expect(pressAlt().defaultPrevented).toBe(false);
+    expect(releaseAlt().defaultPrevented).toBe(releases);
+    expect(document.activeElement).toBe(toolButton);
+    key(toolButton,'keydown','Alt','AltRight',{altKey:true});
+    expect(key(toolButton,'keyup','Alt','AltRight').defaultPrevented).toBe(releases);
+
+    pressAlt();
+    button.dispatchEvent(new WheelEvent('wheel',{altKey:true,deltaY:-60,bubbles:true,composed:true}));
+    expect(releaseAlt().defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(toolButton);
+    pressAlt();
+    toolButton.dispatchEvent(new MouseEvent('pointerdown',{altKey:true,bubbles:true,composed:true}));
+    expect(releaseAlt().defaultPrevented).toBe(false);
+    toolButton.dispatchEvent(new MouseEvent('pointerup',{bubbles:true,composed:true}));
+    pressAlt();
+    toolButton.click();
+    expect(releaseAlt().defaultPrevented).toBe(false);
+    pressAlt();
+    key(toolButton,'keydown','z','KeyZ',{altKey:true});
+    key(toolButton,'keyup','z','KeyZ',{altKey:true});
+    expect(releaseAlt().defaultPrevented).toBe(false);
+
+    pressAlt();
+    viewport.focus();
+    toolButton.focus();
+    expect(releaseAlt().defaultPrevented).toBe(false);
+    pressAlt();
+    expect(releaseAlt(toolButton,{cancelable:false}).defaultPrevented).toBe(false);
+    expect(releaseAlt().defaultPrevented).toBe(false);
+    pressAlt(toolButton,{isComposing:true});
+    expect(releaseAlt().defaultPrevented).toBe(false);
+    pressAlt(toolButton,{modifierAltGraph:true});
+    expect(releaseAlt().defaultPrevented).toBe(false);
+
+    const textInput=viewport.querySelector('input')!;
+    textInput.focus();
+    pressAlt(textInput);
+    expect(releaseAlt(textInput).defaultPrevented).toBe(false);
+    const menu=document.createElement('div');
+    menu.setAttribute('role','menu');
+    viewport.append(menu);
+    toolButton.focus();
+    pressAlt();
+    expect(releaseAlt().defaultPrevented).toBe(false);
+    menu.remove();
+    button.focus();
+    pressAlt(button);
+    expect(releaseAlt(button).defaultPrevented).toBe(false);
+
     keymap.set('input.pan',['F7']);
     viewport.focus();
     expect(key(viewport,'keydown','F7','F7').defaultPrevented).toBe(true);
