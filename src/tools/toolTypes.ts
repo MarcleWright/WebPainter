@@ -263,7 +263,7 @@ export interface ToolOptions {
 export function defaultToolOptions(): ToolOptions {
   return {
     selection: { op: 'replace', feather: 0, antiAlias: true, style: 'normal', ratioW: 1, ratioH: 1, fixedW: 64, fixedH: 64, tolerance: 32, contiguous: true, sampleAllLayers: false, width: 10, contrast: 10, frequency: 57, brushSize: 30 },
-    move: { autoSelect: false, autoSelectTarget: 'layer', showTransformControls: false, snap: true },
+    move: { autoSelect: false, autoSelectTarget: 'layer', showTransformControls: true, snap: true },
     crop: { ratio: 'free', customW: 1, customH: 1, fixedPx: false, deletePixels: false, overlay: 'thirds' },
     eyedropper: { sampleSize: 1, sampleAllLayers: true },
     gradient: { type: 'linear', reverse: false, dither: true, transparency: true, opacity: 1, blendMode: 'normal', presetIndex: 0 },

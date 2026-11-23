@@ -30,6 +30,7 @@ afterEach(()=>{for(const s of [...editor.sessions]){editor.finishMove(s,false);e
 afterAll(()=>{setGpuCompositor(null);gpu.dispose();});
 const pt=(x:number,y:number):ToolPointer=>({x,y,sx:x,sy:y,pressure:1,tiltX:0,tiltY:0,twist:0,button:0,buttons:1,shift:false,alt:false,mod:false,pointerType:'mouse',time:0,clickCount:1});
 function fixture(){
+ ui.setToolOptions('move', { showTransformControls: false });
  io.recovery.remove.mockResolvedValue(undefined);
  const doc=newDoc(24,16);const data=new Uint8ClampedArray(24*16*4);for(let i=0;i<24*16;i++){data[i*4]=i%251;data[i*4+3]=255;}
  const l=createPixelLayer('pixels',8,TiledRaster.fromPixels(24,16,4,8,data));add(doc,l);

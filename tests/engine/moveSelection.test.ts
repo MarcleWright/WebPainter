@@ -3,15 +3,17 @@
  * Moving selected pixels with the Move tool: the pixels stay floating between drags (as in
  * Photoshop), so moving them A → B → C leaves a hole only at A, and B shows what it showed before.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MoveTool } from '../../src/tools/moveTool';
 import type { ToolHost, ToolPointer } from '../../src/tools/tool';
 import { editor } from '../../src/app/editor';
+import { ui } from '../../src/app/store';
 import { add, newDoc } from '../helpers/build';
 import { createPixelLayer } from '../../src/document/layerFactory';
 import { TiledRaster } from '../../src/image-engine/tiledRaster';
 import type { PixelLayer } from '../../src/document/types';
 
+beforeEach(() => ui.setToolOptions('move', { showTransformControls: false }));
 afterEach(() => {for (const s of [...editor.sessions]) editor.removeSession(s.id);});
 const W = 64, H = 24;
 
