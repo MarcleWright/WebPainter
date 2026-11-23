@@ -7,7 +7,7 @@ import {CanvasView} from '../../src/ui/CanvasView';
 import {gpuCompositor} from '../../src/rendering/renderEngine';
 import {editor} from '../../src/app/editor';
 import {installInputDispatch} from '../../src/app/inputDispatch';
-import {captureWebCanvasKeyDown,enableWebCanvasInput,resetWebCanvasAlt} from '../../src/app/webCanvasInput';
+import {captureWebCanvasKeyDown,enableWebCanvasInput,observeWebCanvasPointer,resetWebCanvasAlt} from '../../src/app/webCanvasInput';
 import {ui} from '../../src/app/store';
 import {clearInputSessions,inputSession} from './fixture';
 
@@ -175,6 +175,53 @@ it('cancels Alt release after a focused Web viewport handles zoom, while deliver
     });
   }finally{
     window.removeEventListener('keydown',captureWebCanvasKeyDown,true);
+    dispose();
+    disable();
+  }
+});
+
+it('hands zoom back to the Web canvas from buttons and known notifications without taking ordinary button activation', async () => {
+  inputSession();
+  await act(async()=>root.render(<CanvasView/>));
+  const viewport=container.querySelector<HTMLElement>('.viewport')!;
+  const button=document.createElement('button');
+  const toast=document.createElement('div');
+  toast.dataset.wpNotifications='';
+  container.append(button,toast);
+  const key=(target:HTMLElement,type:string,value:string,code:string,altKey=false)=>{
+    const event=new KeyboardEvent(type,{key:value,code,altKey,bubbles:true,cancelable:true});
+    target.dispatchEvent(event);
+    return event;
+  };
+  const zoom=()=>viewport.dispatchEvent(new WheelEvent('wheel',{altKey:true,deltaY:-80,bubbles:true,cancelable:true}));
+  const altZoom=(target:HTMLElement)=>{
+    key(target,'keydown','Alt','AltLeft',true);
+    zoom();
+    return key(target,'keyup','Alt','AltLeft');
+  };
+  const disable=enableWebCanvasInput(container);
+  const dispose=installInputDispatch();
+  const pointer=observeWebCanvasPointer as EventListener;
+  window.addEventListener('keydown',captureWebCanvasKeyDown,true);
+  window.addEventListener('pointerdown',pointer,true);
+  try{
+    await act(async()=>{
+      button.focus();
+      expect(key(button,'keydown',' ','Space').defaultPrevented).toBe(false);
+      expect(key(button,'keydown','Enter','Enter').defaultPrevented).toBe(false);
+      expect(altZoom(button).defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(viewport);
+      expect(key(viewport,'keydown',' ','Space').defaultPrevented).toBe(true);
+      key(viewport,'keyup',' ','Space');
+      viewport.blur();
+      expect(altZoom(document.body).defaultPrevented).toBe(false);
+      toast.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true}));
+      expect(altZoom(document.body).defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(viewport);
+    });
+  }finally{
+    window.removeEventListener('keydown',captureWebCanvasKeyDown,true);
+    window.removeEventListener('pointerdown',pointer,true);
     dispose();
     disable();
   }

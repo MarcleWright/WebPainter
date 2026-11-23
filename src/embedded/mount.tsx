@@ -5,7 +5,7 @@ import { installSurface } from '../ui/surface';
 import { initializeEditor } from './editor';
 import { editor as editorModel } from '../app/editor';
 import { releasePan } from '../app/heldPan';
-import { captureWebCanvasKeyDown, enableWebCanvasInput, resetWebCanvasAlt } from '../app/webCanvasInput';
+import { captureWebCanvasKeyDown, enableWebCanvasInput, observeWebCanvasFocus, observeWebCanvasPointer, resetWebCanvasAlt, resetWebCanvasInput } from '../app/webCanvasInput';
 import { resolveHostShortcutProfile, type EmbeddedEditor, type EmbeddedPageEditor, type HostPort, type NewDocumentPickerOptions, type NewDocumentPickerResult } from './contract';
 import { NewDocumentSizeDialog } from '../ui/dialogs/NewDocumentSizeFields';
 import { NATIVE_LIMITS } from '../document/native';
@@ -117,7 +117,7 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean,
   const pointers=new Set<number>(),keys=new Set<string>(),listeners=new Set<()=>void>();let composing=false;
   const owns=(e:Event)=>(!reusable||!!editorModel.active)&&e.composedPath().some(n=>n===rootNode||n===portals);
   const wake=()=>setTimeout(()=>listeners.forEach(fn=>fn()),0);
-  const pointerDown=(e:PointerEvent)=>{if(webPage)resetWebCanvasAlt();if(owns(e)){pointers.add(e.pointerId);wake();}};
+  const pointerDown=(e:PointerEvent)=>{if(webPage)observeWebCanvasPointer(e);if(owns(e)){pointers.add(e.pointerId);wake();}};
   const pointerUp=(e:PointerEvent)=>{if(pointers.delete(e.pointerId))wake();};
   const keyDown=(e:KeyboardEvent)=>{
     if(webPage)captureWebCanvasKeyDown(e);
@@ -129,13 +129,13 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean,
     if(keys.delete(e.code))wake();
   };
   const composition=(e:Event)=>{
-    if(webPage&&e.type==='compositionstart')resetWebCanvasAlt();
+    if(webPage&&e.type==='compositionstart')resetWebCanvasInput();
     if(owns(e)){composing=e.type==='compositionstart';wake();}
   };
-  const focus=()=>{if(webPage)resetWebCanvasAlt();wake();};
-  const resetInput=()=>{keys.clear();pointers.clear();composing=false;if(webPage)resetWebCanvasAlt();};
+  const focus=(e:FocusEvent)=>{if(webPage){if(e.type==='focusin')observeWebCanvasFocus(e);else resetWebCanvasAlt();}wake();};
+  const resetInput=()=>{keys.clear();pointers.clear();composing=false;if(webPage)resetWebCanvasInput();};
   const blur=(event:Event)=>{if(event.target===window){resetInput();wake();}};
-  const events:[string,EventListener][]=[['pointerdown',pointerDown as EventListener],['pointerup',pointerUp as EventListener],['pointercancel',pointerUp as EventListener],['keydown',keyDown as EventListener],['keyup',keyUp as EventListener],['compositionstart',composition],['compositionend',composition],['focusin',focus],['focusout',focus],['blur',blur]];
+  const events:[string,EventListener][]=[['pointerdown',pointerDown as EventListener],['pointerup',pointerUp as EventListener],['pointercancel',pointerUp as EventListener],['keydown',keyDown as EventListener],['keyup',keyUp as EventListener],['compositionstart',composition],['compositionend',composition],['focusin',focus as EventListener],['focusout',focus as EventListener],['blur',blur]];
   for(const [type,fn]of events)window.addEventListener(type,fn,true);
   const api=initializeEditor(host,{
     busy(){return pointers.size>0||keys.size>0||composing;},

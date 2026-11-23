@@ -7,7 +7,7 @@ import {useApp, ui} from './store';
 import {chordFromEvent, keymap} from './shortcuts';
 import {isComposing,inputEventTarget,isTextTarget,inputBlocked,installInputContext} from './inputContext';
 import {beginPan,releasePan,invalidatePan,inputPointerRevision,inputPointerBusy,onInputPointerStart} from './heldPan';
-import {finishWebCanvasAlt,resetWebCanvasAlt} from './webCanvasInput';
+import {finishWebCanvasAlt,resetWebCanvasInput,webControlOwnsActivation} from './webCanvasInput';
 import type {ToolId} from '../tools/toolTypes';
 const BRUSH_TOOLS = new Set<ToolId>(['brush','pencil','eraser','bgEraser','cloneStamp','patternStamp','healing','spotHealing','remove','colorReplace','mixerBrush','blur','sharpen','smudge','dodge','burn','sponge','quickSelect']);
 let pending: {digits: string; flow: boolean; timer: ReturnType<typeof setTimeout>; cancelSession: () => void; end:()=>void} | null = null;
@@ -53,6 +53,7 @@ function toolAllowed(): boolean {
 }
 function down(e: KeyboardEvent) {
   if (e.defaultPrevented || isComposing(e) || isTextTarget(inputEventTarget(e))) return;
+  if (webControlOwnsActivation(e)) return;
   if (useApp.getState().dialogs.length || document.querySelector('[role="dialog"],[role="menu"]')) return;
   const host = editor.hostFactory?.();
   if (editor.hasPendingToolInteraction() && !toolAllowed()) {e.preventDefault();return;}
@@ -103,7 +104,7 @@ function up(e: KeyboardEvent) {
 export function installInputDispatch(target: EventTarget = window): () => void {
   const removeContext = installInputContext(target);
   const offPointer = onInputPointerStart(cancelDigits);
-  const invalidate = () => {cancelDigits();invalidatePan();interruptPen(editor.active);resetWebCanvasAlt();};
+  const invalidate = () => {cancelDigits();invalidatePan();interruptPen(editor.active);resetWebCanvasInput();};
   const keyup = (event: KeyboardEvent) => {
     // The selected tool must see the release before the Web canvas can cancel its browser default.
     up(event);

@@ -109,7 +109,7 @@ function StatusBar() {
 function ToastHost() {
   const toasts = useApp((s) => s.toasts);
   return (
-    <div className="toasts" aria-live="polite">
+    <div className="toasts" aria-live="polite" data-wp-notifications="">
       {toasts.map((t) => (
         <div key={t.id} className={`toast ${t.kind}`} role={t.kind === 'error' ? 'alert' : 'status'}>
           <div className="toast-head">
