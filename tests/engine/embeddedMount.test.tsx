@@ -10,6 +10,8 @@ import {keymap} from '../../src/app/shortcuts';
 import {NumberField,Slider} from '../../src/ui/controls';
 import {portalTarget,keyboardTarget} from '../../src/ui/surface';
 import {editor} from '../../src/app/editor';
+import {installInputDispatch} from '../../src/app/inputDispatch';
+import {invalidatePan,panHeld} from '../../src/app/heldPan';
 import {run} from '../../src/app/actions';
 import {createNative,encodeNative} from '../../src/document/native';
 import {SetLayerPropsCommand} from '../../src/commands/layerCommands';
@@ -38,6 +40,51 @@ for(const shadow of [false,true])it((shadow?'Shadow':'Frame')+' mount wakes afte
  await act(async()=>number.dispatchEvent(new KeyboardEvent('keyup',{key:'ArrowDown',code:'ArrowDown',bubbles:true,composed:true})));await vi.waitFor(()=>expect(events.slice(before).some(s=>s.checkpointReady)).toBe(true));expect((shadow?node.shadowRoot!.activeElement:document.activeElement)).toBe(number);
  await act(async()=>{number.blur();range.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,composed:true}));});expect(api!.state().checkpointReady).toBe(false);const last=events.length;await act(async()=>range.dispatchEvent(new MouseEvent('pointerup',{bubbles:true,composed:true})));await vi.waitFor(()=>expect(events.slice(last).some(s=>s.checkpointReady)).toBe(true));
  await act(async()=>range.dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space',bubbles:true,composed:true})));expect(api!.state().checkpointReady).toBe(true);
+});
+
+it.each([
+  ['Web page',mountPageSurface,'web',true],
+  ['Desktop page',mountPageSurface,'desktop',false],
+  ['Web frame',mountFrame,'web',false],
+] as const)('%s handles only its matching release across a shadow host panel',async(_name,mount,shortcutProfile,releases)=>{
+  node=document.createElement('div');
+  const panel=document.createElement('div');
+  const button=document.createElement('button');
+  panel.attachShadow({mode:'open'}).append(button);
+  panel.addEventListener('keyup',event=>event.stopPropagation());
+  document.body.append(node);
+  node.append(panel);
+  await act(async()=>{
+    api=mount(node,{
+      nativeVersion:1,shortcutProfile,readResource:async()=>({name:'pan.wpnative',bytes:createNative(24,16)}),
+      save:async()=>{},export:async()=>{},confirm:async()=>0,dirty(){},error(){},
+    });
+    await api.open('pan-binding','pan-resource');
+  });
+  const session=editor.active!;
+  const viewport=node.querySelector<HTMLElement>('#wp-root')!;
+  viewport.tabIndex=0;
+  const dispose=installInputDispatch();
+  const key=(target: HTMLElement,type: string,value: string,code: string)=>{
+    const event=new KeyboardEvent(type,{key:value,code,bubbles:true,composed:true,cancelable:true});
+    target.dispatchEvent(event);
+    return event;
+  };
+  try{
+    keymap.set('input.pan',['F7']);
+    viewport.focus();
+    expect(key(viewport,'keydown','F7','F7').defaultPrevented).toBe(true);
+    expect(panHeld(session)).toBe(true);
+    button.focus();
+    expect(key(button,'keyup',' ','Space').defaultPrevented).toBe(false);
+    expect(panHeld(session)).toBe(true);
+    expect(key(button,'keyup','F7','F7').defaultPrevented).toBe(false);
+    expect(panHeld(session)).toBe(!releases);
+  }finally{
+    invalidatePan();
+    dispose();
+    keymap.reset();
+  }
 });
 
 it('composition picker settles once and leaves formal document open to the host', async () => {

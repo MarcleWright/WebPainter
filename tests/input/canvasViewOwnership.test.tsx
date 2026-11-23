@@ -5,6 +5,9 @@ import {createRoot,type Root} from 'react-dom/client';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {CanvasView} from '../../src/ui/CanvasView';
 import {gpuCompositor} from '../../src/rendering/renderEngine';
+import {editor} from '../../src/app/editor';
+import {installInputDispatch} from '../../src/app/inputDispatch';
+import {captureWebCanvasKeyDown,enableWebCanvasInput,resetWebCanvasAlt} from '../../src/app/webCanvasInput';
 import {ui} from '../../src/app/store';
 import {clearInputSessions,inputSession} from './fixture';
 
@@ -107,4 +110,72 @@ it('drops cursor frames from the previous document and cancels a pending frame o
   expect(frames.has(pending)).toBe(false);
   await act(async()=>late(0));
   expect(ui.get().cursor).toEqual(cursor);
+});
+
+it('cancels Alt release after a focused Web viewport handles zoom, while delivering the release to Pen first', async () => {
+  const {session}=inputSession();
+  await act(async()=>root.render(<CanvasView/>));
+  const viewport=container.querySelector<HTMLElement>('.viewport')!;
+  const key=(type: string, init: KeyboardEventInit={})=>{
+    const event=new KeyboardEvent(type,{key:'Alt',code:'AltLeft',altKey:type==='keydown',bubbles:true,cancelable:true,...init});
+    viewport.dispatchEvent(event);
+    return event;
+  };
+  const wheel=(deltaY: number, init: WheelEventInit={})=>viewport.querySelector('canvas')!.dispatchEvent(
+    new WheelEvent('wheel',{altKey:true,deltaY,bubbles:true,cancelable:true,...init}),
+  );
+  const disable=enableWebCanvasInput(container);
+  const dispose=installInputDispatch();
+  window.addEventListener('keydown',captureWebCanvasKeyDown,true);
+  try{
+    await act(async()=>{
+      viewport.focus();
+      editor.setTool('pen');
+      const releases: boolean[]=[];
+      const observeTool=vi.spyOn(editor.currentTool!,'keyUp');
+      observeTool.mockImplementation((_host,event)=>{releases.push(event.defaultPrevented);return false;});
+
+      key('keydown');
+      expect(key('keyup').defaultPrevented).toBe(false);
+
+      key('keydown');
+      const before=session.view.zoom;
+      wheel(-80);
+      expect(session.view.zoom).toBeGreaterThan(before);
+      expect(key('keyup').defaultPrevented).toBe(true);
+      expect(releases).toEqual([false,false]);
+
+      session.view.zoom=128;
+      key('keydown');
+      wheel(-80);
+      expect(session.view.zoom).toBe(128);
+      expect(key('keyup').defaultPrevented).toBe(true);
+
+      key('keydown');
+      wheel(0);
+      expect(key('keyup').defaultPrevented).toBe(false);
+
+      key('keydown',{ctrlKey:true});
+      wheel(80,{ctrlKey:true});
+      expect(key('keyup').defaultPrevented).toBe(false);
+
+      key('keydown');
+      wheel(80);
+      expect(key('keyup',{code:'AltRight'}).defaultPrevented).toBe(false);
+
+      key('keydown');
+      wheel(80);
+      resetWebCanvasAlt();
+      expect(key('keyup').defaultPrevented).toBe(false);
+
+      disable();
+      key('keydown');
+      wheel(80);
+      expect(key('keyup').defaultPrevented).toBe(false);
+    });
+  }finally{
+    window.removeEventListener('keydown',captureWebCanvasKeyDown,true);
+    dispose();
+    disable();
+  }
 });

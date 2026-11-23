@@ -1,4 +1,5 @@
 import {panHeld, setInputPointerBusy} from '../app/heldPan';
+import {noteWebCanvasAltZoom} from '../app/webCanvasInput';
 import {access} from '../app/access';
 import {isComposing, inputBlocked} from '../app/inputContext';
 /** Document tabs + interactive canvas viewport. */
@@ -733,7 +734,7 @@ export function CanvasView() {
     if (h && p) currentTool()?.doubleClick?.(h, p);
   };
 
-  const onWheel = (e: React.WheelEvent) => {
+  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if(document.querySelector('[role="dialog"]')) return;
     const s = editor.active;
     if (!s) return;
@@ -742,6 +743,7 @@ export function CanvasView() {
     if (e.ctrlKey || e.altKey) {
       const factor = Math.pow(1.0015, -e.deltaY * (e.deltaMode === 1 ? 30 : 1));
       s.view.zoomAt(sx, sy, s.view.zoom * factor);
+      noteWebCanvasAltZoom(e.nativeEvent, e.currentTarget, s);
       editor.updateTitle();
     } else if (e.shiftKey) s.view.panX -= e.deltaY + e.deltaX;
     else {

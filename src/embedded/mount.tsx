@@ -4,6 +4,8 @@ import { App } from '../ui/App';
 import { installSurface } from '../ui/surface';
 import { initializeEditor } from './editor';
 import { editor as editorModel } from '../app/editor';
+import { releasePan } from '../app/heldPan';
+import { captureWebCanvasKeyDown, enableWebCanvasInput, resetWebCanvasAlt } from '../app/webCanvasInput';
 import { resolveHostShortcutProfile, type EmbeddedEditor, type EmbeddedPageEditor, type HostPort, type NewDocumentPickerOptions, type NewDocumentPickerResult } from './contract';
 import { NewDocumentSizeDialog } from '../ui/dialogs/NewDocumentSizeFields';
 import { NATIVE_LIMITS } from '../document/native';
@@ -96,7 +98,8 @@ function clearDocumentDiagnostics() {
 function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean, reusable = false) {
   if (container.shadowRoot) throw new Error('Container already used');
   // Reject a malformed host profile before adding DOM or input listeners.
-  resolveHostShortcutProfile(host.shortcutProfile);
+  const profile = resolveHostShortcutProfile(host.shortcutProfile);
+  const webPage = reusable && profile === 'web';
 
   const surface = isolated ? container.attachShadow({ mode: 'open' }) : container;
   const style = document.createElement('style');
@@ -114,13 +117,23 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean,
   const pointers=new Set<number>(),keys=new Set<string>(),listeners=new Set<()=>void>();let composing=false;
   const owns=(e:Event)=>(!reusable||!!editorModel.active)&&e.composedPath().some(n=>n===rootNode||n===portals);
   const wake=()=>setTimeout(()=>listeners.forEach(fn=>fn()),0);
-  const pointerDown=(e:PointerEvent)=>{if(owns(e)){pointers.add(e.pointerId);wake();}};
+  const pointerDown=(e:PointerEvent)=>{if(webPage)resetWebCanvasAlt();if(owns(e)){pointers.add(e.pointerId);wake();}};
   const pointerUp=(e:PointerEvent)=>{if(pointers.delete(e.pointerId))wake();};
-  const keyDown=(e:KeyboardEvent)=>{if(owns(e)&&!['Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight'].includes(e.code)){keys.add(e.code);wake();}};
-  const keyUp=(e:KeyboardEvent)=>{if(keys.delete(e.code))wake();};
-  const composition=(e:Event)=>{if(owns(e)){composing=e.type==='compositionstart';wake();}};
-  const focus=()=>wake();
-  const resetInput=()=>{keys.clear();pointers.clear();composing=false;};
+  const keyDown=(e:KeyboardEvent)=>{
+    if(webPage)captureWebCanvasKeyDown(e);
+    if(owns(e)&&!['Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight'].includes(e.code)){keys.add(e.code);wake();}
+  };
+  const keyUp=(e:KeyboardEvent)=>{
+    // An ADA panel may stop propagation after it receives the release.
+    if(webPage)releasePan(e);
+    if(keys.delete(e.code))wake();
+  };
+  const composition=(e:Event)=>{
+    if(webPage&&e.type==='compositionstart')resetWebCanvasAlt();
+    if(owns(e)){composing=e.type==='compositionstart';wake();}
+  };
+  const focus=()=>{if(webPage)resetWebCanvasAlt();wake();};
+  const resetInput=()=>{keys.clear();pointers.clear();composing=false;if(webPage)resetWebCanvasAlt();};
   const blur=(event:Event)=>{if(event.target===window){resetInput();wake();}};
   const events:[string,EventListener][]=[['pointerdown',pointerDown as EventListener],['pointerup',pointerUp as EventListener],['pointercancel',pointerUp as EventListener],['keydown',keyDown as EventListener],['keyup',keyUp as EventListener],['compositionstart',composition],['compositionend',composition],['focusin',focus],['focusout',focus],['blur',blur]];
   for(const [type,fn]of events)window.addEventListener(type,fn,true);
@@ -134,6 +147,7 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean,
       clearDocumentDiagnostics();
     } : undefined,
   });
+  const disableWebCanvasInput = webPage ? enableWebCanvasInput(rootNode) : undefined;
   const root = createRoot(rootNode);
   const render = (picker: PickerRequest | null = null) => root.render(<EmbeddedApp picker={picker} />);
   render();
@@ -143,6 +157,7 @@ function mountSurface(container: HTMLElement, host: HostPort, isolated: boolean,
   const editor: EmbeddedEditor = { ...api, destroy() {
     if (api.state().open) throw new Error('Request close before destroy');
     live = false; for(const [type,fn]of events)window.removeEventListener(type,fn,true);listeners.clear();root.unmount();
+    disableWebCanvasInput?.();
     container.removeEventListener('keydown', stop); container.removeEventListener('keyup', stop);
     restoreSurface(); api.destroy(); surface.replaceChildren();
     clearDocumentDiagnostics();

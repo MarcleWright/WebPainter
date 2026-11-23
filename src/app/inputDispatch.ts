@@ -7,6 +7,7 @@ import {useApp, ui} from './store';
 import {chordFromEvent, keymap} from './shortcuts';
 import {isComposing,inputEventTarget,isTextTarget,inputBlocked,installInputContext} from './inputContext';
 import {beginPan,releasePan,invalidatePan,inputPointerRevision,inputPointerBusy,onInputPointerStart} from './heldPan';
+import {finishWebCanvasAlt,resetWebCanvasAlt} from './webCanvasInput';
 import type {ToolId} from '../tools/toolTypes';
 const BRUSH_TOOLS = new Set<ToolId>(['brush','pencil','eraser','bgEraser','cloneStamp','patternStamp','healing','spotHealing','remove','colorReplace','mixerBrush','blur','sharpen','smudge','dodge','burn','sponge','quickSelect']);
 let pending: {digits: string; flow: boolean; timer: ReturnType<typeof setTimeout>; cancelSession: () => void; end:()=>void} | null = null;
@@ -102,19 +103,24 @@ function up(e: KeyboardEvent) {
 export function installInputDispatch(target: EventTarget = window): () => void {
   const removeContext = installInputContext(target);
   const offPointer = onInputPointerStart(cancelDigits);
-  const invalidate = () => {cancelDigits();invalidatePan();interruptPen(editor.active);};
+  const invalidate = () => {cancelDigits();invalidatePan();interruptPen(editor.active);resetWebCanvasAlt();};
+  const keyup = (event: KeyboardEvent) => {
+    // The selected tool must see the release before the Web canvas can cancel its browser default.
+    up(event);
+    finishWebCanvasAlt(event);
+  };
   const focus = (e: FocusEvent) => {const origin=inputEventTarget(e);if (isTextTarget(origin) || origin instanceof HTMLElement && origin.closest('[role="dialog"],[role="menu"]')) invalidate();};
   const unsub = useApp.subscribe((state,prev) => {
     if (state.activeSessionId !== prev.activeSessionId || state.tool !== prev.tool || state.dialogs !== prev.dialogs) invalidate();
   });
   target.addEventListener('keydown',down as EventListener);
-  target.addEventListener('keyup',up as EventListener);
+  target.addEventListener('keyup',keyup as EventListener);
   window.addEventListener('blur',invalidate);
   target.addEventListener('focusin',focus as EventListener,true);
   target.addEventListener('compositionstart',invalidate as EventListener,true);
   return () => {
     removeContext();offPointer();unsub();invalidate();
-    target.removeEventListener('keydown',down as EventListener);target.removeEventListener('keyup',up as EventListener);
+    target.removeEventListener('keydown',down as EventListener);target.removeEventListener('keyup',keyup as EventListener);
     window.removeEventListener('blur',invalidate);target.removeEventListener('focusin',focus as EventListener,true);target.removeEventListener('compositionstart',invalidate as EventListener,true);
   };
 }
