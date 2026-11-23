@@ -17,7 +17,7 @@ import { registerTools } from '../tools/registry';
 import { keymap } from '../app/shortcuts';
 import { installTextEngine } from '../app/textEngine';
 import { ui,useApp } from '../app/store';
-import { resolveHostShortcutProfile, type EmbeddedEditor, type HostPort, type Operation, type Output } from './contract';
+import { GENERATION_REFERENCE_MAX_BYTES, resolveHostShortcutProfile, type EmbeddedEditor, type GenerationReference, type HostPort, type Operation, type Output } from './contract';
 
 let active = false;
 let nextGeneration = 0;
@@ -43,15 +43,21 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
   const ready=()=>!!editor.active&&!boundary.busy()&&checkpointReady(editor.active);
   class DeferredCheckpoint extends Error {}
   let closeCapture:{token:symbol;entry:string;revision:number}|null=null;
+  let referenceCapture:AbortController|null=null;
+  const cancelReferenceCapture=()=>{
+    const running=referenceCapture;
+    referenceCapture=null;
+    running?.abort();
+  };
   const assertLive = () => { if (disposed) throw new Error('Editor disposed'); };
   const operation = (): Operation => ({ generation, operationId: `${generation}:${++sequence}`, binding });
   const valid = (op: Operation) => !disposed && op.generation === generation && op.binding === binding;
-  const state = () => ({ outputBusy:!!editor.active?.outputBusy, checkpointReady:ready(), hasUncommittedChanges:!!editor.active&&(boundary.busy()||hasUncommittedChanges(editor.active)), change, generation, open: !!editor.active, dirty: !!editor.active?.modified, checkpoint: editor.active?.history.current.id ?? null });
+  const state = () => ({ referenceCaptureBusy:!!referenceCapture, outputBusy:!!editor.active?.outputBusy, checkpointReady:ready(), hasUncommittedChanges:!!editor.active&&(boundary.busy()||hasUncommittedChanges(editor.active)), change, generation, open: !!editor.active, dirty: !!editor.active?.modified, checkpoint: editor.active?.history.current.id ?? null });
   let lastState: ReturnType<typeof state> | null = null;
   const notify = () => {
     if (disposed) return;
     const current = state();
-    if (lastState && current.generation === lastState.generation && current.open === lastState.open && current.dirty === lastState.dirty && current.checkpoint === lastState.checkpoint && current.change===lastState.change && current.outputBusy===lastState.outputBusy && current.checkpointReady===lastState.checkpointReady && current.hasUncommittedChanges===lastState.hasUncommittedChanges) return;
+    if (lastState && current.generation === lastState.generation && current.open === lastState.open && current.dirty === lastState.dirty && current.checkpoint === lastState.checkpoint && current.change===lastState.change && current.outputBusy===lastState.outputBusy && current.referenceCaptureBusy===lastState.referenceCaptureBusy && current.checkpointReady===lastState.checkpointReady && current.hasUncommittedChanges===lastState.hasUncommittedChanges) return;
     lastState = current;
     try { host.dirty(current); }
     catch (e) { try { host.error({ generation, message: String(e) }); } catch { /* Observers do not own edits. */ } }
@@ -127,10 +133,45 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
     const reservation=s.reserveOutput(pending.then(()=>true,()=>false));if(!reservation)throw Error('Output already reserved');
     try{return await pending;}finally{s.releaseOutput(reservation);}
   }
+  async function captureGenerationReference(signal?:AbortSignal):Promise<GenerationReference> {
+    assertLive();
+    signal?.throwIfAborted();
+    const session=editor.active;
+    if(host.nativeVersion!==1||opening||!session||session.closeRequested)throw Error('Reference capture unavailable');
+    if(referenceCapture)throw Error('Reference capture already in progress');
+    if(boundary.busy()||!checkpointReady(session))throw Error('Finish the current edit before generating');
+    if(session.doc.canvas.colorMode!=='rgb'||session.doc.canvas.bitDepth!==8)throw Error('Reference capture requires an RGB8 board');
+
+    const op=operation(), capture=new AbortController();
+    const abort=()=>capture.abort();
+    signal?.addEventListener('abort',abort,{once:true});
+    referenceCapture=capture;
+    try{
+      // The reference slot does not acquire the native output reservation. Both owners take
+      // a synchronous COW checkpoint before starting their independent work.
+      const start=performance.now();
+      const frozen=captureCheckpoint(session);
+      if(!frozen)throw Error('Finish the current edit before generating');
+      const {document,entry}=frozen;
+      performance.measure('wp:reference:snapshot-lock',{start,duration:performance.now()-start});
+      const {bytes}=await checkpointOutput(document,'reference',capture.signal);
+      capture.signal.throwIfAborted();
+      if(referenceCapture!==capture||!valid(op)||editor.session(session.id)!==session||session.closeRequested){
+        throw Error('Stale reference capture');
+      }
+      if(bytes.length>GENERATION_REFERENCE_MAX_BYTES||bytes.length<4||bytes[0]!==0xff||bytes[1]!==0xd8){
+        throw Error('Invalid reference JPEG or image exceeds 32 MiB');
+      }
+      return {...op,checkpoint:entry,format:'jpeg',width:document.width,height:document.height,bytes};
+    }finally{
+      signal?.removeEventListener('abort',abort);
+      if(referenceCapture===capture){referenceCapture=null;notify();}
+    }
+  }
   async function nativeCheckpoint(publish:boolean,requirePreview:boolean,intent:'background'|'explicit'|'close'='explicit'):Promise<Output> {
     const background=intent==='background',closing=intent==='close';
     assertLive();const s=editor.active;
-    if(background&&(!ready()||s?.outputBusy||s?.closeRequested))throw new DeferredCheckpoint('Checkpoint deferred');
+    if(background&&(!ready()||s?.outputBusy||s?.closeRequested||(publish&&referenceCapture)))throw new DeferredCheckpoint('Checkpoint deferred');
     if(host.nativeVersion!==1||opening||!s||s.outputBusy||(s.closeRequested&&!closing))throw Error('Native editor busy or unavailable');
     const op=operation();
     const pending=Promise.resolve().then(async()=>{
@@ -143,7 +184,7 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
         if(!cutoff||!s.ownsEditProtection(cutoff.token)||s.history.current.id!==cutoff.entry||s.doc.rev!==cutoff.revision)throw Error('Stale close cutoff');
         captured={document:snapshotDocument(s.doc),entry:cutoff.entry,revision:cutoff.revision};
       }else{
-        if(boundary.busy())throw new DeferredCheckpoint('Checkpoint deferred');
+        if(boundary.busy()||(background&&publish&&referenceCapture))throw new DeferredCheckpoint('Checkpoint deferred');
         captured=captureCheckpoint(s);
         if(!captured)throw new DeferredCheckpoint('Checkpoint deferred');
       }
@@ -170,7 +211,7 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
     async open(nextBinding, token) {
       assertLive();
       if (opening || editor.active) throw new Error('Close the current work before opening another');
-      opening = true; binding = nextBinding; generation = ++nextGeneration;
+      cancelReferenceCapture(); opening = true; binding = nextBinding; generation = ++nextGeneration;
       const op = operation();
       try {
         const resource = await host.readResource(op, token);
@@ -193,8 +234,8 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
       if(host.nativeVersion===1){try{await nativeCheckpoint(true,false);notify();return true;}catch(e){if(!disposed&&generation===issued)host.error({generation:issued,message:String(e)});return false;}}
       const ok=await save();notify();return ok;
     },
-    async saveBackground(){const issued=generation;if(!ready()||editor.active?.outputBusy||editor.active?.closeRequested)return 'deferred';try{await nativeCheckpoint(true,false,'background');return 'saved';}catch(e){if(e instanceof DeferredCheckpoint)return 'deferred';if(!disposed&&generation===issued)host.error({generation:issued,message:String(e)});return 'failed';}},
-    captureComposite: capture,
+    async saveBackground(){const issued=generation;if(!ready()||editor.active?.outputBusy||editor.active?.closeRequested||referenceCapture)return 'deferred';try{await nativeCheckpoint(true,false,'background');return 'saved';}catch(e){if(e instanceof DeferredCheckpoint)return 'deferred';if(!disposed&&generation===issued)host.error({generation:issued,message:String(e)});return 'failed';}},
+    captureComposite: capture, captureGenerationReference,
     captureNative:()=>nativeCheckpoint(false,false,'background'),saveAndCapture:()=>nativeCheckpoint(true,true),
     async exportPng() { const output = await capture(); await host.export(output); if (!valid(output)) throw new Error('Stale export receipt'); },
     async exportPsd() { const output=await capture('psd');await host.export(output);if(!valid(output))throw Error('Stale export receipt'); },
@@ -242,6 +283,7 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
         return ok;
       }
       const existing=s.joinClose();if(existing)return existing;
+      cancelReferenceCapture();
       let protection:symbol|undefined;
       const closing=Promise.resolve().then(async()=>{
         const output=s.joinOutput();if(output&&!(await output))return false;
@@ -266,7 +308,7 @@ export function initializeEditor(host: HostPort, boundary:InputBoundary={busy:()
     destroy() {
       assertLive();
       if (editor.sessions.length) throw new Error('Request close before destroy');
-      disposed = true; generation = ++nextGeneration; offSession(); stopText(); stopBoundary(); stopToolState();
+      cancelReferenceCapture(); disposed = true; generation = ++nextGeneration; offSession(); stopText(); stopBoundary(); stopToolState();
       editor.hostFactory = null; editor.clipboard = null;
       editor.releaseToolInstances();
       for (const a of original) register(a);

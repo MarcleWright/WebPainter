@@ -7,8 +7,8 @@ export async function mountDirect(container: HTMLElement, host: HostPort): Promi
 export async function mountPage(container: HTMLElement, host: HostPort): Promise<EmbeddedPageEditor> {
   return (await import('./mount')).mountPageSurface(container, host);
 }
-export type { EmbeddedEditor, EmbeddedPageEditor, HostPort, NewDocumentPickerOptions, NewDocumentPickerResult, Output } from './contract';
-export { HOST_SHORTCUT_PROFILE_VERSION, NEW_DOCUMENT_PICKER_VERSION, PORT_VERSION } from './contract';
+export type { EmbeddedEditor, EmbeddedPageEditor, GenerationReference, HostPort, NewDocumentPickerOptions, NewDocumentPickerResult, Output } from './contract';
+export { GENERATION_REFERENCE_CAPTURE_VERSION, HOST_SHORTCUT_PROFILE_VERSION, NEW_DOCUMENT_PICKER_VERSION, PORT_VERSION } from './contract';
 import { HOST_SHORTCUT_PROFILE_VERSION, resolveHostShortcutProfile } from './contract';
 import type { EmbeddedEditor, EmbeddedPageEditor, HostPort, EditorState } from './contract';
 import { connectRpc } from './rpc';
