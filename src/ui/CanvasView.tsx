@@ -40,6 +40,7 @@ import { CreateLayerCommand } from '../commands/layerCommands';
 import { insertionPoint } from '../app/ops/common';
 import { ALL_SPRING } from './springTools';
 import { quadFromRect } from '../image-engine/matrix';
+import { BrushResize } from './brushResize';
 
 const PASTEBOARD: [number, number, number] = [0.106, 0.11, 0.122];
 
@@ -121,6 +122,8 @@ export function CanvasView() {
   const sizeRef = useRef({ w: 1, h: 1, dpr: 1 });
   const dirty = useRef(true);
   const overlayDirty = useRef(true);
+  const [brushResize] = useState(() => new BrushResize(() => { overlayDirty.current = true; }));
+  useEffect(() => brushResize.listen(), [brushResize]);
   // Session-only path selection/hiding must repaint even when the pixel selection is empty.
   useEffect(()=>{overlayDirty.current=true;},[docRev]);
   const ants = useRef<AntsCache | null>(null);
@@ -422,7 +425,7 @@ export function CanvasView() {
     // Tool overlay (mode controllers first).
     const h0 = host();
     const tl = currentTool();
-    if (h0 && tl?.drawOverlay) {
+    if (!brushResize.draw(g, w, h) && h0 && tl?.drawOverlay) {
       g.save();
       tl.drawOverlay(h0, g);
       g.restore();
@@ -561,6 +564,11 @@ export function CanvasView() {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (brushResize.down(e, pointerDown.current || !!panDrag.current || !!guideDrag.current)) {
+      e.preventDefault();
+      if (brushResize.active) viewRef.current?.focus();
+      return;
+    }
     if(document.querySelector('[role="dialog"]')) return;
     const s = editor.active;
     const h = host();
@@ -637,6 +645,7 @@ export function CanvasView() {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (brushResize.move(e, pointerDown.current || !!panDrag.current || !!guideDrag.current)) return;
     const s = editor.active;
     const h = host();
     if (!s || !h) return;
@@ -682,6 +691,7 @@ export function CanvasView() {
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (brushResize.up(e)) return;
     const s = editor.active;
     const h = host();
     if (panDrag.current) { if (panDrag.current.pointer !== e.pointerId) return; panDrag.current = null; setInputPointerBusy(false); return; }
@@ -721,6 +731,7 @@ export function CanvasView() {
   };
 
   const onPointerCancel = (e:React.PointerEvent) => {
+    if (brushResize.cancel(e)) return;
     const tool=activeTool.current,h=host();
     if(pointerDown.current&&tool?.cancelPointer&&h){tool.cancelPointer(h);pointerDown.current=false;pointerSession.current=null;activeTool.current=null;capture.current=null;setInputPointerBusy(false);overlayDirty.current=dirty.current=true;}
     else onPointerUp(e);
@@ -734,6 +745,7 @@ export function CanvasView() {
   };
 
   const onWheel = (e: React.WheelEvent) => {
+    if (brushResize.active) return;
     if(document.querySelector('[role="dialog"]')) return;
     const s = editor.active;
     if (!s) return;
@@ -768,6 +780,7 @@ export function CanvasView() {
   // Context menu.
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (brushResize.suppressMenu(e)) return;
     const s = editor.active;
     if (!s) return;
     const hasSel = !s.doc.selection.isEmpty();
@@ -895,7 +908,7 @@ export function CanvasView() {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerCancel}
-          onLostPointerCapture={(e) => { if (pointerDown.current) onPointerCancel(e); }}
+          onLostPointerCapture={(e) => { if (!brushResize.cancel(e) && pointerDown.current) onPointerCancel(e); }}
           onPointerLeave={() => { ui.set((s) => ({ cursor: { ...s.cursor, inside: false } })); overlayDirty.current = true; }}
           onDoubleClick={onDoubleClick}
           onWheel={onWheel}
