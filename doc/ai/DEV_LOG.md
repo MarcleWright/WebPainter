@@ -6,6 +6,10 @@
 
 ## Recent
 
+### 2026-11-24 Color 面板与笔刷交互规划
+
+- [任务](tasks/2026-11-24_01_brush-and-color-interactions.md)记录基线、三阶段验收及独立设计审查。代码执行等待 Owner 授权。
+
 ### 2026-11-18 ADA 画板创建与 Web 打开提速
 
 - [画板任务](tasks/2026-11-18_01_drawing-board-workflow-and-open-performance.md) 0–E 已完成本地代码与证据交付。ADA 代码 46659d1、固定 WP 01006e09…。真实 Chrome 验证预设、源图导入、同 iframe 待命及跨项目退役，打开性能用同包对照。详见[执行台账](tasks/2026-11-18_01_execution-loop.md)。

@@ -1,18 +1,20 @@
 /** Color, Swatches, Gradients, Navigator and Info panels. */
 import { colorFromCmyk, colorFromLab, exactCmyk, isCmykDoc, isLabDoc, labFor, srgbToCmyk } from '../../color/plates';
 import { uiCmykProfile } from '../../app/colorSettings';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import { useApp, ui } from '../../app/store';
+import { isComposing } from '../../app/inputContext';
 import { editor } from '../../app/editor';
 import { useSession } from '../hooks';
 import type { RGB } from '../../color/types';
-import { cmykToRgb, hexToRgb, hslToRgb, hsvToRgb, labToRgb, rgbCss, rgbToCmyk, rgbToHex, rgbToHsl, rgbToHsv, rgbToLab } from '../../color/convert';
+import { hexToRgb, hslToRgb, hsvToRgb, rgbCss, rgbToHex, rgbToHsl, rgbToHsv, type HSV } from '../../color/convert';
 import { NumberField, Select, IconButton } from '../controls';
 import { gradientPresets, setCustomGradient } from '../../tools/fillSampleTools';
 import { GradientPreview } from '../OptionsBar';
 import { compositeRegion } from '../../rendering/compositor';
 import { colorEngine } from '../../color/cms';
 import { sampleColor } from '../../tools/fillSampleTools';
+import { ColorField, colorFieldModes, hueTrack, pickColorField, type ColorFieldMode, type ColorFieldPart } from './ColorField';
 
 export type ColorModel = 'rgb' | 'hsb' | 'hsl' | 'lab' | 'cmyk' | 'gray';
 
@@ -21,12 +23,15 @@ export function cmykOfUi(c: RGB): [number, number, number, number] {
   return exactCmyk(c) ?? srgbToCmyk(c, uiCmykProfile());
 }
 
-export function ColorSliders({ color, onChange, model }: { color: RGB; onChange: (c: RGB) => void; model: ColorModel }) {
-  const row = (label: string, value: number, max: number, set: (v: number) => void, bg: string, min = 0) => (
-    <div className="field" key={label}>
-      <span className="lbl" style={{ width: 14 }}>{label}</span>
-      <input type="range" className="slider" min={min} max={max} step={max <= 1 ? 0.001 : 1} value={value} onChange={(e) => set(Number(e.target.value))} style={{ background: bg, height: 8, borderRadius: 4, appearance: 'none', WebkitAppearance: 'none' }} aria-label={label} />
-      <NumberField value={Math.round(value * (max <= 1 ? 1000 : 1)) / (max <= 1 ? 1000 : 1)} onChange={set} min={min} max={max} width={44} step={max <= 1 ? 0.01 : 1} />
+function ColorSliders({ color, hsv, onChange, onChangeHsv, model }: {
+  color: RGB; hsv: HSV; onChange: (c: RGB) => void; onChangeHsv: (c: HSV) => void; model: ColorModel;
+}) {
+  const row = (label: string, value: number, max: number, set: (v: number) => void, bg: string, min = 0, unit = '') => (
+    <div className="color-slider-row" key={label}>
+      <span className="lbl" aria-hidden="true">{label}</span>
+      <input type="range" className="color-slider" min={min} max={max} value={value} onChange={(e) => set(Number(e.target.value))} style={{ background: bg }} aria-label={label} />
+      <NumberField value={value} onChange={set} min={min} max={max} width={40} />
+      <span className="faint" aria-hidden="true">{unit}</span>
     </div>
   );
   const grad = (a: RGB, b: RGB) => `linear-gradient(to right, ${rgbCss(a)}, ${rgbCss(b)})`;
@@ -36,8 +41,12 @@ export function ColorSliders({ color, onChange, model }: { color: RGB; onChange:
       return <>{row('R', Math.round(r * 255), 255, (v) => onChange({ ...color, r: v / 255 }), grad({ r: 0, g, b }, { r: 1, g, b }))}{row('G', Math.round(g * 255), 255, (v) => onChange({ ...color, g: v / 255 }), grad({ r, g: 0, b }, { r, g: 1, b }))}{row('B', Math.round(b * 255), 255, (v) => onChange({ ...color, b: v / 255 }), grad({ r, g, b: 0 }, { r, g, b: 1 }))}</>;
     }
     case 'hsb': {
-      const h = rgbToHsv(color);
-      return <>{row('H', Math.round(h.h), 360, (v) => onChange(hsvToRgb({ ...h, h: v })), 'linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)')}{row('S', Math.round(h.s * 100), 100, (v) => onChange(hsvToRgb({ ...h, s: v / 100 })), grad(hsvToRgb({ ...h, s: 0 }), hsvToRgb({ ...h, s: 1 })))}{row('B', Math.round(h.v * 100), 100, (v) => onChange(hsvToRgb({ ...h, v: v / 100 })), grad({ r: 0, g: 0, b: 0 }, hsvToRgb({ ...h, v: 1 })))}</>;
+      const h = hsv;
+      return <>
+        {row('H', Math.round(h.h), 360, (v) => onChangeHsv({ ...h, h: v }), hueTrack, 0, '°')}
+        {row('S', Math.round(h.s * 100), 100, (v) => onChangeHsv({ ...h, s: v / 100 }), grad(hsvToRgb({ ...h, s: 0 }), hsvToRgb({ ...h, s: 1 })), 0, '%')}
+        {row('B', Math.round(h.v * 100), 100, (v) => onChangeHsv({ ...h, v: v / 100 }), grad({ r: 0, g: 0, b: 0 }, hsvToRgb({ ...h, v: 1 })), 0, '%')}
+      </>;
     }
     case 'hsl': {
       const h = rgbToHsl(color);
@@ -63,30 +72,150 @@ export function ColorSliders({ color, onChange, model }: { color: RGB; onChange:
   }
 }
 
+type ColorTarget = 'fg' | 'bg';
+
+/** Gray and black cannot encode hue, and black cannot encode saturation. */
+function displayHsv(color: RGB, remembered?: HSV): HSV {
+  const hsv = rgbToHsv(color);
+  if (remembered && hsv.s === 0) hsv.h = remembered.h;
+  if (remembered && hsv.v === 0) hsv.s = remembered.s;
+  // Red at 360° and red at 0° are the same RGB, but opposite ends of the hue strip.
+  if (remembered?.h === 360 && hsv.h === 0) hsv.h = 360;
+  return hsv;
+}
+
+function HexColor({ color, onChange }: { color: RGB; onChange: (color: RGB) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const start = useRef<RGB | null>(null);
+  const cancel = useRef(false);
+  return (
+    <label className="field color-panel-hex">
+      <span className="lbl">#</span>
+      <input className="txt" aria-label="Hex color" value={draft ?? rgbToHex(color)} spellCheck={false}
+        onFocus={() => { start.current = color; cancel.current = false; setDraft(rgbToHex(color)); }}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const original = start.current;
+          const parsed = draft !== null && original === color && draft !== rgbToHex(original) && hexToRgb(draft);
+          if (!cancel.current && parsed) onChange(parsed);
+          start.current = null;
+          setDraft(null);
+        }}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (isComposing(e)) return;
+          if (e.key === 'Escape') cancel.current = true;
+          if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
+        }}
+      />
+    </label>
+  );
+}
+
+interface ColorDrag {
+  id: number;
+  element: HTMLDivElement;
+  mode: ColorFieldMode;
+  part: ColorFieldPart;
+  target: ColorTarget;
+  hsv: HSV;
+  expected: RGB;
+}
+
 export function ColorPanel() {
   const fg = useApp((s) => s.fg);
   const bg = useApp((s) => s.bg);
   const recent = useApp((s) => s.recentColors);
-  const [target, setTarget] = useState<'fg' | 'bg'>('fg');
+  const [target, setTarget] = useState<ColorTarget>('fg');
+  const [mode, setMode] = useState<ColorFieldMode>('spectrum');
   const docMode = useSession()?.doc.canvas.colorMode;
   const [model, setModel] = useState<ColorModel>(docMode === 'cmyk' ? 'cmyk' : docMode === 'lab' ? 'lab' : 'hsb');
   const c = target === 'fg' ? fg : bg;
-  const set = (x: RGB) => (target === 'fg' ? ui.set({ fg: x }) : ui.set({ bg: x }));
+  const memory = useRef({ fg: rgbToHsv(fg), bg: rgbToHsv(bg) });
+  const hsv = displayHsv(c, memory.current[target]);
+  const drag = useRef<ColorDrag | null>(null);
+
+  function stopDrag() {
+    const current = drag.current;
+    if (!current) return;
+    drag.current = null;
+    if (current.element.hasPointerCapture?.(current.id)) current.element.releasePointerCapture(current.id);
+  }
+
+  useLayoutEffect(() => {
+    const unsubscribe = useApp.subscribe((state, previous) => {
+      for (const key of ['fg', 'bg'] as const) {
+        if (state[key] === previous[key]) continue;
+        if (drag.current?.target === key && drag.current.expected !== state[key]) stopDrag();
+        memory.current[key] = displayHsv(state[key], memory.current[key]);
+      }
+    });
+    window.addEventListener('blur', stopDrag);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('blur', stopDrag);
+      stopDrag();
+    };
+  }, []);
+
+  // Panel color edits update the shared tool colors without filling the recent-color list.
+  function writeColor(key: ColorTarget, color: RGB, hsv?: HSV) {
+    if (hsv) memory.current[key] = hsv;
+    ui.set(key === 'fg' ? { fg: color } : { bg: color });
+  }
+
+  const set = (color: RGB) => { stopDrag(); writeColor(target, color); };
+  const setHsv = (next: HSV) => { stopDrag(); writeColor(target, hsvToRgb(next), next); };
+  const selectTarget = (key: ColorTarget) => { stopDrag(); setTarget(key); };
+  const sampleField = (e: PointerEvent<HTMLDivElement>) => {
+    const owner = drag.current;
+    if (!owner || owner.id !== e.pointerId || owner.element !== e.currentTarget) return;
+    const rect = owner.element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) { stopDrag(); return; }
+    const next = pickColorField(owner.mode, owner.part, owner.hsv, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+    const rgb = hsvToRgb(next);
+    owner.expected = rgb;
+    writeColor(owner.target, rgb, next);
+  };
+  const startField = (e: PointerEvent<HTMLDivElement>, part: ColorFieldPart) => {
+    if (e.button !== 0 || drag.current) return;
+    e.preventDefault();
+    e.currentTarget.focus({ preventScroll: true });
+    const expected = useApp.getState()[target];
+    drag.current = { id: e.pointerId, element: e.currentTarget, mode, part, target, hsv: displayHsv(expected, memory.current[target]), expected };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    sampleField(e);
+  };
+  const endField = (e: PointerEvent<HTMLDivElement>) => {
+    if (drag.current?.id === e.pointerId && drag.current.element === e.currentTarget) stopDrag();
+  };
+
   return (
-    <div className="panel">
-      <div className="panel-body">
-        <div className="row">
-          <div style={{ position: 'relative', width: 40, height: 40 }}>
-            <div onClick={() => setTarget('bg')} onDoubleClick={() => ui.openDialog('colorPicker', { purpose: 'background' })} title="Background" style={{ position: 'absolute', left: 14, top: 14, width: 24, height: 24, background: rgbCss(bg), border: `2px solid ${target === 'bg' ? '#3d8bfd' : '#000'}` }} />
-            <div onClick={() => setTarget('fg')} onDoubleClick={() => ui.openDialog('colorPicker', { purpose: 'foreground' })} title="Foreground" style={{ position: 'absolute', left: 0, top: 0, width: 24, height: 24, background: rgbCss(fg), border: `2px solid ${target === 'fg' ? '#3d8bfd' : '#000'}` }} />
+    <div className="panel color-panel">
+      <div className="panel-body color-panel-body">
+        <div className="color-panel-values">
+          <div className="color-panel-chips">
+            {(['bg', 'fg'] as const).map((key) => {
+              const purpose = key === 'fg' ? 'foreground' : 'background';
+              const label = key === 'fg' ? 'Foreground color' : 'Background color';
+              return (
+                <button type="button" className={`color-panel-chip color-panel-chip-${key}`} key={key}
+                  aria-label={label} title={label} aria-pressed={target === key}
+                  style={{ backgroundColor: rgbCss(key === 'fg' ? fg : bg) }}
+                  onClick={() => selectTarget(key)} onDoubleClick={() => { stopDrag(); ui.openDialog('colorPicker', { purpose }); }} />
+              );
+            })}
           </div>
-          <Select value={model} onChange={setModel} options={[{ value: 'hsb', label: 'HSB' }, { value: 'rgb', label: 'RGB' }, { value: 'hsl', label: 'HSL' }, { value: 'lab', label: 'Lab' }, { value: 'cmyk', label: 'CMYK' }, { value: 'gray', label: 'Grayscale' }]} />
-          <label className="field"><span className="lbl">#</span><input className="txt" style={{ width: 70 }} value={rgbToHex(c)} onChange={(e) => { const x = hexToRgb(e.target.value); if (x) set(x); }} onKeyDown={(e) => e.stopPropagation()} /></label>
+          <div className="color-panel-sliders"><ColorSliders color={c} hsv={hsv} onChange={set} onChangeHsv={setHsv} model={model} /></div>
         </div>
-        <ColorSliders color={c} onChange={set} model={model} />
+        <div className="color-panel-controls">
+          <Select ariaLabel="Color value format" value={model} onChange={(value) => { stopDrag(); setModel(value); }} options={[{ value: 'hsb', label: 'HSB' }, { value: 'rgb', label: 'RGB' }, { value: 'hsl', label: 'HSL' }, { value: 'lab', label: 'Lab' }, { value: 'cmyk', label: 'CMYK' }, { value: 'gray', label: 'Grayscale' }]} />
+          <Select ariaLabel="Color picker mode" value={mode} onChange={(value) => { stopDrag(); setMode(value); }} options={colorFieldModes} />
+          <HexColor key={target} color={c} onChange={set} />
+        </div>
         {model === 'cmyk' && <div className="faint">CMYK through {uiCmykProfile().name}{colorEngine.ready ? '' : ' (device formula until colour management loads)'}.</div>}
-        <div className="row" style={{ height: 14, borderRadius: 3, overflow: 'hidden', background: 'linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)', cursor: 'crosshair' }}
-          onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); set(hsvToRgb({ h: ((e.clientX - r.left) / r.width) * 360, s: 1, v: 1 })); }} title="Color ramp" />
+        <ColorField mode={mode} hsv={hsv} onStart={startField} onMove={sampleField} onEnd={endField}
+          onNeutral={(white) => { const n = white ? 1 : 0; set({ r: n, g: n, b: n }); }} />
         {recent.length > 0 && (
           <div className="swatches-grid">
             {recent.map((x, i) => <div key={i} className="sw" style={{ background: rgbCss(x) }} onClick={() => set(x)} title={`#${rgbToHex(x)}`} />)}

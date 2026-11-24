@@ -21,6 +21,7 @@
 | 本地运行和远程配置 | [开发环境](engineering/DEV_SETUP.md) |
 | 怎样验证、哪些还没有验证 | [验证约定](engineering/TESTING.md) |
 | 当前已知缺口 | [已知问题](engineering/KNOWN_ISSUES.md) |
+| Color 面板三种取色模式、Alt+右键与笔刷设置 | [分阶段任务](ai/tasks/2026-11-24_01_brush-and-color-interactions.md) |
 | Ctrl+Enter 路径转选区三键、共享入口与草稿结束 | [路径转选区任务](ai/tasks/2026-11-12_02_path-selection-shortcuts.md)，P1–P3、F1–F2 及文字工具隐藏路径补漏复审 Approved；IME/设备/人工与 Owner Pending |
 | 钢笔未闭合路径 Ctrl/Alt 即时编辑与闭合提示 | [钢笔任务](ai/tasks/2026-11-12_01_pen-live-path-editing.md)，方案复审通过后 P1–P3 已实施，待独立实现复审；完整 IME/窗口/DPR 与 Owner Pending |
 | 透明调整窗口、受控画布导航与移动选区贴合 | [交互对齐任务](ai/tasks/2026-11-11_01_dialog-and-selection-interaction.md)，P1–P3 原实现审查 Changes Requested；限定 F1–F2 已修复并补测，待独立复审，人工/Owner Pending |
