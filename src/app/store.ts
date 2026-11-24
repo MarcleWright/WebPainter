@@ -7,6 +7,7 @@ import {access} from './access';
  */
 import { create } from 'zustand';
 import type { RGB } from '../color/types';
+import { constrainBrushControls } from '../brush/controls';
 import { BRUSH_PRESETS, BrushSettings, defaultBrush, defaultToolOptions, ToolId, ToolOptions } from '../tools/toolTypes';
 import { loadJSON, saveJSON } from './settings';
 
@@ -102,7 +103,7 @@ export const useApp = create<AppState>(() => ({
   tool: 'brush',
   groupTool: persisted.groupTool ?? {},
   toolOptions: { ...defaultToolOptions(), ...(persisted.toolOptions ?? {}) },
-  brush: persisted.brush ?? defaultBrush(),
+  brush: constrainBrushControls(persisted.brush ?? defaultBrush()),
   brushPresets: persisted.brushPresets ?? BRUSH_PRESETS,
   fg: { r: 0, g: 0, b: 0 },
   bg: { r: 1, g: 1, b: 1 },
@@ -149,7 +150,12 @@ useApp.subscribe((s) => {
 let seq = 1;
 
 export const ui = {
-  set: useApp.setState,
+  set(patch: Partial<AppState> | ((state: AppState) => Partial<AppState>)): void {
+    useApp.setState((state) => {
+      const next = typeof patch === 'function' ? patch(state) : patch;
+      return next.brush ? { ...next, brush: constrainBrushControls(next.brush) } : next;
+    });
+  },
   get: useApp.getState,
   openDialog(type: string, props?: Record<string, unknown>): number {
     if(!access('dialog:'+type).enabled)return 0;
@@ -184,7 +190,7 @@ export const ui = {
     useApp.setState((s) => ({ toolOptions: { ...s.toolOptions, [key]: { ...s.toolOptions[key], ...patch } } }));
   },
   setBrush(patch: Partial<BrushSettings>): void {
-    useApp.setState((s) => ({ brush: { ...s.brush, ...patch } }));
+    ui.set((s) => ({ brush: { ...s.brush, ...patch } }));
   },
   addRecentColor(c: RGB): void {
     useApp.setState((s) => ({ recentColors: [c, ...s.recentColors.filter((x) => x.r !== c.r || x.g !== c.g || x.b !== c.b)].slice(0, 12) }));

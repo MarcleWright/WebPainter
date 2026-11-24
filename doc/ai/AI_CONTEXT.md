@@ -1,6 +1,6 @@
 # 当前上下文
 
-2026-11-24 WebPainter_Dev 已快进到主分支基线 d6a7f65。Owner 已授权 [Color 与笔刷交互](tasks/2026-11-24_01_brush-and-color-interactions.md)按 P1 Color、P2 Alt+右键、P3 设置与键位顺序实施并分阶段本地提交。[执行台账](tasks/2026-11-24_01_execution-loop.md)
+2026-11-24 WebPainter_Dev 从主分支基线 d6a7f65 串行完成 [Color 与笔刷交互](tasks/2026-11-24_01_brush-and-color-interactions.md) P1 Color、P2 Alt+右键、P3 设置与键位。各阶段独立实现审查通过并分别本地提交。最终 276 项输入回归、生产构建及隔离 Electron 连续流程通过。物理数位笔、高 DPR 及 Owner 体验待验。见[执行台账](tasks/2026-11-24_01_execution-loop.md)。
 
 2026-11-18 [ADA 画板任务](tasks/2026-11-18_01_drawing-board-workflow-and-open-performance.md)0–E 的本地实现与验证完成，画板分支代码 46659d1。WP 通用代码 0382d4c → embedded 9b6aaf5 → 固定包 01006e09…。WP 尺寸确认后由 ADA 创建、图片导入原尺寸首层、返回释放文档但同项目保留 WP、元数据不整读 native。正式环境、Owner 真笔／IME／高 DPR 与 Desktop 包验收待确认，详见[执行台账](tasks/2026-11-18_01_execution-loop.md)。
 

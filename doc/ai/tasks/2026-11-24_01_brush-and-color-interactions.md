@@ -59,3 +59,13 @@ Planner 接受 R1、R2。P1 保留面板不写最近颜色的行为，增加长�
 - Coder 接入画布上的独立笔刷调节与 HUD，同步顶栏，继续使用共享笔刷参数。更新后的 P-INPUT 271/271，类型检查与差异检查通过。挂载 Canvas 验证两档缩放、组合按钮、输入失效、上限和 R3 的笔／触摸模拟序列。
 - 隔离 Windows Electron 使用 WebContents 输入并记录 Chromium 指针事件。Alt+右拖动由 24 px / 45% 到 96 px / 59%，笔刷圈仍固定在起点。图层像素、文档历史与待提交状态保持原样。右键尾菜单被拦截，普通右键恢复，Alt+左键沿用背景取色，下一笔正常提交一次。实际释放 capture、在画布外松右键、普通右键恢复也已验证。证据位于 `doc/material/local/2026-11-24/brush-p2/`。复合按钮与新旧不同指针交叉主要由挂载测试覆盖，实体数位笔与物理鼠标手感待验。
 - 独立 Reviewer R3 复审 Approved，独立挂载测试 22/22，核对了更新的 Electron 证据。受审基线 9551383，BrushResize / CanvasView / 测试对象分别为 4325f8f、78fa78c、69b942d。Planner 接受，R3 关闭。
+
+## P3 实施与审查
+
+- 独立 Reviewer 首审 Changes Requested，受审基线 55e762d。独立复跑输入监听测试 81/81。R4/P2：合法参数叠加会使实时笔画预览阻塞主线程。在 500 px、间距 2%、散布次数 8、粉笔纹理深度 80% 时，实际预览回调在脚本测量中约 52–84 ms。上限组合约 186–325 ms。Planner 接受，要求仅在预览侧限制工作量，保留各类参数的可见反馈及正式笔画路径。
+- R5/P2：既有定义笔刷和选择预设入口可直接激活超出约定范围的尺寸。Planner 接受，要求对当前笔刷的加载和激活应用共享范围，保留原预设记录及自定义笔尖。
+- Coder 保留 Brush Settings 的五类参数与预设入口，统一当前笔刷尺寸与硬度。预览沿整条样例笔画抽样，单次覆盖计算限制为 50,000 个像素，保留尺寸、间距、散布、纹理及传递的可见变化。
+- 除规格中列出的路由，Clone Stamp、Pattern Stamp 支持不透明度与流量。Healing、Magic Eraser 仅用普通数字调不透明度。Mixer Brush、Dodge、Burn 仅用 Shift 数字调流量。Quick Selection 随选区工具调整图层。Background Eraser、Color Replacement、Blur、Sharpen、Smudge、Sponge、Spot Healing、Remove、Red Eye、Patch 的数字键不改笔刷或图层参数。
+- P-INPUT 276/276，生产构建（含类型、renderer 与 Electron）和差异检查通过。隔离 Windows Electron/WebGPU、DPR 1 完成取色、Alt+右键、方括号与数字键、分类、Brushes、预设、顶栏提交及落笔。190 px dock 无横向溢出；顶栏输入 64 px / 73% 与设置同步，下一笔采样 RGBA 约 (0, .984, .004, 1)，唯一一条历史来自落笔。原生按键与鼠标事件脚本注入，顶栏提交使用页面焦点模拟，测试窗口未占用系统焦点。
+- R4 真实 renderer 上限组合八次预览回调 2.7–6.5 ms。独立同口径脚本复测上限组合 4.5–13.0 ms，500 px 组合 4.0–7.4 ms。R5 实窗选择旧预设（6100 px / 160%）、定义采样笔尖（6500 × 2 px）、重新加载旧当前设置均应用范围。原记录、采样笔尖及其他测试参数保留。证据位于 `doc/material/local/2026-11-24/brush-p3/`。
+- 独立 Reviewer 复审 Approved，定向测试 83/83，R4、R5 关闭。受审基线 55e762d，BrushStrokePreview / store / controls / inputDispatch / 两个测试对象分别为 9fa625e、eaa8abb、4fdd4b5、74ddbfe、e13dd0c、b260a67。Planner 核对同一实现与实窗记录后接受。物理数位笔、高 DPR 及 Owner 体验待验收。

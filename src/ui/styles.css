@@ -332,6 +332,13 @@ td.preserve { color: #8ab4ff; }
 .color-pick-neutrals button { padding: 0; border: 1px solid var(--border-strong); background: #fff; }
 .color-pick-neutrals button + button { background: #000; border-top: 0; }
 .brush-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 4px; }
+.brush-stroke-preview { align-self: center; max-width: 100%; height: auto; border-radius: 4px; background: var(--bg-0); }
+.brush-settings .panel-body > .field:has(> select:only-child) > select { width: 100%; }
+.brush-settings .panel-body > .field:has(> .slider) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 6px; }
+.brush-settings .field:has(> .slider) > .lbl { grid-column: 1 / -1; white-space: normal; }
+.brush-settings .slider { width: 100%; min-width: 0; }
+.brush-settings .field:has(> select) { flex-wrap: wrap; }
+.brush-settings select { max-width: 100%; min-width: 0; }
 .brush-cell { background: var(--bg-0); border: 1px solid var(--border); border-radius: 4px; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; font-size: 10px; color: var(--text-dim); overflow: hidden; }
 .brush-cell.active { border-color: var(--accent); color: var(--text); }
 .gradient-strip { height: 22px; border-radius: 3px; border: 1px solid var(--border-strong); cursor: pointer; }

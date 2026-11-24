@@ -8,33 +8,72 @@ import {chordFromEvent, keymap} from './shortcuts';
 import {isComposing,inputEventTarget,isTextTarget,inputBlocked,installInputContext} from './inputContext';
 import {beginPan,releasePan,invalidatePan,inputPointerRevision,inputPointerBusy,onInputPointerStart} from './heldPan';
 import type {ToolId} from '../tools/toolTypes';
-const BRUSH_TOOLS = new Set<ToolId>(['brush','pencil','eraser','bgEraser','cloneStamp','patternStamp','healing','spotHealing','remove','colorReplace','mixerBrush','blur','sharpen','smudge','dodge','burn','sponge','quickSelect']);
-let pending: {digits: string; flow: boolean; timer: ReturnType<typeof setTimeout>; cancelSession: () => void; end:()=>void} | null = null;
+type DigitTarget = 'brushOpacity' | 'brushFlow' | 'gradientOpacity' | 'bucketOpacity' | 'layer.setOpacity' | 'layer.setFillOpacity';
+
+function digitTarget(tool: ToolId, shifted: boolean, airbrush: boolean): DigitTarget | null {
+  switch (tool) {
+    case 'brush': return shifted !== airbrush ? 'brushFlow' : 'brushOpacity';
+    case 'eraser':
+    case 'cloneStamp':
+    case 'patternStamp': return shifted ? 'brushFlow' : 'brushOpacity';
+    case 'pencil':
+    case 'healing':
+    case 'magicEraser': return shifted ? null : 'brushOpacity';
+    case 'mixerBrush':
+    case 'dodge':
+    case 'burn': return shifted ? 'brushFlow' : null;
+    case 'gradient': return shifted ? null : 'gradientOpacity';
+    case 'paintBucket': return shifted ? null : 'bucketOpacity';
+    case 'move':
+    case 'marqueeRect':
+    case 'marqueeEllipse':
+    case 'marqueeRow':
+    case 'marqueeColumn':
+    case 'lasso':
+    case 'polyLasso':
+    case 'magneticLasso':
+    case 'objectSelect':
+    case 'quickSelect':
+    case 'magicWand': return shifted ? 'layer.setFillOpacity' : 'layer.setOpacity';
+    default: return null;
+  }
+}
+
+let pending: {digits: string; parameter: DigitTarget; timer: ReturnType<typeof setTimeout>; cancelSession: () => void; end:()=>void} | null = null;
 function cancelDigits() {if (pending) {clearTimeout(pending.timer);pending.cancelSession();const end=pending.end;pending = null;end();}}
-function handleDigit(digit: string, flow: boolean) {
+function handleDigit(digit: string, shifted: boolean) {
   const s = editor.active;
-  if (!s) return;
-  if (pending && pending.flow !== flow) cancelDigits();
+  if (!s || inputPointerBusy()) return;
+  const tool = editor.currentToolId;
+  const parameter = digitTarget(tool, shifted, useApp.getState().brush.airbrush);
+  if (pending?.parameter !== parameter) cancelDigits();
+  if (!parameter) return;
   const digits = (pending?.digits ?? '') + digit;
   cancelDigits();
-  const doc = s.doc, target = s.activeLayer(), mode = s.mode, layer = s.activeLayerId, mask = s.editMask, channel = s.activeChannelId, tool = editor.currentToolId;
-  const interaction = inputPointerRevision(), brush = BRUSH_TOOLS.has(tool);
-  const parameter = flow ? 'layer.setFillOpacity' : 'layer.setOpacity';
+  const doc = s.doc, target = s.activeLayer(), mode = s.mode, layer = s.activeLayerId, mask = s.editMask, channel = s.activeChannelId;
+  const interaction = inputPointerRevision();
+  const layerParameter = parameter === 'layer.setFillOpacity' || parameter === 'layer.setOpacity';
   const valid = () => editor.active === s && s.doc === doc && s.mode === mode && s.activeLayer() === target
     && s.activeLayerId === layer && s.editMask === mask && s.activeChannelId === channel && editor.currentToolId === tool
     && inputPointerRevision() === interaction && !inputPointerBusy() && !editor.currentTool?.busy?.()
     && !useApp.getState().dialogs.length && !isTextTarget(document.activeElement)
     && s.canEdit() && access(`tool:${tool}`).enabled
-    && (brush || action(parameter)?.enabled?.() !== false);
+    && digitTarget(tool, shifted, useApp.getState().brush.airbrush) === parameter
+    && (!layerParameter || action(parameter)?.enabled?.() !== false);
   const apply = () => {
     cancelDigits();
     if (!valid()) return;
     const value = digits.length >= 2 ? Number(digits.slice(0,2))/100 || 1 : digits === '0' ? 1 : Number(digits)/10;
-    if (brush) ui.setBrush(flow ? {flow: value} : {opacity: value});
-    else void run(parameter, {value});
+    switch (parameter) {
+      case 'brushOpacity': ui.setBrush({opacity: value}); break;
+      case 'brushFlow': ui.setBrush({flow: value}); break;
+      case 'gradientOpacity': ui.setToolOptions('gradient', {opacity: value}); break;
+      case 'bucketOpacity': ui.setToolOptions('bucket', {opacity: value}); break;
+      default: void run(parameter, {value});
+    }
   };
   if (digits.length >= 2) apply();
-  else pending = {digits, flow, timer: setTimeout(apply,350), cancelSession: s.on(() => {if (!valid()) cancelDigits();}), end:s.beginUncommitted()};
+  else pending = {digits, parameter, timer: setTimeout(apply,350), cancelSession: s.on(() => {if (!valid()) cancelDigits();}), end:s.beginUncommitted()};
 }
 function localChord(e: KeyboardEvent): boolean {
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
@@ -102,10 +141,12 @@ function up(e: KeyboardEvent) {
 export function installInputDispatch(target: EventTarget = window): () => void {
   const removeContext = installInputContext(target);
   const offPointer = onInputPointerStart(cancelDigits);
+  const offKeymap = keymap.on(cancelDigits);
   const invalidate = () => {cancelDigits();invalidatePan();interruptPen(editor.active);};
   const focus = (e: FocusEvent) => {const origin=inputEventTarget(e);if (isTextTarget(origin) || origin instanceof HTMLElement && origin.closest('[role="dialog"],[role="menu"]')) invalidate();};
   const unsub = useApp.subscribe((state,prev) => {
     if (state.activeSessionId !== prev.activeSessionId || state.tool !== prev.tool || state.dialogs !== prev.dialogs) invalidate();
+    else if (state.tool === 'brush' && state.brush.airbrush !== prev.brush.airbrush) cancelDigits();
   });
   target.addEventListener('keydown',down as EventListener);
   target.addEventListener('keyup',up as EventListener);
@@ -113,7 +154,7 @@ export function installInputDispatch(target: EventTarget = window): () => void {
   target.addEventListener('focusin',focus as EventListener,true);
   target.addEventListener('compositionstart',invalidate as EventListener,true);
   return () => {
-    removeContext();offPointer();unsub();invalidate();
+    removeContext();offPointer();offKeymap();unsub();invalidate();
     target.removeEventListener('keydown',down as EventListener);target.removeEventListener('keyup',up as EventListener);
     window.removeEventListener('blur',invalidate);target.removeEventListener('focusin',focus as EventListener,true);target.removeEventListener('compositionstart',invalidate as EventListener,true);
   };

@@ -2,6 +2,7 @@ import {AccessBoundary} from './AccessBoundary';
 /** Context-sensitive tool options bar. */
 import { useApp, ui } from '../app/store';
 import { editor } from '../app/editor';
+import { BRUSH_HARDNESS_MAX_PERCENT, BRUSH_SIZE_MAX, BRUSH_SIZE_MIN } from '../brush/controls';
 import { toolInfo } from '../tools/toolTypes';
 import { Icon } from './icons';
 import { BlendSelect, Check, ColorSwatch, NumberField, Seg, Select, Slider, IconButton } from './controls';
@@ -266,8 +267,8 @@ export function OptionsBar() {
         const set = (p: Partial<typeof m>) => ui.setToolOptions('mixer', p);
         return (
           <>
-            <NumberField label="Size" value={brush.size} onChange={(v) => ui.setBrush({ size: v })} min={1} max={5000} unit="px" />
-            <NumberField label="Hardness" value={Math.round(brush.hardness * 100)} onChange={(v) => ui.setBrush({ hardness: v / 100 })} min={0} max={100} unit="%" />
+            <NumberField label="Size" value={brush.size} onChange={(v) => ui.setBrush({ size: v })} min={BRUSH_SIZE_MIN} max={BRUSH_SIZE_MAX} unit="px" />
+            <NumberField label="Hardness" value={Math.round(brush.hardness * BRUSH_HARDNESS_MAX_PERCENT)} onChange={(v) => ui.setBrush({ hardness: v / BRUSH_HARDNESS_MAX_PERCENT })} min={0} max={BRUSH_HARDNESS_MAX_PERCENT} unit="%" />
             <Check label="Load after stroke" checked={m.loadAfterStroke} onChange={(v) => set({ loadAfterStroke: v })} />
             <Check label="Clean after stroke" checked={m.cleanAfterStroke} onChange={(v) => set({ cleanAfterStroke: v })} />
             <NumberField label="Wet" value={Math.round(m.wet * 100)} onChange={(v) => set({ wet: v / 100 })} min={0} max={100} unit="%" />
@@ -296,8 +297,13 @@ export function OptionsBar() {
       case 'sponge':
         return (
           <>
-            <NumberField label="Size" value={brush.size} onChange={(v) => ui.setBrush({ size: v })} min={1} max={5000} unit="px" />
-            {tool !== 'pencil' && <NumberField label="Hardness" value={Math.round(brush.hardness * 100)} onChange={(v) => ui.setBrush({ hardness: v / 100 })} min={0} max={100} unit="%" />}
+            {['brush', 'pencil', 'eraser'].includes(tool) && (
+              <AccessBoundary entry="panel:brushes">
+                <IconButton icon="brush" title="Brush Presets" onClick={() => window.dispatchEvent(new CustomEvent('celenne:showPanel', { detail: 'brushes' }))} />
+              </AccessBoundary>
+            )}
+            <NumberField label="Size" value={brush.size} onChange={(v) => ui.setBrush({ size: v })} min={BRUSH_SIZE_MIN} max={BRUSH_SIZE_MAX} unit="px" />
+            {tool !== 'pencil' && <NumberField label="Hardness" value={Math.round(brush.hardness * BRUSH_HARDNESS_MAX_PERCENT)} onChange={(v) => ui.setBrush({ hardness: v / BRUSH_HARDNESS_MAX_PERCENT })} min={0} max={BRUSH_HARDNESS_MAX_PERCENT} unit="%" />}
             {(tool === 'brush' || tool === 'pencil' || tool === 'cloneStamp' || tool === 'patternStamp') && <><span className="lbl muted">Mode</span><BlendSelect value={brush.blendMode} onChange={(m) => ui.setBrush({ blendMode: m })} width={120} /></>}
             {(tool === 'eraser') && <Select label="Mode" value={o.eraser.mode} onChange={(v) => ui.setToolOptions('eraser', { mode: v })} options={[{ value: 'brush', label: 'Brush' }, { value: 'pencil', label: 'Pencil' }, { value: 'block', label: 'Block' }]} />}
             {['brush', 'pencil', 'eraser', 'cloneStamp', 'patternStamp', 'healing'].includes(tool) && <NumberField label="Opacity" value={Math.round(brush.opacity * 100)} onChange={(v) => ui.setBrush({ opacity: v / 100 })} min={1} max={100} unit="%" />}

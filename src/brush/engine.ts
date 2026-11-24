@@ -50,11 +50,13 @@ export class DabEmitter {
   private last: InputSample | null = null;
   private smoothed: { x: number; y: number } | null = null;
   private residue = 0;
-  private rng = new Rng((Math.random() * 0xffffffff) >>> 0);
+  private rng: Rng;
   private lastDir = 0;
   private velocity = 0;
 
-  constructor(private b: BrushSettings) {}
+  constructor(private b: BrushSettings, seed = (Math.random() * 0xffffffff) >>> 0) {
+    this.rng = new Rng(seed);
+  }
 
   /** Lazy radius in document px derived from the smoothing setting. */
   private lazyRadius(): number {

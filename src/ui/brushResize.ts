@@ -4,6 +4,7 @@ import { editor } from '../app/editor';
 import { inputPointerBusy, panHeld, setInputPointerBusy } from '../app/heldPan';
 import type { DocumentSession } from '../app/session';
 import { ui, useApp } from '../app/store';
+import { BRUSH_HARDNESS_MAX_PERCENT, clampBrushHardness, clampBrushSize } from '../brush/controls';
 import type { BrushSettings } from '../tools/toolTypes';
 
 const RIGHT_BUTTON = 2;
@@ -30,14 +31,6 @@ type Gesture = {
 function toolSupportsResize(tool: string): tool is BrushTool {
   return tool === 'brush' || tool === 'pencil'
     || (tool === 'eraser' && useApp.getState().toolOptions.eraser.mode === 'brush');
-}
-
-function clampSize(value: number): number {
-  return Number.isFinite(value) ? Math.max(1, Math.min(5000, value)) : 40;
-}
-
-function clampHardness(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 }
 
 export class BrushResize {
@@ -71,7 +64,7 @@ export class BrushResize {
     const anchorY = e.clientY - rect.top;
     const gesture: Gesture = {
       session: s, doc: s.doc, tool, pointer: e.pointerId, element: e.currentTarget, zoom: s.view.zoom,
-      startSize: clampSize(size), startHardness: clampHardness(hardness), startX: e.clientX, startY: e.clientY,
+      startSize: clampBrushSize(size), startHardness: clampBrushHardness(hardness), startX: e.clientX, startY: e.clientY,
       anchorX, anchorY, x: anchorX, y: anchorY,
     };
     this.sequence = { pointer: e.pointerId, element: e.currentTarget };
@@ -95,8 +88,8 @@ export class BrushResize {
     const dx = e.clientX - g.startX;
     const dy = e.clientY - g.startY;
     const current = useApp.getState().brush;
-    const size = clampSize(g.startSize + 2 * dx / g.zoom);
-    const hardness = clampHardness(g.startHardness + dy / 200);
+    const size = clampBrushSize(g.startSize + 2 * dx / g.zoom);
+    const hardness = clampBrushHardness(g.startHardness + dy / 200);
     const settings: Partial<BrushSettings> = {};
     if (g.x !== g.anchorX + dx && size !== current.size) settings.size = size;
     if (g.tool !== 'pencil' && g.y !== g.anchorY + dy && hardness !== current.hardness) settings.hardness = hardness;
@@ -156,10 +149,10 @@ export class BrushResize {
     const gesture = this.gesture;
     if (!gesture) return false;
     const brush = useApp.getState().brush;
-    const size = clampSize(brush.size);
+    const size = clampBrushSize(brush.size);
     const { anchorX, anchorY } = gesture;
     const radius = size * gesture.session.view.zoom / 2;
-    const effectiveHardness = gesture.tool === 'pencil' ? 1 : clampHardness(brush.hardness);
+    const effectiveHardness = gesture.tool === 'pencil' ? 1 : clampBrushHardness(brush.hardness);
     g.save();
     g.beginPath();
     g.arc(anchorX, anchorY, radius, 0, Math.PI * 2);
@@ -175,7 +168,7 @@ export class BrushResize {
     g.lineWidth = 1;
     g.stroke();
 
-    const label = `${Number(size.toFixed(1))} px · Hardness ${Math.round(effectiveHardness * 100)}%${gesture.tool === 'pencil' ? ' (fixed)' : ''}`;
+    const label = `${Number(size.toFixed(1))} px · Hardness ${Math.round(effectiveHardness * BRUSH_HARDNESS_MAX_PERCENT)}%${gesture.tool === 'pencil' ? ' (fixed)' : ''}`;
     g.font = '12px system-ui, sans-serif';
     const width = g.measureText(label).width + 16;
     const x = Math.max(0, Math.min(w - width, gesture.x + 16));

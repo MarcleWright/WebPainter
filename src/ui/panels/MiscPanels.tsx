@@ -6,6 +6,8 @@ import { useSession } from '../hooks';
 import { editor } from '../../app/editor';
 import { Check, ColorSwatch, IconButton, NumberField, Select, Slider, Seg, BlendSelect } from '../controls';
 import { BrushSettings, BRUSH_PRESETS, TOOLS, ToolId, defaultBrush } from '../../tools/toolTypes';
+import { BRUSH_HARDNESS_MAX_PERCENT, BRUSH_SIZE_MAX, BRUSH_SIZE_MIN } from '../../brush/controls';
+import { BrushStrokePreview } from './BrushStrokePreview';
 import { dabCoverage, makeTipSampler } from '../../brush/engine';
 import { macros } from '../../app/macros';
 import { Icon } from '../icons';
@@ -50,7 +52,7 @@ export function BrushesPanel() {
   return (
     <div className="panel">
       <div className="panel-body">
-        <Slider label="Size" value={brush.size} min={1} max={1000} unit="px" onChange={(v) => ui.setBrush({ size: v })} />
+        <Slider label="Size" value={brush.size} min={BRUSH_SIZE_MIN} max={BRUSH_SIZE_MAX} unit="px" onChange={(v) => ui.setBrush({ size: v })} />
         <div className="brush-grid">
           {presets.map((p, i) => (
             <div key={i} className={`brush-cell${p.name === brush.name ? ' active' : ''}`} title={p.name} onClick={() => ui.set({ brush: { ...p, size: p.size } })}
@@ -85,43 +87,58 @@ export function BrushesPanel() {
   );
 }
 
+const brushCategories = [
+  { value: 'tip', label: 'Brush Tip Shape' },
+  { value: 'shape', label: 'Shape Dynamics' },
+  { value: 'scatter', label: 'Scattering' },
+  { value: 'texture', label: 'Texture' },
+  { value: 'transfer', label: 'Transfer' },
+] as const;
+
 export function BrushSettingsPanel() {
+  const [category, setCategory] = useState<(typeof brushCategories)[number]['value']>('tip');
   const b = useApp((s) => s.brush);
   const d = b.dynamics;
   const setD = (p: Partial<typeof d>) => ui.setBrush({ dynamics: { ...d, ...p } });
   return (
-    <div className="panel">
+    <div className="panel brush-settings">
       <div className="panel-body">
-        <div className="row" style={{ justifyContent: 'center', background: 'var(--bg-0)', borderRadius: 4 }}><BrushPreview b={b} w={220} h={60} /></div>
-        <div className="section-title">Brush Tip Shape</div>
-        <Slider label="Size" value={b.size} min={1} max={2000} unit="px" onChange={(v) => ui.setBrush({ size: v })} />
-        <Slider label="Hardness" value={Math.round(b.hardness * 100)} min={0} max={100} unit="%" onChange={(v) => ui.setBrush({ hardness: v / 100 })} />
-        <Slider label="Angle" value={b.angle} min={-180} max={180} unit="°" onChange={(v) => ui.setBrush({ angle: v })} />
-        <Slider label="Roundness" value={Math.round(b.roundness * 100)} min={1} max={100} unit="%" onChange={(v) => ui.setBrush({ roundness: v / 100 })} />
-        <Slider label="Spacing" value={Math.round(b.spacing * 100)} min={1} max={1000} unit="%" onChange={(v) => ui.setBrush({ spacing: v / 100 })} />
-        <Slider label="Smoothing" value={Math.round(b.smoothing * 100)} min={0} max={100} unit="%" onChange={(v) => ui.setBrush({ smoothing: v / 100 })} />
-        <Check label="Aliased (pencil edges)" checked={b.aliased} onChange={(v) => ui.setBrush({ aliased: v })} />
-        <div className="section-title">Shape Dynamics</div>
-        <Check label="Pen pressure controls size" checked={d.sizePressure} onChange={(v) => setD({ sizePressure: v })} />
-        <Slider label="Min. size" value={Math.round(d.minSize * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ minSize: v / 100 })} />
-        <Slider label="Size jitter" value={Math.round(d.sizeJitter * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ sizeJitter: v / 100 })} />
-        <Slider label="Angle jitter" value={Math.round(d.angleJitter * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ angleJitter: v / 100 })} />
-        <Select label="Angle control" value={d.angleControl} onChange={(v) => setD({ angleControl: v })} options={[{ value: 'none', label: 'Off' }, { value: 'direction', label: 'Direction' }, { value: 'tilt', label: 'Pen Tilt' }, { value: 'rotation', label: 'Rotation' }]} />
-        <Check label="Roundness from pen tilt" checked={d.roundnessFromTilt} onChange={(v) => setD({ roundnessFromTilt: v })} />
-        <Slider label="Velocity → size" value={Math.round(d.sizeFromVelocity * 100)} min={-100} max={100} unit="%" onChange={(v) => setD({ sizeFromVelocity: v / 100 })} />
-        <div className="section-title">Scattering</div>
-        <Slider label="Scatter" value={Math.round(b.scatter * 100)} min={0} max={1000} unit="%" onChange={(v) => ui.setBrush({ scatter: v / 100 })} />
-        <Slider label="Count" value={b.count} min={1} max={16} onChange={(v) => ui.setBrush({ count: v })} />
-        <div className="section-title">Texture</div>
-        <Select label="Texture" value={b.texture} onChange={(v) => ui.setBrush({ texture: v })} options={[{ value: 'none', label: 'None' }, { value: 'noise', label: 'Noise' }, { value: 'chalk', label: 'Chalk' }, { value: 'charcoal', label: 'Charcoal' }, { value: 'canvas', label: 'Canvas' }, { value: 'ink', label: 'Ink' }]} />
-        <Slider label="Scale" value={Math.round(b.textureScale * 100)} min={10} max={1000} unit="%" onChange={(v) => ui.setBrush({ textureScale: v / 100 })} />
-        <Slider label="Depth" value={Math.round(b.textureDepth * 100)} min={0} max={100} unit="%" onChange={(v) => ui.setBrush({ textureDepth: v / 100 })} />
-        <div className="section-title">Transfer</div>
-        <Check label="Pen pressure controls opacity" checked={d.opacityPressure} onChange={(v) => setD({ opacityPressure: v })} />
-        <Check label="Pen pressure controls flow" checked={d.flowPressure} onChange={(v) => setD({ flowPressure: v })} />
-        <Slider label="Opacity jitter" value={Math.round(d.opacityJitter * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ opacityJitter: v / 100 })} />
-        <Slider label="Flow jitter" value={Math.round(d.flowJitter * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ flowJitter: v / 100 })} />
-        <Check label="Airbrush build-up" checked={b.airbrush} onChange={(v) => ui.setBrush({ airbrush: v })} />
+        <Select ariaLabel="Brush settings category" value={category} options={[...brushCategories]} onChange={setCategory} />
+        <BrushStrokePreview brush={b} />
+        {category === 'tip' && <>
+          <Slider label="Size" value={b.size} min={BRUSH_SIZE_MIN} max={BRUSH_SIZE_MAX} unit="px" onChange={(v) => ui.setBrush({ size: v })} />
+          <Slider label="Hardness" value={Math.round(b.hardness * BRUSH_HARDNESS_MAX_PERCENT)} min={0} max={BRUSH_HARDNESS_MAX_PERCENT} unit="%" onChange={(v) => ui.setBrush({ hardness: v / BRUSH_HARDNESS_MAX_PERCENT })} />
+          <Slider label="Angle" value={b.angle} min={-180} max={180} unit="°" onChange={(v) => ui.setBrush({ angle: v })} />
+          <Slider label="Roundness" value={Math.round(b.roundness * 100)} min={1} max={100} unit="%" onChange={(v) => ui.setBrush({ roundness: v / 100 })} />
+          <Slider label="Spacing" value={Math.round(b.spacing * 100)} min={1} max={1000} unit="%" onChange={(v) => ui.setBrush({ spacing: v / 100 })} />
+          <Slider label="Smoothing" value={Math.round(b.smoothing * 100)} min={0} max={100} unit="%" onChange={(v) => ui.setBrush({ smoothing: v / 100 })} />
+          <Check label="Aliased (pencil edges)" checked={b.aliased} onChange={(v) => ui.setBrush({ aliased: v })} />
+        </>}
+        {category === 'shape' && <>
+          <Check label="Pen pressure controls size" checked={d.sizePressure} onChange={(v) => setD({ sizePressure: v })} />
+          <Slider label="Min. size" value={Math.round(d.minSize * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ minSize: v / 100 })} />
+          <Slider label="Size jitter" value={Math.round(d.sizeJitter * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ sizeJitter: v / 100 })} />
+          <Slider label="Angle jitter" value={Math.round(d.angleJitter * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ angleJitter: v / 100 })} />
+          <Select label="Angle control" value={d.angleControl} onChange={(v) => setD({ angleControl: v })} options={[{ value: 'none', label: 'Off' }, { value: 'direction', label: 'Direction' }, { value: 'tilt', label: 'Pen Tilt' }, { value: 'rotation', label: 'Rotation' }]} />
+          <Check label="Roundness from pen tilt" checked={d.roundnessFromTilt} onChange={(v) => setD({ roundnessFromTilt: v })} />
+          <Slider label="Velocity → size" value={Math.round(d.sizeFromVelocity * 100)} min={-100} max={100} unit="%" onChange={(v) => setD({ sizeFromVelocity: v / 100 })} />
+        </>}
+        {category === 'scatter' && <>
+          <Slider label="Scatter" value={Math.round(b.scatter * 100)} min={0} max={1000} unit="%" onChange={(v) => ui.setBrush({ scatter: v / 100 })} />
+          <Slider label="Count" value={b.count} min={1} max={16} onChange={(v) => ui.setBrush({ count: v })} />
+        </>}
+        {category === 'texture' && <>
+          <Select label="Texture" value={b.texture} onChange={(v) => ui.setBrush({ texture: v })} options={[{ value: 'none', label: 'None' }, { value: 'noise', label: 'Noise' }, { value: 'chalk', label: 'Chalk' }, { value: 'charcoal', label: 'Charcoal' }, { value: 'canvas', label: 'Canvas' }, { value: 'ink', label: 'Ink' }]} />
+          <Slider label="Scale" value={Math.round(b.textureScale * 100)} min={10} max={1000} unit="%" onChange={(v) => ui.setBrush({ textureScale: v / 100 })} />
+          <Slider label="Depth" value={Math.round(b.textureDepth * 100)} min={0} max={100} unit="%" onChange={(v) => ui.setBrush({ textureDepth: v / 100 })} />
+        </>}
+        {category === 'transfer' && <>
+          <Check label="Pen pressure controls opacity" checked={d.opacityPressure} onChange={(v) => setD({ opacityPressure: v })} />
+          <Check label="Pen pressure controls flow" checked={d.flowPressure} onChange={(v) => setD({ flowPressure: v })} />
+          <Slider label="Opacity jitter" value={Math.round(d.opacityJitter * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ opacityJitter: v / 100 })} />
+          <Slider label="Flow jitter" value={Math.round(d.flowJitter * 100)} min={0} max={100} unit="%" onChange={(v) => setD({ flowJitter: v / 100 })} />
+          <Check label="Airbrush build-up" checked={b.airbrush} onChange={(v) => ui.setBrush({ airbrush: v })} />
+        </>}
       </div>
     </div>
   );

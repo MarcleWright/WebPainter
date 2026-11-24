@@ -107,10 +107,10 @@ for (const direction of [-1,1]) {
   const suffix = direction < 0 ? 'decrease' : 'increase', key = direction < 0 ? '[' : ']';
   reg(`brush.size.${suffix}`, `${direction < 0 ? 'Decrease' : 'Increase'} Brush Size`, () => {
     const b=useApp.getState().brush, step=b.size<10?1:b.size<50?5:b.size<100?10:b.size<300?25:50;
-    ui.setBrush({size:Math.max(1,Math.min(5000,b.size+direction*step))});editor.hostFactory?.()?.redraw();
+    ui.setBrush({size:b.size+direction*step});editor.hostFactory?.()?.redraw();
   }, {shortcut:key});
   reg(`brush.hardness.${suffix}`, `${direction < 0 ? 'Decrease' : 'Increase'} Brush Hardness`, () => {
-    ui.setBrush({hardness:Math.max(0,Math.min(1,useApp.getState().brush.hardness+direction*0.25))});editor.hostFactory?.()?.redraw();
+    ui.setBrush({hardness:useApp.getState().brush.hardness+direction*0.25});editor.hostFactory?.()?.redraw();
   }, {shortcut:`Shift+${key}`});
 }
 reg('view.togglePanels', 'Show / Hide Panels', () => window.dispatchEvent(new CustomEvent('celenne:togglePanels')), {shortcut:'Tab'});

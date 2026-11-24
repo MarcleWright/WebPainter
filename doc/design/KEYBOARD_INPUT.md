@@ -20,6 +20,8 @@
 - 保存/关闭请求与目标 canEdit/access 都参与输入保护。已禁用工具的保留实例只用于判断是否有待结束交互，不重新授予输入；保护期间不通过工具切换、deactivate 或局部 Esc 丢掉文字、路径、变换等编辑。
 - Space 的 held pan 是视图覆盖，不调用普通 setTool/deactivate。笔画/拖动中不接管 pointer；平移已开始后松键仍由平移接收 pointer up，之后退出。失焦、切文档、进入文字/Modal/菜单及显式换工具使旧 held 状态失效，清理临时平移捕获，不提交/取消底下作品编辑。现有 Alt 取色不变，本轮不新增临时 zoom。
 - 数字延后 350ms，绑定原 session/doc/layer 对象、mode、mask/channel、tool 和参数类型。切层/工具/文档/文本焦点/Modal 后取消缓存；Canvas pointer 交互开始立即取消旧 timer 与两位数缓存，即使短拖动已经结束也不再应用。执行时再检查 pointer 身份/busy、原目标、canEdit、outputPending/closePending 和相关 access。Modal 延迟确认仍验证原实例/目标身份。
+- 在 [Color 与笔刷交互](../ai/tasks/2026-11-24_01_brush-and-color-interactions.md) 中，数字键按当前工具的有效参数分派。Brush 普通数字调不透明度，Shift+数字调流量，启用喷枪时交换。Eraser 各模式保持原顺序，独立 Pencil 仅响应普通数字。渐变与油漆桶各用自己的不透明度，Move 与选区工具对应图层不透明度及填充。喷枪切换和键位配置变更取消尚未提交的数字序列。其他笔刷类工具的对应参数见任务记录。
+- 在画布上 Alt+右键拖动调节笔刷，左右改尺寸，上下改硬度。独立 Pencil 仅调尺寸。与方括号快捷键、顶栏和笔刷面板共用当前笔刷设置，尺寸 1–5000 px，硬度 0–100%。手势结束保留最近的设置值，参数调节不写入文档历史。
 - 快速旋转/翻转的异步入口固定原 session/doc、完整选中图层对象与选择集合、mode/工具及必要编辑身份；选择或交互变化后恢复也不复活旧请求，继续前重查最终 Action enabled/access 和目标编辑/保存关闭状态。不改变既有变换算法、Action/宏及历史。
 
 ## 公共弹窗的画布导航（2026-11-11）

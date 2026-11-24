@@ -11,6 +11,7 @@ import {NumberField,Slider} from '../../src/ui/controls';
 import {inputSession,clearInputSessions,key} from './fixture';
 import {keymap} from '../../src/app/shortcuts';
 import {ui,useApp} from '../../src/app/store';
+import {defaultBrush,type ToolId} from '../../src/tools/toolTypes';
 import {register,actionDefinitions} from '../../src/app/actions';
 const originalSave=actionDefinitions().find(a=>a.id==='file.save')!;
 // Replace layout/panels and graphics only. Production App, CanvasView, text controls and Modal listeners run.
@@ -85,6 +86,100 @@ it('delayed numeric applies two digits once, and cancels on layer/tool/document/
   await act(async()=>{ui.set({dialogs:[]});document.querySelectorAll('input').forEach(i=>i.blur());key(window,'7');change();});
   await new Promise(r=>setTimeout(r,380));expect(useApp.getState().brush.opacity).toBe(.25);
  }
+});
+
+it('routes numeric chords only to the active tool controls',async()=>{
+ const {session}=await mount();
+ type Parameter = 'opacity'|'flow'|'gradient'|'bucket'|'layer'|'fill';
+ const modes: Array<[ToolId,Parameter|null,Parameter|null]> = [
+  ['brush','opacity','flow'],['pencil','opacity',null],['eraser','opacity','flow'],
+  ['gradient','gradient',null],['paintBucket','bucket',null],
+  ...(['move','marqueeRect','marqueeEllipse','marqueeRow','marqueeColumn','lasso','polyLasso','magneticLasso','objectSelect','quickSelect','magicWand'] as ToolId[])
+   .map((tool):[ToolId,Parameter,Parameter]=>[tool,'layer','fill']),
+  ['cloneStamp','opacity','flow'],['patternStamp','opacity','flow'],['healing','opacity',null],['magicEraser','opacity',null],
+  ['mixerBrush',null,'flow'],['dodge',null,'flow'],['burn',null,'flow'],
+  ...(['spotHealing','remove','patch','redEye','bgEraser','colorReplace','blur','sharpen','smudge','sponge','pen','type'] as ToolId[])
+   .map((tool):[ToolId,null,null]=>[tool,null,null]),
+ ];
+ const values=()=>{
+  const {brush,toolOptions}=ui.get();
+  const layer=session.activeLayer()!;
+  return {opacity:brush.opacity,flow:brush.flow,gradient:toolOptions.gradient.opacity,bucket:toolOptions.bucket.opacity,layer:layer.opacity,fill:layer.fillOpacity};
+ };
+ for(const [tool,normal,shifted] of modes){
+  await act(async()=>{editor.setTool(tool);ui.setBrush({airbrush:false});});
+  expect(editor.currentToolId).toBe(tool);
+  for(const [shiftKey,target,value] of [[false,normal,.23],[true,shifted,.61]] as const){
+   const before=values();
+   const history=session.history.current.id;
+   await act(async()=>{for(const digit of shiftKey?'61':'23') key(window,digit,{code:`Digit${digit}`,shiftKey});});
+   expect(values(),`${tool}, shift=${shiftKey}`).toEqual(target?{...before,[target]:value}:before);
+   if(target!=='layer'&&target!=='fill') expect(session.history.current.id).toBe(history);
+  }
+ }
+});
+
+it('airbrush swaps Brush digits only, keeps Eraser modes and cancels an incomplete old parameter',async()=>{
+ const {session}=await mount();
+ const canvas=container.querySelector('.viewport')!;
+ const digits=(values:string,shiftKey=false)=>{for(const digit of values) key(canvas,digit,{code:`Digit${digit}`,shiftKey});};
+ vi.useFakeTimers();
+ try{
+  await act(async()=>{editor.setTool('brush');ui.setBrush({airbrush:false,opacity:1,flow:1});digits('2');ui.setBrush({airbrush:true});ui.setBrush({airbrush:false});});
+  await act(async()=>vi.advanceTimersByTimeAsync(400));
+  expect(ui.get().brush.opacity).toBe(1);
+  expect(ui.get().brush.flow).toBe(1);
+  await act(async()=>{ui.setBrush({airbrush:true});digits('35');digits('64',true);});
+  expect(ui.get().brush.opacity).toBe(.64);
+  expect(ui.get().brush.flow).toBe(.35);
+  await act(async()=>{digits('2');keymap.reassign('color.swap','2');});
+  await act(async()=>vi.advanceTimersByTimeAsync(400));
+  expect(ui.get().brush.flow).toBe(.35);
+  keymap.reset();
+  for(const mode of ['brush','pencil','block'] as const){
+   await act(async()=>{editor.setTool('eraser');ui.setToolOptions('eraser',{mode});ui.setBrush({opacity:1,flow:1});digits('24');digits('53',true);});
+   expect(ui.get().brush).toMatchObject({opacity:.24,flow:.53,airbrush:true});
+  }
+  expect(session.history.index).toBe(0);
+ }finally{
+  await act(async()=>ui.setBrush({airbrush:false}));
+  vi.useRealTimers();
+ }
+});
+
+it('cancels digit drafts on Alt-right resize and ignores new digits until mouse release',async()=>{
+ const {session}=await mount();
+ const canvas=container.querySelector<HTMLElement>('.viewport')!;
+ const mouse=(type:string,buttons:number)=>{
+  const event=new MouseEvent(type,{bubbles:true,cancelable:true,altKey:type==='pointerdown',button:2,buttons});
+  Object.defineProperties(event,{pointerId:{value:1},pointerType:{value:'mouse'}});
+  canvas.dispatchEvent(event);
+ };
+ vi.useFakeTimers();
+ try{
+  await act(async()=>{editor.setTool('brush');ui.setBrush({airbrush:false,opacity:1,flow:1});key(canvas,'2');mouse('pointerdown',2);});
+  expect(session.hasLocalUncommitted).toBe(false);
+  await act(async()=>{key(canvas,'7');mouse('pointerup',0);vi.advanceTimersByTime(400);});
+  expect(ui.get().brush.opacity).toBe(1);
+  await act(async()=>{key(canvas,'5');key(canvas,'4');});
+  expect(ui.get().brush.opacity).toBe(.54);
+  expect(session.history.index).toBe(0);
+ }finally{vi.useRealTimers();}
+});
+
+it('normalizes live brush controls when applying settings or an old preset without mutating the source record',async()=>{
+ await mount();
+ const {brush,brushPresets}=ui.get();
+ const tipImage={width:2,height:1,data:[255,84]};
+ const legacy={...defaultBrush(),name:'Old preset',size:6200,hardness:1.4,tip:'sampled' as const,tipImage,opacity:.62};
+ await act(async()=>ui.set({brushPresets:[legacy],brush:legacy}));
+ expect(ui.get().brush).toMatchObject({size:5000,hardness:1,opacity:.62});
+ expect(ui.get().brush.tipImage).toBe(tipImage);
+ expect(ui.get().brushPresets[0]).toBe(legacy);
+ expect(legacy).toMatchObject({size:6200,hardness:1.4});
+ await act(async()=>ui.setBrush({size:-4,hardness:-.4}));
+ expect(ui.get().brush).toMatchObject({size:1,hardness:0,opacity:.62});
+ await act(async()=>ui.set({brush,brushPresets}));
 });
 it('held pan keeps pointer owner after keyup; repeat, blur, new document and explicit tool selection invalidate safely',async()=>{
  const {session}=await mount();const canvas=container.querySelector('.viewport')!;await act(async()=>editor.setTool('brush'));
